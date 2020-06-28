@@ -37,21 +37,21 @@ fn main() {
                                 .map(|t| format!("{}", t.format("%H:%M:%S")))
                                 .unwrap_or_else(|| "none".to_string());
 
-                            println!("fix: {}T{}Z", date, time);
+                            println!("time: {}T{}Z", date, time);
 
                             let lat = nmea.latitude
-                                .map(|l| format!("{:?}", l))
+                                .map(|l| format!("{:10.6}°", l))
                                 .unwrap_or_else(|| "None".to_string());
 
                             let lon = nmea.longitude
-                                .map(|l| format!("{:?}", l))
+                                .map(|l| format!("{:>11.6}°", l))
                                 .unwrap_or_else(|| "None".to_string());
 
                             let alt = nmea.altitude
-                                .map(|a| format!("{:?}", a))
+                                .map(|a| format!("{:>6.1}m", a))
                                 .unwrap_or_else(|| "None".to_string());
 
-                            println!("lat: {:>6.9}° lon: {:>6.10}° alt: {:>1.6}m", lat, lon, alt);
+                            println!("lat: {} lon: {} alt: {}", lat, lon, alt);
                         },
                         nmea::SentenceType::GSA => {
                             let hdop = nmea.hdop
@@ -72,7 +72,7 @@ fn main() {
 
                             println!("hdop: {:>1.4} vdop: {:>1.4} pdop: {:>1.4} fix sats: {}", hdop, vdop, pdop, fix_sats);
                         },
-                        _ => (),
+                        _ => ()
                     }
                 },
                 Err(error) => println!("E: {}", error),
