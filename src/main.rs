@@ -5,11 +5,16 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 fn main() {
-    let mut nmea = nmea::Nmea::new();
-
     let name = env::args().nth(1).unwrap();
-    let socket = File::open(name).unwrap();
+    let socket = match File::open(name) {
+        Ok(socket) => socket,
+        Err(e)     => {
+            println!("Error {}", e);
+            std::process::exit(1);
+        }
+    };
 
+    let mut nmea = nmea::Nmea::new();
     let mut input = BufReader::new(socket);
 
     loop {
