@@ -5,11 +5,10 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 fn main() {
-    let name = env::args().nth(1).unwrap();
-    let socket = open_socket(name);
+    let socket = open_socket();
+    let mut input = BufReader::new(socket);
 
     let mut nmea = nmea::Nmea::new();
-    let mut input = BufReader::new(socket);
 
     loop {
         let mut buffer = String::new();
@@ -27,7 +26,16 @@ fn main() {
     }
 }
 
-fn open_socket(name: String) -> File {
+fn open_socket() -> File {
+    let name = env::args().nth(1);
+
+    if name.is_none() {
+        println!("Provide GPS device as first argument");
+        std::process::exit(1);
+    }
+
+    let name = name.unwrap();
+
     match File::open(name) {
         Ok(socket) => return socket,
         Err(e)     => {
