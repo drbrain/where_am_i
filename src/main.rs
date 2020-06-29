@@ -6,24 +6,10 @@ use std::io::{BufRead, BufReader};
 
 fn main() {
     let socket = open_socket();
-    let mut input = BufReader::new(socket);
 
     let mut nmea = nmea::Nmea::new();
 
-    loop {
-        let mut buffer = String::new();
-
-        let size = match input.read_line(&mut buffer) {
-            Ok(size) => size,
-            Err(_)   => continue,
-        };
-
-        if size == 0 {
-            break;
-        }
-
-        parse(&mut nmea, &buffer);
-    }
+    parse_loop(&mut nmea, socket);
 }
 
 fn open_socket() -> File {
@@ -43,6 +29,25 @@ fn open_socket() -> File {
             std::process::exit(1);
         }
     };
+}
+
+fn parse_loop(mut nmea: &mut nmea::Nmea, socket: File) {
+    let mut input = BufReader::new(socket);
+
+    loop {
+        let mut buffer = String::new();
+
+        let size = match input.read_line(&mut buffer) {
+            Ok(size) => size,
+            Err(_)   => continue,
+        };
+
+        if size == 0 {
+            break;
+        }
+
+        parse(&mut nmea, &buffer);
+    }
 }
 
 fn parse(nmea: &mut nmea::Nmea, buffer: &String) {
