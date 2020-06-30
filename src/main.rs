@@ -9,6 +9,9 @@ use std::{
     time::Duration,
 };
 
+type NmeaMutex = Arc<Mutex<Nmea>>;
+type NmeaParseResult = Result<SentenceType, String>;
+
 fn main() {
     let socket = open_socket();
 
@@ -38,7 +41,7 @@ fn open_socket() -> File {
     };
 }
 
-fn parse_loop(nmea_m: &Arc<Mutex<Nmea>>, socket: File) {
+fn parse_loop(nmea_m: &NmeaMutex, socket: File) {
     let nmea_m = Arc::clone(&nmea_m);
 
     thread::spawn(move || {
@@ -61,7 +64,7 @@ fn parse_loop(nmea_m: &Arc<Mutex<Nmea>>, socket: File) {
     });
 }
 
-fn location_loop(nmea_m: &Arc<Mutex<Nmea>>) {
+fn location_loop(nmea_m: &NmeaMutex) {
     loop {
         thread::sleep(Duration::from_secs(1));
 
@@ -70,7 +73,7 @@ fn location_loop(nmea_m: &Arc<Mutex<Nmea>>) {
     };
 }
 
-fn parse(nmea_m: &Arc<Mutex<Nmea>>, buffer: &String) {
+fn parse(nmea_m: &NmeaMutex, buffer: &String) {
     match parse_line(&nmea_m, &buffer) {
         Ok(sentence) => {
             match sentence {
@@ -82,7 +85,7 @@ fn parse(nmea_m: &Arc<Mutex<Nmea>>, buffer: &String) {
     };
 }
 
-fn parse_line(nmea_m: &Arc<Mutex<Nmea>>, buffer: &String) -> Result<SentenceType, String> {
+fn parse_line(nmea_m: &NmeaMutex, buffer: &String) -> NmeaParseResult {
     let mut nmea = nmea_m.lock().unwrap();
 
     let result = nmea.parse(&buffer);
@@ -90,7 +93,7 @@ fn parse_line(nmea_m: &Arc<Mutex<Nmea>>, buffer: &String) -> Result<SentenceType
     return result;
 }
 
-fn display_time(nmea_m: &Arc<Mutex<Nmea>>) {
+fn display_time(nmea_m: &NmeaMutex) {
     let nmea = nmea_m.lock().unwrap();
 
     let date      = nmea.fix_date;
@@ -107,7 +110,7 @@ fn display_time(nmea_m: &Arc<Mutex<Nmea>>) {
     println!("time: {}T{}Z", date, time);
 }
 
-fn display_location(nmea_m: &Arc<Mutex<Nmea>>) {
+fn display_location(nmea_m: &NmeaMutex) {
     let nmea = nmea_m.lock().unwrap();
 
     let latitude  = nmea.latitude;
@@ -129,7 +132,7 @@ fn display_location(nmea_m: &Arc<Mutex<Nmea>>) {
     println!("lat: {} lon: {} alt: {}", lat, lon, alt);
 }
 
-fn display_precision(nmea_m: &Arc<Mutex<Nmea>>) {
+fn display_precision(nmea_m: &NmeaMutex) {
     let nmea = nmea_m.lock().unwrap();
     let hdop = nmea.hdop;
     let pdop = nmea.pdop;
