@@ -66,10 +66,11 @@ fn parse_loop(nmea_m: &NmeaMutex, socket: File) {
 
 fn location_loop(nmea_m: &NmeaMutex) {
     loop {
-        thread::sleep(Duration::from_secs(1));
+        thread::sleep(Duration::from_secs(10));
 
         display_location(&nmea_m);
         display_precision(&nmea_m);
+        display_satellites(&nmea_m);
     };
 }
 
@@ -156,4 +157,27 @@ fn display_precision(nmea_m: &NmeaMutex) {
         .unwrap_or_else(|| "None".to_string());
 
     println!("hdop: {} vdop: {} pdop: {} fix sats: {}", hdop, vdop, pdop, fix_sats);
+}
+
+fn display_satellites(nmea_m: &NmeaMutex) {
+    let nmea = nmea_m.lock().unwrap();
+    let satellites = nmea.satellites();
+
+    for satellite in satellites {
+        let snr = satellite.snr()
+            .map(|snr| format!("{:2}dB", snr))
+            .unwrap_or_else(|| " ?dB".to_string());
+
+        let azimuth = satellite.azimuth()
+            .map(|snr| format!("Az: {:3}°", snr))
+            .unwrap_or_else(|| "Untracked".to_string());
+
+        let elevation = satellite.elevation()
+            .map(|snr| format!("El: {:2}°", snr))
+            .unwrap_or_else(|| "".to_string());
+
+        println!("{:3} ({}) {} {} {}",
+                 satellite.prn(), satellite.gnss_type(),
+                 snr, azimuth, elevation);
+    }
 }
