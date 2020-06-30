@@ -1,4 +1,4 @@
-extern crate nmea;
+use nmea::{Nmea, SentenceType};
 
 use std::{
     env,
@@ -12,7 +12,7 @@ use std::{
 fn main() {
     let socket = open_socket();
 
-    let nmea = nmea::Nmea::new();
+    let nmea = Nmea::new();
     let nmea_m = Arc::new(Mutex::new(nmea));
 
     parse_loop(&nmea_m, socket);
@@ -38,7 +38,7 @@ fn open_socket() -> File {
     };
 }
 
-fn parse_loop(nmea_m: &Arc<Mutex<nmea::Nmea>>, socket: File) {
+fn parse_loop(nmea_m: &Arc<Mutex<Nmea>>, socket: File) {
     let nmea_m = Arc::clone(&nmea_m);
 
     thread::spawn(move || {
@@ -61,7 +61,7 @@ fn parse_loop(nmea_m: &Arc<Mutex<nmea::Nmea>>, socket: File) {
     });
 }
 
-fn location_loop(nmea_m: &Arc<Mutex<nmea::Nmea>>) {
+fn location_loop(nmea_m: &Arc<Mutex<Nmea>>) {
     loop {
         thread::sleep(Duration::from_secs(1));
 
@@ -70,11 +70,11 @@ fn location_loop(nmea_m: &Arc<Mutex<nmea::Nmea>>) {
     };
 }
 
-fn parse(nmea_m: &Arc<Mutex<nmea::Nmea>>, buffer: &String) {
+fn parse(nmea_m: &Arc<Mutex<Nmea>>, buffer: &String) {
     match parse_line(&nmea_m, &buffer) {
         Ok(sentence) => {
             match sentence {
-                nmea::SentenceType::GGA => display_time(&nmea_m),
+                SentenceType::GGA => display_time(&nmea_m),
                 _ => ()
             }
         },
@@ -82,7 +82,7 @@ fn parse(nmea_m: &Arc<Mutex<nmea::Nmea>>, buffer: &String) {
     };
 }
 
-fn parse_line(nmea_m: &Arc<Mutex<nmea::Nmea>>, buffer: &String) -> Result<nmea::SentenceType, String> {
+fn parse_line(nmea_m: &Arc<Mutex<Nmea>>, buffer: &String) -> Result<SentenceType, String> {
     let mut nmea = nmea_m.lock().unwrap();
 
     let result = nmea.parse(&buffer);
@@ -90,7 +90,7 @@ fn parse_line(nmea_m: &Arc<Mutex<nmea::Nmea>>, buffer: &String) -> Result<nmea::
     return result;
 }
 
-fn display_time(nmea_m: &Arc<Mutex<nmea::Nmea>>) {
+fn display_time(nmea_m: &Arc<Mutex<Nmea>>) {
     let nmea = nmea_m.lock().unwrap();
 
     let date      = nmea.fix_date;
@@ -107,7 +107,7 @@ fn display_time(nmea_m: &Arc<Mutex<nmea::Nmea>>) {
     println!("time: {}T{}Z", date, time);
 }
 
-fn display_location(nmea_m: &Arc<Mutex<nmea::Nmea>>) {
+fn display_location(nmea_m: &Arc<Mutex<Nmea>>) {
     let nmea = nmea_m.lock().unwrap();
 
     let latitude  = nmea.latitude;
@@ -129,7 +129,7 @@ fn display_location(nmea_m: &Arc<Mutex<nmea::Nmea>>) {
     println!("lat: {} lon: {} alt: {}", lat, lon, alt);
 }
 
-fn display_precision(nmea_m: &Arc<Mutex<nmea::Nmea>>) {
+fn display_precision(nmea_m: &Arc<Mutex<Nmea>>) {
     let nmea = nmea_m.lock().unwrap();
     let hdop = nmea.hdop;
     let pdop = nmea.pdop;
