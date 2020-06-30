@@ -1,15 +1,22 @@
 extern crate nmea;
 
-use std::env;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::{
+    env,
+    fs::File,
+    io::{BufRead, BufReader},
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration,
+};
 
 fn main() {
     let socket = open_socket();
 
-    let mut nmea = nmea::Nmea::new();
+    let nmea = nmea::Nmea::new();
+    let nmea_m = Arc::new(Mutex::new(nmea));
 
-    parse_loop(&mut nmea, socket);
+    parse_loop(&nmea_m, socket);
+    location_loop(&nmea_m);
 }
 
 fn open_socket() -> File {
@@ -31,78 +38,117 @@ fn open_socket() -> File {
     };
 }
 
-fn parse_loop(mut nmea: &mut nmea::Nmea, socket: File) {
-    let mut input = BufReader::new(socket);
+fn parse_loop(nmea_m: &Arc<Mutex<nmea::Nmea>>, socket: File) {
+    let nmea_m = Arc::clone(&nmea_m);
 
-    loop {
-        let mut buffer = String::new();
+    thread::spawn(move || {
+        let mut input = BufReader::new(socket);
 
-        let size = match input.read_line(&mut buffer) {
-            Ok(size) => size,
-            Err(_)   => continue,
-        };
+        loop {
+            let mut buffer = String::new();
 
-        if size == 0 {
-            break;
+            let size = match input.read_line(&mut buffer) {
+                Ok(size) => size,
+                Err(_)   => continue,
+            };
+
+            if size == 0 {
+                std::process::exit(1);
+            }
+
+            parse(&nmea_m, &buffer);
         }
-
-        parse(&mut nmea, &buffer);
-    }
+    });
 }
 
-fn parse(nmea: &mut nmea::Nmea, buffer: &String) {
-    match nmea.parse(&buffer) {
+fn location_loop(nmea_m: &Arc<Mutex<nmea::Nmea>>) {
+    loop {
+        thread::sleep(Duration::from_secs(1));
+
+        display_location(&nmea_m);
+        display_precision(&nmea_m);
+    };
+}
+
+fn parse(nmea_m: &Arc<Mutex<nmea::Nmea>>, buffer: &String) {
+    match parse_line(&nmea_m, &buffer) {
         Ok(sentence) => {
             match sentence {
-                nmea::SentenceType::GGA => display_fix(&nmea),
-                nmea::SentenceType::GSA => display_precision(&nmea),
+                nmea::SentenceType::GGA => display_time(&nmea_m),
                 _ => ()
             }
         },
         Err(error) => println!("E: {}", error),
-    }
+    };
 }
 
-fn display_fix(nmea: &nmea::Nmea) {
-    let date = nmea.fix_date
+fn parse_line(nmea_m: &Arc<Mutex<nmea::Nmea>>, buffer: &String) -> Result<nmea::SentenceType, String> {
+    let mut nmea = nmea_m.lock().unwrap();
+
+    let result = nmea.parse(&buffer);
+
+    return result;
+}
+
+fn display_time(nmea_m: &Arc<Mutex<nmea::Nmea>>) {
+    let nmea = nmea_m.lock().unwrap();
+
+    let date      = nmea.fix_date;
+    let time      = nmea.fix_time;
+
+    let date = date
         .map(|d| format!("{}", d.format("%Y-%m-%d")))
         .unwrap_or_else(|| "none".to_string());
 
-    let time = nmea.fix_time
+    let time = time
         .map(|t| format!("{}", t.format("%H:%M:%S")))
         .unwrap_or_else(|| "none".to_string());
 
     println!("time: {}T{}Z", date, time);
+}
 
-    let lat = nmea.latitude
+fn display_location(nmea_m: &Arc<Mutex<nmea::Nmea>>) {
+    let nmea = nmea_m.lock().unwrap();
+
+    let latitude  = nmea.latitude;
+    let longitude = nmea.longitude;
+    let altitude  = nmea.altitude;
+
+    let lat = latitude
         .map(|l| format!("{:10.6}°", l))
         .unwrap_or_else(|| "None".to_string());
 
-    let lon = nmea.longitude
+    let lon = longitude
         .map(|l| format!("{:>11.6}°", l))
         .unwrap_or_else(|| "None".to_string());
 
-    let alt = nmea.altitude
+    let alt = altitude
         .map(|a| format!("{:>6.1}m", a))
         .unwrap_or_else(|| "None".to_string());
 
     println!("lat: {} lon: {} alt: {}", lat, lon, alt);
 }
 
-fn display_precision(nmea: &nmea::Nmea) {
-    let hdop = nmea.hdop
+fn display_precision(nmea_m: &Arc<Mutex<nmea::Nmea>>) {
+    let nmea = nmea_m.lock().unwrap();
+    let hdop = nmea.hdop;
+    let pdop = nmea.pdop;
+    let vdop = nmea.vdop;
+    let sats = nmea.fix_satellites();
+
+    let hdop = hdop
         .map(|l| format!("{:5.2}", l))
         .unwrap_or_else(|| "None".to_string());
 
-    let vdop = nmea.vdop
+    let vdop = vdop
         .map(|l| format!("{:5.2}", l))
         .unwrap_or_else(|| "None".to_string());
 
-    let pdop = nmea.pdop
+    let pdop = pdop
         .map(|l| format!("{:5.2}", l))
         .unwrap_or_else(|| "None".to_string());
 
-    let fix_sats = nmea.fix_satellites()
+    let fix_sats = sats
         .map(|l| format!("{:2}", l))
         .unwrap_or_else(|| "None".to_string());
 
