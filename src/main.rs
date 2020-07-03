@@ -1,28 +1,32 @@
-use nmea::{Nmea, SentenceType};
+use nmea::Nmea;
+use nmea::SentenceType;
 
-use std::{
-    env,
-    fs::File,
-    io::{BufRead, BufReader},
-    sync::{Arc, Mutex},
-    thread,
-    time::Duration,
-};
+use std::env;
 
-type NmeaMutex = Arc<Mutex<Nmea>>;
-type NmeaParseResult = Result<SentenceType, String>;
+use tokio::fs::File;
+use tokio::io::AsyncBufReadExt;
+use tokio::io::AsyncWriteExt;
+use tokio::io::BufReader;
+use tokio::net::TcpListener;
+use tokio::net::TcpStream;
+use tokio::sync::broadcast;
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 
-fn main() {
-    let socket = open_socket();
+#[tokio::main]
+async fn main() {
+    let input = open_socket().await;
 
-    let nmea = Nmea::new();
-    let nmea_m = Arc::new(Mutex::new(nmea));
+    let nmea_tx = spawn_server(2947);
 
-    parse_loop(&nmea_m, socket);
-    location_loop(&nmea_m);
+    let (lines_rx, done_rx) = spawn_reader(input, nmea_tx);
+
+    spawn_parser(lines_rx);
+
+    done_rx.await.unwrap();
 }
 
-fn open_socket() -> File {
+async fn open_socket() -> BufReader<File> {
     let name = env::args().nth(1);
 
     if name.is_none() {
@@ -32,152 +36,105 @@ fn open_socket() -> File {
 
     let name = name.unwrap();
 
-    match File::open(name) {
-        Ok(socket) => return socket,
-        Err(e)     => {
+    let io = match File::open(name).await {
+        Ok(io) => io,
+        Err(e) => {
             println!("Error {}", e);
             std::process::exit(1);
         }
     };
+
+    let input = BufReader::new(io);
+
+    return input;
 }
 
-fn parse_loop(nmea_m: &NmeaMutex, socket: File) {
-    let nmea_m = Arc::clone(&nmea_m);
+async fn send_to_client(mut socket: TcpStream, mut nmea_rx: broadcast::Receiver<String>) {
+    loop {
+        let mut line = nmea_rx.recv().await.unwrap();
 
-    thread::spawn(move || {
-        let mut input = BufReader::new(socket);
+        line.push('\n');
+
+        let result = socket.write(line.as_bytes()).await;
+
+        match result {
+            Ok(_)  => (),
+            Err(_) => break,
+        };
+    }
+}
+
+fn spawn_server(port: u16) -> broadcast::Sender<String> {
+    let (tx, _) = broadcast::channel(5);
+    let nmea_tx = tx.clone();
+
+    let address = ("0.0.0.0", port);
+
+    tokio::spawn(async move {
+        let mut listener = TcpListener::bind(address).await.unwrap();
 
         loop {
-            let mut buffer = String::new();
+            let (socket, _) = listener.accept().await.unwrap();
+            let nmea_rx = nmea_tx.subscribe();
 
-            let size = match input.read_line(&mut buffer) {
-                Ok(size) => size,
-                Err(_)   => continue,
-            };
+            send_to_client(socket, nmea_rx).await;
+        }
+    });
 
-            if size == 0 {
-                std::process::exit(1);
+    return tx;
+}
+
+fn spawn_parser(mut lines: mpsc::Receiver<String>) {
+    let mut nmea = Nmea::new();
+
+    tokio::spawn(async move {
+        while let Some(line) = lines.recv().await {
+            let result = nmea.parse(&line.to_string());
+
+            match result {
+                Ok(sentence) => {
+                    match sentence {
+                        SentenceType::GGA => println!("{:?}", sentence),
+                        _ => ()
+                    }
+                },
+                Err(error) => println!("E: {}", error),
             }
-
-            parse(&nmea_m, &buffer);
         }
     });
 }
 
-fn location_loop(nmea_m: &NmeaMutex) {
-    loop {
-        thread::sleep(Duration::from_secs(10));
+fn spawn_reader(input: BufReader<File>, nmea_tx: broadcast::Sender<String>) -> (mpsc::Receiver<String>, oneshot::Receiver<bool>) {
+    let (mut lines_tx, lines_rx) = mpsc::channel(5);
+    let (done_tx, done_rx) = oneshot::channel();
 
-        display_location(&nmea_m);
-        display_precision(&nmea_m);
-        display_satellites(&nmea_m);
-    };
-}
+    tokio::spawn(async move {
+        let mut lines = input.lines();
 
-fn parse(nmea_m: &NmeaMutex, buffer: &String) {
-    match parse_line(&nmea_m, &buffer) {
-        Ok(sentence) => {
-            match sentence {
-                SentenceType::GGA => display_time(&nmea_m),
-                _ => ()
-            }
-        },
-        Err(error) => println!("E: {}", error),
-    };
-}
+        loop {
+            let result = lines.next_line().await;
 
-fn parse_line(nmea_m: &NmeaMutex, buffer: &String) -> NmeaParseResult {
-    let mut nmea = nmea_m.lock().unwrap();
+            let line = match result {
+                Ok(line) => line,
+                Err(_)   => std::process::exit(1),
+            };
 
-    let result = nmea.parse(&buffer);
+            let line = match line {
+                Some(line) => line,
+                None => {
+                    done_tx.send(false).unwrap();
+                    break;
+                }
+            };
 
-    return result;
-}
+            match nmea_tx.send(line.clone()) {
+                Ok(_)  => (),
+                Err(_) => (),
+            };
 
-fn display_time(nmea_m: &NmeaMutex) {
-    let nmea = nmea_m.lock().unwrap();
+            lines_tx.send(line.clone()).await.unwrap();
+        }
+    });
 
-    let date      = nmea.fix_date;
-    let time      = nmea.fix_time;
-
-    let date = date
-        .map(|d| format!("{}", d.format("%Y-%m-%d")))
-        .unwrap_or_else(|| "none".to_string());
-
-    let time = time
-        .map(|t| format!("{}", t.format("%H:%M:%S")))
-        .unwrap_or_else(|| "none".to_string());
-
-    println!("time: {}T{}Z", date, time);
-}
-
-fn display_location(nmea_m: &NmeaMutex) {
-    let nmea = nmea_m.lock().unwrap();
-
-    let latitude  = nmea.latitude;
-    let longitude = nmea.longitude;
-    let altitude  = nmea.altitude;
-
-    let lat = latitude
-        .map(|l| format!("{:10.6}°", l))
-        .unwrap_or_else(|| "None".to_string());
-
-    let lon = longitude
-        .map(|l| format!("{:>11.6}°", l))
-        .unwrap_or_else(|| "None".to_string());
-
-    let alt = altitude
-        .map(|a| format!("{:>6.1}m", a))
-        .unwrap_or_else(|| "None".to_string());
-
-    println!("lat: {} lon: {} alt: {}", lat, lon, alt);
-}
-
-fn display_precision(nmea_m: &NmeaMutex) {
-    let nmea = nmea_m.lock().unwrap();
-    let hdop = nmea.hdop;
-    let pdop = nmea.pdop;
-    let vdop = nmea.vdop;
-    let sats = nmea.fix_satellites();
-
-    let hdop = hdop
-        .map(|l| format!("{:5.2}", l))
-        .unwrap_or_else(|| "None".to_string());
-
-    let vdop = vdop
-        .map(|l| format!("{:5.2}", l))
-        .unwrap_or_else(|| "None".to_string());
-
-    let pdop = pdop
-        .map(|l| format!("{:5.2}", l))
-        .unwrap_or_else(|| "None".to_string());
-
-    let fix_sats = sats
-        .map(|l| format!("{:2}", l))
-        .unwrap_or_else(|| "None".to_string());
-
-    println!("hdop: {} vdop: {} pdop: {} fix sats: {}", hdop, vdop, pdop, fix_sats);
-}
-
-fn display_satellites(nmea_m: &NmeaMutex) {
-    let nmea = nmea_m.lock().unwrap();
-    let satellites = nmea.satellites();
-
-    for satellite in satellites {
-        let snr = satellite.snr()
-            .map(|snr| format!("{:2}dB", snr))
-            .unwrap_or_else(|| " ?dB".to_string());
-
-        let azimuth = satellite.azimuth()
-            .map(|snr| format!("Az: {:3}°", snr))
-            .unwrap_or_else(|| "Untracked".to_string());
-
-        let elevation = satellite.elevation()
-            .map(|snr| format!("El: {:2}°", snr))
-            .unwrap_or_else(|| "".to_string());
-
-        println!("{:3} ({}) {} {} {}",
-                 satellite.prn(), satellite.gnss_type(),
-                 snr, azimuth, elevation);
-    }
+    return (lines_rx, done_rx);
 }
