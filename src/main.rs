@@ -98,7 +98,7 @@ fn spawn_parser(mut lines: mpsc::Receiver<String>) {
                         _ => ()
                     }
                 },
-                Err(error) => println!("E: {}", error),
+                Err(_) => (),
             }
         }
     });
