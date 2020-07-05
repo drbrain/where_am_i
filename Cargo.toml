@@ -11,4 +11,6 @@ nmea   = "0.0.8"
 tokio = { version = "0.2", features = ["full"] }
 
 [patch.crates-io]
-nmea = { git = "https://github.com/AeroRust/nmea" }
+nmea = { path = "../nmea" }
+#nmea = { git = "https://github.com/AeroRust/nmea" }
+

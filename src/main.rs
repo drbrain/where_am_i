@@ -1,5 +1,5 @@
 use nmea::Nmea;
-use nmea::SentenceType;
+use nmea::ParseResult;
 
 use std::env;
 
@@ -92,9 +92,11 @@ fn spawn_parser(mut lines: mpsc::Receiver<String>) {
             let result = nmea.parse(&line.to_string());
 
             match result {
-                Ok(sentence) => {
-                    match sentence {
-                        SentenceType::GGA => println!("{:?}", sentence),
+                Ok(s) => {
+                    match s {
+                        ParseResult::GGA(gga) => {
+                            println!("{:?}", gga.fix_time);
+                        },
                         _ => ()
                     }
                 },
