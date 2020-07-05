@@ -49,7 +49,7 @@ async fn open_socket() -> BufReader<File> {
     return input;
 }
 
-async fn send_to_client(mut socket: TcpStream, mut nmea_rx: broadcast::Receiver<String>) {
+async fn handle_client(mut socket: TcpStream, mut nmea_rx: broadcast::Receiver<String>) {
     loop {
         let mut line = nmea_rx.recv().await.unwrap();
 
@@ -77,7 +77,7 @@ fn spawn_server(port: u16) -> broadcast::Sender<String> {
             let (socket, _) = listener.accept().await.unwrap();
             let nmea_rx = nmea_tx.subscribe();
 
-            send_to_client(socket, nmea_rx).await;
+            handle_client(socket, nmea_rx).await;
         }
     });
 
