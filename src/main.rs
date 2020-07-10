@@ -1,3 +1,8 @@
+extern crate json;
+
+use json::parse;
+use json::stringify;
+
 use nmea::Nmea;
 use nmea::ParseResult;
 
@@ -5,10 +10,11 @@ use std::env;
 
 use tokio::fs::File;
 use tokio::io::AsyncBufReadExt;
-use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
+use tokio::io::BufWriter;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
+use tokio::prelude::*;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
@@ -49,18 +55,108 @@ async fn open_socket() -> BufReader<File> {
     return input;
 }
 
-async fn handle_client(mut socket: TcpStream, mut nmea_rx: broadcast::Receiver<String>) {
+async fn handle_client(mut socket: TcpStream, nmea_tx: broadcast::Sender<String>) {
+    let (recv, send) = socket.split();
+
+    let recv = BufReader::new(recv);
+    let mut lines = recv.lines();
+
+    let mut send = BufWriter::new(send);
+
     loop {
-        let mut line = nmea_rx.recv().await.unwrap();
-
-        line.push('\n');
-
-        let result = socket.write(line.as_bytes()).await;
-
-        match result {
-            Ok(_)  => (),
+        let request = match lines.next_line().await {
+            Ok(l) => l,
             Err(_) => break,
         };
+
+        if request.is_none() {
+            break;
+        }
+
+        let request = request.unwrap();
+
+        println!("{:?}", request);
+
+        if request == "?VERSION;".to_string() {
+            let version = json::object!{
+                class: "VERSION",
+                release: "where_am_i 0.0.0",
+                rev: "",
+                proto_major: 3,
+                proto_minor: 10,
+            };
+
+            let mut version_json = stringify(version);
+            println!("{:?}", version_json);
+            version_json.push('\n');
+
+            let result = send.write(version_json.as_bytes()).await;
+
+            println!("{:?}", result);
+
+            if result.is_err() {
+                break;
+            }
+        } else if request.starts_with("?WATCH=") {
+            let json_start = match request.find("{") {
+                Some(i) => i,
+                None    => continue,
+            };
+
+            let json_end = match request.rfind("}") {
+                Some(i) => i,
+                None    => continue,
+            };
+
+            let watch_json = match request.get(json_start..=json_end) {
+                Some(j) => j,
+                None    => continue,
+            };
+
+            let watch = match parse(watch_json) {
+                Ok(w) => w,
+                Err(_) => {
+                    println!("Error parsing WATCH body {}", watch_json);
+                    continue;
+                },
+            };
+
+            let device = watch["device"].as_str().unwrap_or_else(|| "UNSET");
+
+            let enable = watch["enable"].as_bool().unwrap_or_else(|| false);
+
+            let pps = watch["pps"].as_bool().unwrap_or_else(|| false);
+
+            println!("device: {} enabled: {} pps: {}", device, enable, pps);
+
+            if enable && pps {
+                let mut rx = nmea_tx.subscribe();
+
+                loop {
+                    let mut message = match rx.recv().await {
+                        Ok(m) => m,
+                        Err(_) => break,
+                    };
+
+                    message.push('\n');
+
+                    match send.write(message.as_bytes()).await {
+                        Ok(_) => (),
+                        Err(_) => break,
+                    };
+
+                    let flushed = send.flush().await;
+                    if flushed.is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+
+        let flushed = send.flush().await;
+        if flushed.is_err() {
+            break;
+        }
     }
 }
 
@@ -75,9 +171,14 @@ fn spawn_server(port: u16) -> broadcast::Sender<String> {
 
         loop {
             let (socket, _) = listener.accept().await.unwrap();
-            let nmea_rx = nmea_tx.subscribe();
 
-            handle_client(socket, nmea_rx).await;
+            let nodelay = socket.set_nodelay(true);
+
+            if nodelay.is_err() {
+                continue;
+            }
+
+            handle_client(socket, nmea_tx.clone()).await;
         }
     });
 
@@ -118,7 +219,10 @@ fn spawn_reader(input: BufReader<File>, nmea_tx: broadcast::Sender<String>) -> (
 
             let line = match result {
                 Ok(line) => line,
-                Err(_)   => std::process::exit(1),
+                Err(_)   => {
+                    eprintln!("GPS disconnected");
+                    std::process::exit(1);
+                }
             };
 
             let line = match line {
