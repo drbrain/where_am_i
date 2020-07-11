@@ -4,6 +4,7 @@ use chrono::DateTime;
 use chrono::NaiveDateTime;
 use chrono::Utc;
 
+use json::object;
 use json::parse;
 use json::stringify;
 
@@ -11,6 +12,8 @@ use nmea::Nmea;
 use nmea::ParseResult;
 
 use std::env;
+use std::time::Duration;
+use std::time::SystemTime;
 
 use tokio::fs::File;
 use tokio::io::AsyncBufReadExt;
@@ -24,10 +27,12 @@ use tokio::sync::oneshot;
 
 #[derive(Clone, Debug)]
 struct TOFF {
+    class: String,
+    device: String,
     real_sec: i64,
     real_nsec: u32,
-    clock_sec: i64,
-    clock_nsec: i64,
+    clock_sec: u64,
+    clock_nsec: u32,
 }
 
 #[tokio::main]
@@ -64,7 +69,7 @@ async fn open_socket() -> BufReader<File> {
     return input;
 }
 
-async fn handle_client(mut socket: TcpStream, nmea_tx: broadcast::Sender<TOFF>) {
+async fn handle_client(mut socket: TcpStream, nmea_tx: broadcast::Sender<json::JsonValue>) {
     let (recv, send) = socket.split();
 
     let recv = BufReader::new(recv);
@@ -142,12 +147,12 @@ async fn handle_client(mut socket: TcpStream, nmea_tx: broadcast::Sender<TOFF>) 
                 let mut rx = nmea_tx.subscribe();
 
                 loop {
-                    let time = match rx.recv().await {
+                    let toff = match rx.recv().await {
                         Ok(t) => t,
                         Err(_) => break,
                     };
 
-                    let message = format!("{:?}\n", time);
+                    let message = format!("{}\n", stringify(toff));
 
                     match send.write(message.as_bytes()).await {
                         Ok(_) => (),
@@ -169,7 +174,7 @@ async fn handle_client(mut socket: TcpStream, nmea_tx: broadcast::Sender<TOFF>) 
     }
 }
 
-fn spawn_server(port: u16) -> broadcast::Sender<TOFF> {
+fn spawn_server(port: u16) -> broadcast::Sender<json::JsonValue> {
     let (tx, _) = broadcast::channel(5);
     let fix_tx = tx.clone();
 
@@ -194,7 +199,7 @@ fn spawn_server(port: u16) -> broadcast::Sender<TOFF> {
     return tx;
 }
 
-fn spawn_parser(input: BufReader<File>, fix_tx: broadcast::Sender<TOFF>) -> oneshot::Receiver<bool> {
+fn spawn_parser(input: BufReader<File>, fix_tx: broadcast::Sender<json::JsonValue>) -> oneshot::Receiver<bool> {
     let mut lines = input.lines();
 
     let mut nmea = Nmea::new();
@@ -209,6 +214,11 @@ fn spawn_parser(input: BufReader<File>, fix_tx: broadcast::Sender<TOFF>) -> ones
                     done_tx.send(false).unwrap();
                     break;
                 }
+            };
+
+            let received = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+                Ok(n) => n,
+                Err(_) => continue,
             };
 
             let line = match line {
@@ -227,7 +237,7 @@ fn spawn_parser(input: BufReader<File>, fix_tx: broadcast::Sender<TOFF>) -> ones
             }
 
             match parsed.unwrap() {
-                ParseResult::RMC(rmc) => report_fix(&rmc, &fix_tx),
+                ParseResult::RMC(rmc) => report_fix(rmc, received, &fix_tx),
                 _ => (),
             };
         }
@@ -236,7 +246,7 @@ fn spawn_parser(input: BufReader<File>, fix_tx: broadcast::Sender<TOFF>) -> ones
     return done_rx;
 }
 
-fn report_fix(rmc: &nmea::RmcData, fix_tx: &broadcast::Sender<TOFF>) {
+fn report_fix(rmc: nmea::RmcData, received: Duration, fix_tx: &broadcast::Sender<json::JsonValue>) {
     let time = rmc.fix_time;
     if time.is_none() {
         return;
@@ -253,14 +263,14 @@ fn report_fix(rmc: &nmea::RmcData, fix_tx: &broadcast::Sender<TOFF>) {
     let sec  = timestamp.timestamp();
     let nsec = timestamp.timestamp_subsec_nanos();
 
-    let toff = TOFF {
+    let toff = object! {
+        class:      "TOFF".to_string(),
+        device:     "".to_string(),
         real_sec:   sec,
         real_nsec:  nsec,
-        clock_sec:  0,
-        clock_nsec: 0
+        clock_sec:  received.as_secs(),
+        clock_nsec: received.subsec_nanos(),
     };
-
-    println!("toff: {:?}", toff);
 
     match fix_tx.send(toff) {
         Ok(_)  => (),
