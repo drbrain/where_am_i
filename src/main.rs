@@ -1,5 +1,9 @@
 extern crate json;
 
+use chrono::DateTime;
+use chrono::NaiveDateTime;
+use chrono::Utc;
+
 use json::parse;
 use json::stringify;
 
@@ -16,18 +20,23 @@ use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio::sync::broadcast;
-use tokio::sync::mpsc;
 use tokio::sync::oneshot;
+
+#[derive(Clone, Debug)]
+struct TOFF {
+    real_sec: i64,
+    real_nsec: u32,
+    clock_sec: i64,
+    clock_nsec: i64,
+}
 
 #[tokio::main]
 async fn main() {
     let input = open_socket().await;
 
-    let nmea_tx = spawn_server(2947);
+    let fix_tx = spawn_server(2947);
 
-    let (lines_rx, done_rx) = spawn_reader(input, nmea_tx);
-
-    spawn_parser(lines_rx);
+    let done_rx = spawn_parser(input, fix_tx);
 
     done_rx.await.unwrap();
 }
@@ -55,7 +64,7 @@ async fn open_socket() -> BufReader<File> {
     return input;
 }
 
-async fn handle_client(mut socket: TcpStream, nmea_tx: broadcast::Sender<String>) {
+async fn handle_client(mut socket: TcpStream, nmea_tx: broadcast::Sender<TOFF>) {
     let (recv, send) = socket.split();
 
     let recv = BufReader::new(recv);
@@ -133,12 +142,12 @@ async fn handle_client(mut socket: TcpStream, nmea_tx: broadcast::Sender<String>
                 let mut rx = nmea_tx.subscribe();
 
                 loop {
-                    let mut message = match rx.recv().await {
-                        Ok(m) => m,
+                    let time = match rx.recv().await {
+                        Ok(t) => t,
                         Err(_) => break,
                     };
 
-                    message.push('\n');
+                    let message = format!("{:?}\n", time);
 
                     match send.write(message.as_bytes()).await {
                         Ok(_) => (),
@@ -160,9 +169,9 @@ async fn handle_client(mut socket: TcpStream, nmea_tx: broadcast::Sender<String>
     }
 }
 
-fn spawn_server(port: u16) -> broadcast::Sender<String> {
+fn spawn_server(port: u16) -> broadcast::Sender<TOFF> {
     let (tx, _) = broadcast::channel(5);
-    let nmea_tx = tx.clone();
+    let fix_tx = tx.clone();
 
     let address = ("0.0.0.0", port);
 
@@ -178,69 +187,83 @@ fn spawn_server(port: u16) -> broadcast::Sender<String> {
                 continue;
             }
 
-            handle_client(socket, nmea_tx.clone()).await;
+            handle_client(socket, fix_tx.clone()).await;
         }
     });
 
     return tx;
 }
 
-fn spawn_parser(mut lines: mpsc::Receiver<String>) {
+fn spawn_parser(input: BufReader<File>, fix_tx: broadcast::Sender<TOFF>) -> oneshot::Receiver<bool> {
+    let mut lines = input.lines();
+
     let mut nmea = Nmea::new();
-
-    tokio::spawn(async move {
-        while let Some(line) = lines.recv().await {
-            let result = nmea.parse(&line.to_string());
-
-            match result {
-                Ok(s) => {
-                    match s {
-                        ParseResult::GGA(gga) => {
-                            println!("{:?}", gga.fix_time);
-                        },
-                        _ => ()
-                    }
-                },
-                Err(_) => (),
-            }
-        }
-    });
-}
-
-fn spawn_reader(input: BufReader<File>, nmea_tx: broadcast::Sender<String>) -> (mpsc::Receiver<String>, oneshot::Receiver<bool>) {
-    let (mut lines_tx, lines_rx) = mpsc::channel(5);
     let (done_tx, done_rx) = oneshot::channel();
 
     tokio::spawn(async move {
-        let mut lines = input.lines();
-
         loop {
-            let result = lines.next_line().await;
-
-            let line = match result {
-                Ok(line) => line,
-                Err(_)   => {
-                    eprintln!("GPS disconnected");
-                    std::process::exit(1);
-                }
-            };
-
-            let line = match line {
-                Some(line) => line,
-                None => {
+            let line = match lines.next_line().await {
+                Ok(l)  => l,
+                Err(e) => {
+                    eprintln!("Failed to read from GPS ({:?})", e);
                     done_tx.send(false).unwrap();
                     break;
                 }
             };
 
-            match nmea_tx.send(line.clone()) {
-                Ok(_)  => (),
-                Err(_) => (),
+            let line = match line {
+                Some(l) => l,
+                None => {
+                    eprintln!("No line from GPS");
+                    done_tx.send(false).unwrap();
+                    break;
+                }
             };
 
-            lines_tx.send(line.clone()).await.unwrap();
+            let parsed = nmea.parse(&line);
+
+            if parsed.is_err() {
+                continue;
+            }
+
+            match parsed.unwrap() {
+                ParseResult::RMC(rmc) => report_fix(&rmc, &fix_tx),
+                _ => (),
+            };
         }
     });
 
-    return (lines_rx, done_rx);
+    return done_rx;
+}
+
+fn report_fix(rmc: &nmea::RmcData, fix_tx: &broadcast::Sender<TOFF>) {
+    let time = rmc.fix_time;
+    if time.is_none() {
+        return;
+    }
+
+    let date = rmc.fix_date;
+    if date.is_none() {
+        return;
+    }
+
+    let ts = NaiveDateTime::new(date.unwrap(), time.unwrap());
+    let timestamp = DateTime::<Utc>::from_utc(ts, Utc);
+
+    let sec  = timestamp.timestamp();
+    let nsec = timestamp.timestamp_subsec_nanos();
+
+    let toff = TOFF {
+        real_sec:   sec,
+        real_nsec:  nsec,
+        clock_sec:  0,
+        clock_nsec: 0
+    };
+
+    println!("toff: {:?}", toff);
+
+    match fix_tx.send(toff) {
+        Ok(_)  => (),
+        Err(_) => (),
+    }
 }
