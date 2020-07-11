@@ -21,19 +21,12 @@ use tokio::io::BufReader;
 use tokio::io::BufWriter;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
+use tokio::net::tcp::WriteHalf;
 use tokio::prelude::*;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 
-#[derive(Clone, Debug)]
-struct TOFF {
-    class: String,
-    device: String,
-    real_sec: i64,
-    real_nsec: u32,
-    clock_sec: u64,
-    clock_nsec: u32,
-}
+type Queue = broadcast::Sender<json::JsonValue>;
 
 #[tokio::main]
 async fn main() {
@@ -69,7 +62,7 @@ async fn open_socket() -> BufReader<File> {
     return input;
 }
 
-async fn handle_client(mut socket: TcpStream, nmea_tx: broadcast::Sender<json::JsonValue>) {
+async fn handle_client(mut socket: TcpStream, tx: Queue) {
     let (recv, send) = socket.split();
 
     let recv = BufReader::new(recv);
@@ -130,7 +123,7 @@ async fn handle_client(mut socket: TcpStream, nmea_tx: broadcast::Sender<json::J
             let watch = match parse(watch_json) {
                 Ok(w) => w,
                 Err(_) => {
-                    println!("Error parsing WATCH body {}", watch_json);
+                    eprintln!("Error parsing WATCH body {}", watch_json);
                     continue;
                 },
             };
@@ -141,29 +134,8 @@ async fn handle_client(mut socket: TcpStream, nmea_tx: broadcast::Sender<json::J
 
             let pps = watch["pps"].as_bool().unwrap_or_else(|| false);
 
-            println!("device: {} enabled: {} pps: {}", device, enable, pps);
-
             if enable && pps {
-                let mut rx = nmea_tx.subscribe();
-
-                loop {
-                    let toff = match rx.recv().await {
-                        Ok(t) => t,
-                        Err(_) => break,
-                    };
-
-                    let message = format!("{}\n", stringify(toff));
-
-                    match send.write(message.as_bytes()).await {
-                        Ok(_) => (),
-                        Err(_) => break,
-                    };
-
-                    let flushed = send.flush().await;
-                    if flushed.is_err() {
-                        break;
-                    }
-                }
+                relay_time_messages(&mut send, tx.clone()).await;
             }
         }
 
@@ -174,7 +146,29 @@ async fn handle_client(mut socket: TcpStream, nmea_tx: broadcast::Sender<json::J
     }
 }
 
-fn spawn_server(port: u16) -> broadcast::Sender<json::JsonValue> {
+async fn relay_time_messages(send: &mut BufWriter<WriteHalf<'_>>, tx: Queue) {
+    let mut rx = tx.subscribe();
+
+    loop {
+        let toff = match rx.recv().await {
+            Ok(t) => t,
+            Err(_) => break,
+        };
+
+        let message = format!("{}\n", stringify(toff));
+
+        match send.write(message.as_bytes()).await {
+            Ok(_) => (),
+            Err(_) => break,
+        };
+
+        let flushed = send.flush().await;
+        if flushed.is_err() {
+            break;
+        }
+    }
+}
+fn spawn_server(port: u16) -> Queue {
     let (tx, _) = broadcast::channel(5);
     let fix_tx = tx.clone();
 
@@ -199,7 +193,7 @@ fn spawn_server(port: u16) -> broadcast::Sender<json::JsonValue> {
     return tx;
 }
 
-fn spawn_parser(input: BufReader<File>, fix_tx: broadcast::Sender<json::JsonValue>) -> oneshot::Receiver<bool> {
+fn spawn_parser(input: BufReader<File>, fix_tx: Queue) -> oneshot::Receiver<bool> {
     let mut lines = input.lines();
 
     let mut nmea = Nmea::new();
@@ -246,7 +240,7 @@ fn spawn_parser(input: BufReader<File>, fix_tx: broadcast::Sender<json::JsonValu
     return done_rx;
 }
 
-fn report_fix(rmc: nmea::RmcData, received: Duration, fix_tx: &broadcast::Sender<json::JsonValue>) {
+fn report_fix(rmc: nmea::RmcData, received: Duration, fix_tx: &Queue) {
     let time = rmc.fix_time;
     if time.is_none() {
         return;
