@@ -15,7 +15,6 @@ use std::env;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use tokio::fs::File;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
 use tokio::io::BufWriter;
@@ -26,40 +25,56 @@ use tokio::prelude::*;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 
+use tokio_serial::DataBits;
+use tokio_serial::FlowControl;
+use tokio_serial::Parity;
+use tokio_serial::Serial;
+use tokio_serial::SerialPortSettings;
+use tokio_serial::StopBits;
+
 type Queue = broadcast::Sender<json::JsonValue>;
 
 #[tokio::main]
 async fn main() {
-    let input = open_socket().await;
+    let gps = open_gps().await;
 
-    let fix_tx = spawn_server(2947);
+    let time_tx = spawn_server(2947);
 
-    let done_rx = spawn_parser(input, fix_tx);
+    let done_rx = spawn_parser(gps, time_tx);
 
     done_rx.await.unwrap();
 }
 
-async fn open_socket() -> BufReader<File> {
+async fn open_gps() -> BufReader<Serial> {
     let name = env::args().nth(1);
 
     if name.is_none() {
-        println!("Provide GPS device as first argument");
+        eprintln!("Provide GPS device as first argument");
         std::process::exit(1);
     }
 
     let name = name.unwrap();
 
-    let io = match File::open(name).await {
-        Ok(io) => io,
+    let s = SerialPortSettings {
+        baud_rate:    38400,
+        data_bits:    DataBits::Eight,
+        flow_control: FlowControl::None,
+        parity:       Parity::None,
+        stop_bits:    StopBits::One,
+        timeout:      Duration::from_millis(1),
+    };
+
+    let sp = match Serial::from_path(&name, &s) {
+        Ok(s) => s,
         Err(e) => {
-            println!("Error {}", e);
+            eprintln!("Error {}", e);
             std::process::exit(1);
         }
     };
 
-    let input = BufReader::new(io);
+    let gps = BufReader::new(sp);
 
-    return input;
+    return gps;
 }
 
 async fn handle_client(mut socket: TcpStream, tx: Queue) {
@@ -82,8 +97,6 @@ async fn handle_client(mut socket: TcpStream, tx: Queue) {
 
         let request = request.unwrap();
 
-        println!("{:?}", request);
-
         if request == "?VERSION;".to_string() {
             let version = json::object!{
                 class: "VERSION",
@@ -93,13 +106,9 @@ async fn handle_client(mut socket: TcpStream, tx: Queue) {
                 proto_minor: 10,
             };
 
-            let mut version_json = stringify(version);
-            println!("{:?}", version_json);
-            version_json.push('\n');
+            let message = format!("{}\n", stringify(version));
 
-            let result = send.write(version_json.as_bytes()).await;
-
-            println!("{:?}", result);
+            let result = send.write(message.as_bytes()).await;
 
             if result.is_err() {
                 break;
@@ -128,7 +137,7 @@ async fn handle_client(mut socket: TcpStream, tx: Queue) {
                 },
             };
 
-            let device = watch["device"].as_str().unwrap_or_else(|| "UNSET");
+            let _device = watch["device"].as_str().unwrap_or_else(|| "UNSET");
 
             let enable = watch["enable"].as_bool().unwrap_or_else(|| false);
 
@@ -170,7 +179,7 @@ async fn relay_time_messages(send: &mut BufWriter<WriteHalf<'_>>, tx: Queue) {
 }
 fn spawn_server(port: u16) -> Queue {
     let (tx, _) = broadcast::channel(5);
-    let fix_tx = tx.clone();
+    let time_tx = tx.clone();
 
     let address = ("0.0.0.0", port);
 
@@ -186,14 +195,14 @@ fn spawn_server(port: u16) -> Queue {
                 continue;
             }
 
-            handle_client(socket, fix_tx.clone()).await;
+            handle_client(socket, time_tx.clone()).await;
         }
     });
 
     return tx;
 }
 
-fn spawn_parser(input: BufReader<File>, fix_tx: Queue) -> oneshot::Receiver<bool> {
+fn spawn_parser(input: BufReader<Serial>, time_tx: Queue) -> oneshot::Receiver<bool> {
     let mut lines = input.lines();
 
     let mut nmea = Nmea::new();
@@ -231,7 +240,7 @@ fn spawn_parser(input: BufReader<File>, fix_tx: Queue) -> oneshot::Receiver<bool
             }
 
             match parsed.unwrap() {
-                ParseResult::RMC(rmc) => report_fix(rmc, received, &fix_tx),
+                ParseResult::RMC(rmc) => report_time(rmc, received, &time_tx),
                 _ => (),
             };
         }
@@ -240,7 +249,7 @@ fn spawn_parser(input: BufReader<File>, fix_tx: Queue) -> oneshot::Receiver<bool
     return done_rx;
 }
 
-fn report_fix(rmc: nmea::RmcData, received: Duration, fix_tx: &Queue) {
+fn report_time(rmc: nmea::RmcData, received: Duration, time_tx: &Queue) {
     let time = rmc.fix_time;
     if time.is_none() {
         return;
@@ -266,7 +275,7 @@ fn report_fix(rmc: nmea::RmcData, received: Duration, fix_tx: &Queue) {
         clock_nsec: received.subsec_nanos(),
     };
 
-    match fix_tx.send(toff) {
+    match time_tx.send(toff) {
         Ok(_)  => (),
         Err(_) => (),
     }
