@@ -1,3 +1,4 @@
+mod serial;
 mod server;
 
 use argh::FromArgs;
@@ -108,7 +109,7 @@ async fn main() {
 
     let (name, serial_port_settings) = convert_args(args);
 
-    let gps = open_gps(name, serial_port_settings).await;
+    let gps = serial::open(name, serial_port_settings).await;
 
     let time_tx = server::spawn(2947);
 
@@ -128,20 +129,6 @@ fn convert_args(args: Args) -> (String, SerialPortSettings) {
     };
 
     return (args.device, s);
-}
-
-async fn open_gps(device: String, settings: SerialPortSettings) -> BufReader<Serial> {
-    let sp = match Serial::from_path(&device, &settings) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("Error {}", e);
-            std::process::exit(1);
-        }
-    };
-
-    let gps = BufReader::new(sp);
-
-    return gps;
 }
 
 fn spawn_parser(input: BufReader<Serial>, time_tx: JsonQueue) -> oneshot::Receiver<bool> {
