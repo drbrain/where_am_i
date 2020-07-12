@@ -1,5 +1,7 @@
 extern crate json;
 
+use argh::FromArgs;
+
 use chrono::DateTime;
 use chrono::NaiveDateTime;
 use chrono::Utc;
@@ -11,7 +13,6 @@ use json::stringify;
 use nmea::Nmea;
 use nmea::ParseResult;
 
-use std::env;
 use std::time::Duration;
 use std::time::SystemTime;
 
@@ -34,9 +35,87 @@ use tokio_serial::StopBits;
 
 type Queue = broadcast::Sender<json::JsonValue>;
 
+#[derive(FromArgs)]
+/// Where am I?
+struct Args {
+    /// GPS baud rate
+    #[argh(option, default = "default_baud()")]
+    baud_rate: u32,
+
+    /// GPS data bits
+    #[argh(option, default = "default_bits()")]
+    data_bits: u8,
+
+    /// GPS parity
+    #[argh(option, default = "default_parity()")]
+    parity: String,
+
+    /// GPS stop bits
+    #[argh(option, default = "default_stop_bits()")]
+    stop_bits: u8,
+
+    /// GPS flow control
+    #[argh(option, default = "default_flow_control()")]
+    flow_control: String,
+
+    /// device
+    #[argh(positional)]
+    device: String,
+}
+
+fn default_baud()         -> u32    { 38400 }
+fn default_bits()         -> u8     { 8 }
+fn default_flow_control() -> String { "none".to_string() }
+fn default_parity()       -> String { "none".to_string() }
+fn default_stop_bits()    -> u8     { 1 }
+
+fn data_bits_from_int(i: u8) -> Result<DataBits, String> {
+    match i {
+        5 => Ok(DataBits::Five),
+        6 => Ok(DataBits::Six),
+        7 => Ok(DataBits::Seven),
+        8 => Ok(DataBits::Eight),
+        e => Err(format!("invalid data bits {}", e)),
+    }
+}
+
+fn flow_control_from_str(s: String) -> Result<FlowControl, String> {
+    match s.to_lowercase().as_str() {
+        "n"        => Ok(FlowControl::None),
+        "none"     => Ok(FlowControl::None),
+        "hardware" => Ok(FlowControl::Hardware),
+        "software" => Ok(FlowControl::Software),
+        e => Err(format!("invalid flow control {}", e)),
+    }
+}
+
+fn parity_from_str(s: String) -> Result<Parity, String> {
+    match s.to_lowercase().as_str() {
+        "e"    => Ok(Parity::Even),
+        "even" => Ok(Parity::Even),
+        "n"    => Ok(Parity::None),
+        "none" => Ok(Parity::None),
+        "o"    => Ok(Parity::Odd),
+        "odd"  => Ok(Parity::Odd),
+        e      => Err(format!("invalid parity {}", e)),
+    }
+}
+
+fn stop_bits_from_str(i: u8) -> Result<StopBits, String> {
+    match i {
+        1 => Ok(StopBits::One),
+        2 => Ok(StopBits::Two),
+        e => Err(format!("invalid stop bits {}", e)),
+    }
+}
+
 #[tokio::main]
 async fn main() {
-    let gps = open_gps().await;
+    let args: Args = argh::from_env();
+
+    let (name, serial_port_settings) = convert_args(args);
+
+    let gps = open_gps(name, serial_port_settings).await;
 
     let time_tx = spawn_server(2947);
 
@@ -45,26 +124,21 @@ async fn main() {
     done_rx.await.unwrap();
 }
 
-async fn open_gps() -> BufReader<Serial> {
-    let name = env::args().nth(1);
-
-    if name.is_none() {
-        eprintln!("Provide GPS device as first argument");
-        std::process::exit(1);
-    }
-
-    let name = name.unwrap();
-
+fn convert_args(args: Args) -> (String, SerialPortSettings) {
     let s = SerialPortSettings {
-        baud_rate:    38400,
-        data_bits:    DataBits::Eight,
-        flow_control: FlowControl::None,
-        parity:       Parity::None,
-        stop_bits:    StopBits::One,
+        baud_rate:    args.baud_rate,
+        data_bits:    data_bits_from_int(args.data_bits).unwrap(),
+        flow_control: flow_control_from_str(args.flow_control).unwrap(),
+        parity:       parity_from_str(args.parity).unwrap(),
+        stop_bits:    stop_bits_from_str(args.stop_bits).unwrap(),
         timeout:      Duration::from_millis(1),
     };
 
-    let sp = match Serial::from_path(&name, &s) {
+    return (args.device, s);
+}
+
+async fn open_gps(device: String, settings: SerialPortSettings) -> BufReader<Serial> {
+    let sp = match Serial::from_path(&device, &settings) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("Error {}", e);
