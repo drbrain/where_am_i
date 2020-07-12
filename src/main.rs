@@ -310,6 +310,7 @@ fn spawn_parser(input: BufReader<Serial>, time_tx: Queue) -> oneshot::Receiver<b
             let parsed = nmea.parse(&line);
 
             if parsed.is_err() {
+                eprintln!("Failed to parse {} ({:?})", line, parsed.err());
                 continue;
             }
 
