@@ -42,13 +42,12 @@ pub async fn spawn(device: String) -> JsonQueue {
             data.timeout.flags = ioctl::TIME_INVALID;
 
             unsafe {
-                let result;
-                result = ioctl::fetch(pps.as_raw_fd(), data_ptr);
-
-                if result.is_err() {
-                    let err = result.err().unwrap();
-                    eprintln!("PPS fetch error on {} ({:?})", device, err);
-                    continue;
+                match ioctl::fetch(pps.as_raw_fd(), data_ptr) {
+                    Ok(_) => (),
+                    Err(e) => {
+                        eprintln!("fetch error on {} ({:?})", device, e);
+                        continue;
+                    }
                 }
             };
 
@@ -79,42 +78,34 @@ pub async fn spawn(device: String) -> JsonQueue {
 
 fn configure(pps_fd: i32) -> Result<bool, String> {
     unsafe {
-        let mut current_mode = 0;
-        let mut params = ioctl::params::default();
+        let mut mode = 0;
 
-        let result = ioctl::getparams(pps_fd, &mut params);
-
-        if result.is_err() {
-            let err = result.err().unwrap();
-            match err {
-                nix::Error::Sys(enotty) => return Err("not a PPS device".to_string()),
-                e => return Err(format!("other error {:?}", e)),
-            };
+        match ioctl::getcap(pps_fd, &mut mode) {
+            Ok(_) => (),
+            Err(_) => return Err("unable to get capabilities".to_string()),
         }
 
-        let result = ioctl::getcap(pps_fd, &mut current_mode);
-
-        if result.is_err() {
-            let err = result.err().unwrap();
-            return Err(format!("unable to get capabilities ({:?})", err));
-        }
-
-        if current_mode & ioctl::CANWAIT == 0 {
+        if mode & ioctl::CANWAIT == 0 {
             return Err("cannot wait".to_string());
         }
 
-        if (current_mode & ioctl::CAPTUREASSERT) == 0 {
+        if (mode & ioctl::CAPTUREASSERT) == 0 {
             return Err("cannot capture asserts".to_string());
         }
 
+        let mut params = ioctl::params::default();
+
+        match ioctl::getparams(pps_fd, &mut params) {
+            Ok(_) => (),
+            Err(_) => return Err("unable to set parameters".to_string()),
+        };
+
         params.mode |= ioctl::CAPTUREASSERT;
 
-        let result = ioctl::setparams(pps_fd, &mut params);
-
-        if result.is_err() {
-            let err = result.err().unwrap();
-            return Err("unable to set parameters".to_string());
-        }
+        match ioctl::setparams(pps_fd, &mut params) {
+            Ok(_) => (),
+            Err(_) => return Err("unable to set parameters".to_string()),
+        };
     }
 
     Ok(true)
