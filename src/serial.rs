@@ -7,7 +7,7 @@ pub async fn open(device: String, settings: SerialPortSettings) -> BufReader<Ser
     let sp = match Serial::from_path(&device, &settings) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("Error {}", e);
+            eprintln!("Error opening {}: {}", device, e);
             std::process::exit(1);
         }
     };
