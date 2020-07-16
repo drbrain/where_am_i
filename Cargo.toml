@@ -10,6 +10,8 @@ edition = "2018"
 argh         = "0.1.0"
 chrono       = "0.4.0"
 json         = "0.12"
+libc         = "0.2.0"
+nix          = "0.17.0"
 nmea         = "0.0.8"
 tokio        = { version = "0.2", features = ["full"] }
 tokio-serial = "4.3.0"
