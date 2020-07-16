@@ -31,9 +31,13 @@ struct Args {
     #[argh(option, default = "default_flow_control()")]
     flow_control: String,
 
-    /// device
+    /// pps_device
+    #[argh(option)]
+    pps_device: String,
+
+    /// gps_device
     #[argh(positional)]
-    device: String,
+    gps_device: String,
 }
 
 fn default_baud()         -> u32    { 38400 }
@@ -82,7 +86,7 @@ fn stop_bits_from_str(i: u8) -> Result<StopBits, String> {
     }
 }
 
-pub fn parse() -> (String, SerialPortSettings) {
+pub fn parse() -> (String, SerialPortSettings, String) {
     let args: Args = argh::from_env();
 
     let s = SerialPortSettings {
@@ -94,5 +98,5 @@ pub fn parse() -> (String, SerialPortSettings) {
         timeout:      Duration::from_millis(1),
     };
 
-    return (args.device, s);
+    return (args.gps_device, s, args.pps_device);
 }

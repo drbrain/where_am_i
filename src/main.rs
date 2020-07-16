@@ -28,18 +28,21 @@ pub type JsonQueue = broadcast::Sender<json::JsonValue>;
 
 #[tokio::main]
 async fn main() {
-    let (name, serial_port_settings) = args::parse();
+    let (tx, _) = broadcast::channel(5);
 
-    let gps = serial::open(name, serial_port_settings).await;
+    let (gps_name, serial_port_settings, pps_name) = args::parse();
 
-    let time_tx = server::spawn(2947);
+    let gps = serial::open(gps_name, serial_port_settings).await;
+    let done = spawn_parser(gps, tx.clone());
 
-    let done_rx = spawn_parser(gps, time_tx);
+    pps::spawn(pps_name, tx.clone());
 
-    done_rx.await.unwrap();
+    server::spawn(2947, tx.clone());
+
+    done.await.unwrap();
 }
 
-fn spawn_parser(input: BufReader<Serial>, time_tx: JsonQueue) -> oneshot::Receiver<bool> {
+fn spawn_parser(input: BufReader<Serial>, tx: JsonQueue) -> oneshot::Receiver<bool> {
     let mut lines = input.lines();
 
     let mut nmea = Nmea::new();
@@ -73,12 +76,12 @@ fn spawn_parser(input: BufReader<Serial>, time_tx: JsonQueue) -> oneshot::Receiv
             let parsed = nmea.parse(&line);
 
             if parsed.is_err() {
-                eprintln!("Failed to parse {} ({:?})", line, parsed.err());
+                //eprintln!("Failed to parse {} ({:?})", line, parsed.err());
                 continue;
             }
 
             match parsed.unwrap() {
-                ParseResult::RMC(rmc) => report_time(rmc, received, &time_tx),
+                ParseResult::RMC(rmc) => report_time(rmc, received, &tx),
                 _ => (),
             };
         }
@@ -87,7 +90,7 @@ fn spawn_parser(input: BufReader<Serial>, time_tx: JsonQueue) -> oneshot::Receiv
     return done_rx;
 }
 
-fn report_time(rmc: nmea::RmcData, received: Duration, time_tx: &JsonQueue) {
+fn report_time(rmc: nmea::RmcData, received: Duration, tx: &JsonQueue) {
     let time = rmc.fix_time;
     if time.is_none() {
         return;
@@ -113,7 +116,7 @@ fn report_time(rmc: nmea::RmcData, received: Duration, time_tx: &JsonQueue) {
         clock_nsec: received.subsec_nanos(),
     };
 
-    match time_tx.send(toff) {
+    match tx.send(toff) {
         Ok(_)  => (),
         Err(_) => (),
     }

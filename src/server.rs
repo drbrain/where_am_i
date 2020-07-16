@@ -9,19 +9,17 @@ use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 use tokio::net::tcp::WriteHalf;
 use tokio::prelude::*;
-use tokio::sync::broadcast;
 
-pub fn spawn(port: u16) -> JsonQueue {
-    let (tx, _) = broadcast::channel(5);
-    let time_tx = tx.clone();
-
-    let address = ("0.0.0.0", port);
-
+pub fn spawn(port: u16, tx: JsonQueue) {
     tokio::spawn(async move {
+        let address = ("0.0.0.0", port);
+
         let mut listener = TcpListener::bind(address).await.unwrap();
 
         loop {
             let (socket, _) = listener.accept().await.unwrap();
+
+            eprintln!("new client {:?}", socket.peer_addr().unwrap());
 
             let nodelay = socket.set_nodelay(true);
 
@@ -29,11 +27,9 @@ pub fn spawn(port: u16) -> JsonQueue {
                 continue;
             }
 
-            handle_client(socket, time_tx.clone()).await;
+            handle_client(socket, tx.clone()).await;
         }
     });
-
-    return tx;
 }
 
 async fn handle_client(mut socket: TcpStream, tx: JsonQueue) {
@@ -102,8 +98,12 @@ async fn handle_client(mut socket: TcpStream, tx: JsonQueue) {
 
             let pps = watch["pps"].as_bool().unwrap_or_else(|| false);
 
+            eprintln!("watching enabled: {:?} pps: {:?}", enable, pps);
+
             if enable && pps {
-                relay_time_messages(&mut send, tx.clone()).await;
+                let rx = tx.subscribe();
+
+                relay_time_messages(&mut send, rx).await;
             }
         }
 
@@ -114,16 +114,20 @@ async fn handle_client(mut socket: TcpStream, tx: JsonQueue) {
     }
 }
 
-async fn relay_time_messages(send: &mut BufWriter<WriteHalf<'_>>, tx: JsonQueue) {
-    let mut rx = tx.subscribe();
-
+async fn relay_time_messages(send: &mut BufWriter<WriteHalf<'_>>, mut rx: tokio::sync::broadcast::Receiver<json::JsonValue>) {
     loop {
-        let toff = match rx.recv().await {
-            Ok(t) => t,
-            Err(_) => break,
+        eprintln!("waiting for message");
+        let json = match rx.recv().await {
+            Ok(j) => j,
+            Err(e) => {
+                eprintln!("error: {:?}", e);
+                break;
+            }
         };
 
-        let message = format!("{}\n", stringify(toff));
+        let message = format!("{}\n", stringify(json));
+
+        eprintln!("out: {}", message);
 
         match send.write(message.as_bytes()).await {
             Ok(_) => (),

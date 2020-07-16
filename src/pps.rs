@@ -9,9 +9,8 @@ use std::os::unix::io::AsRawFd;
 use std::time::SystemTime;
 
 use tokio::fs::File;
-use tokio::sync::broadcast;
 
-pub async fn spawn(device: String) -> JsonQueue {
+pub fn spawn(device: String, tx: JsonQueue) {
     let pps = match OpenOptions::new().read(true).write(true).open(&device) {
         Ok(p) => p,
         Err(e) => {
@@ -30,9 +29,6 @@ pub async fn spawn(device: String) -> JsonQueue {
             std::process::exit(1);
         }
     };
-
-    let (tx, _) = broadcast::channel(5);
-    let pps_tx = tx.clone();
 
     tokio::spawn(async move {
         let mut data = ioctl::data::default();
@@ -66,14 +62,12 @@ pub async fn spawn(device: String) -> JsonQueue {
                 precision:  -1,
             };
 
-            match pps_tx.send(pps_obj) {
+            match tx.send(pps_obj) {
                 Ok(_)  => (),
                 Err(_) => (),
             }
         }
     });
-
-    return tx
 }
 
 fn configure(pps_fd: i32) -> Result<bool, String> {
