@@ -35,7 +35,10 @@ async fn main() {
     let gps = serial::open(gps_name, serial_port_settings).await;
     let done = spawn_parser(gps, tx.clone());
 
-    pps::spawn(pps_name, tx.clone());
+    match pps_name {
+        Some(name) => pps::spawn(name, tx.clone()),
+        None => (),
+    };
 
     server::spawn(2947, tx.clone());
 

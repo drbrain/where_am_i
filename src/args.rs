@@ -33,7 +33,7 @@ struct Args {
 
     /// pps_device
     #[argh(option)]
-    pps_device: String,
+    pps_device: Option<String>,
 
     /// gps_device
     #[argh(positional)]
@@ -86,7 +86,7 @@ fn stop_bits_from_str(i: u8) -> Result<StopBits, String> {
     }
 }
 
-pub fn parse() -> (String, SerialPortSettings, String) {
+pub fn parse() -> (String, SerialPortSettings, Option<String>) {
     let args: Args = argh::from_env();
 
     let s = SerialPortSettings {
