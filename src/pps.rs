@@ -1,6 +1,6 @@
 mod ioctl;
 
-use crate::JsonQueue;
+use crate::JsonSender;
 
 use json::object;
 
@@ -10,22 +10,27 @@ use std::time::SystemTime;
 
 use tokio::fs::File;
 
-pub fn spawn(device: String, tx: JsonQueue) {
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+
+#[tracing::instrument]
+pub fn spawn(device: String, tx: JsonSender) {
     let pps = match OpenOptions::new().read(true).write(true).open(&device) {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("Error opening {}: {}", device, e);
+            error!("Error opening PPS {} ({})", device, e);
             std::process::exit(1);
         }
     };
 
-    eprintln!("Opened {}", device);
+    info!("Opened {}", device);
     let pps = File::from_std(pps);
 
     match configure(pps.as_raw_fd()) {
         Ok(_) => (),
         Err(e) => {
-            eprintln!("{}: {}", device, e);
+            error!("configuring PPS device ({:?})", e);
             std::process::exit(1);
         }
     };
@@ -33,6 +38,7 @@ pub fn spawn(device: String, tx: JsonQueue) {
     tokio::spawn(async move {
         let mut data = ioctl::data::default();
         let data_ptr: *mut ioctl::data = &mut data;
+        info!("watching PPS events on {}", device);
 
         loop {
             data.timeout.flags = ioctl::TIME_INVALID;
@@ -41,7 +47,7 @@ pub fn spawn(device: String, tx: JsonQueue) {
                 match ioctl::fetch(pps.as_raw_fd(), data_ptr) {
                     Ok(_) => (),
                     Err(e) => {
-                        eprintln!("fetch error on {} ({:?})", device, e);
+                        error!("fetch error on {} ({:?})", device, e);
                         continue;
                     }
                 }
@@ -49,7 +55,10 @@ pub fn spawn(device: String, tx: JsonQueue) {
 
             let received = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
                 Ok(n) => n,
-                Err(_) => continue,
+                Err(_) => {
+                    error!("error getting current time");
+                    continue;
+                },
             };
 
             let pps_obj = object! {
@@ -63,13 +72,14 @@ pub fn spawn(device: String, tx: JsonQueue) {
             };
 
             match tx.send(pps_obj) {
-                Ok(_)  => (),
-                Err(_) => (),
+                Ok(_)  => debug!("sent tick"),
+                Err(e) => error!("send error: {:?}", e),
             }
         }
     });
 }
 
+#[tracing::instrument]
 fn configure(pps_fd: i32) -> Result<bool, String> {
     unsafe {
         let mut mode = 0;
