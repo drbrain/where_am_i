@@ -182,7 +182,7 @@ impl Future for FetchFuture {
         let mut guard = self.shared_state.lock().unwrap();
 
         if guard.completed {
-            Poll::Ready(Ok(guard.result.as_ref().unwrap()))
+            Poll::Ready(Ok(guard.result.as_ref().unwrap().to_string()))
         } else {
             guard.waker = Some(cx.waker().clone());
             Poll::Pending
