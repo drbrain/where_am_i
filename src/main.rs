@@ -13,8 +13,8 @@ use tracing::Level;
 
 use tracing_subscriber;
 
-pub type JsonReceiver = broadcast::Receiver<json::JsonValue>;
-pub type JsonSender = broadcast::Sender<json::JsonValue>;
+pub type JsonReceiver = broadcast::Receiver<String>;
+pub type JsonSender = broadcast::Sender<String>;
 
 fn main() {
     let mut runtime =
@@ -42,14 +42,15 @@ async fn run() {
 
     let (gps_name, serial_port_settings, pps_name) = args::parse();
 
-    let done = gps::spawn(gps_name, serial_port_settings, tx.clone()).await;
+    match gps_name {
+        Some(name) => gps::spawn(name, serial_port_settings, tx.clone()),
+        None       => (),
+    };
 
     match pps_name {
         Some(name) => pps::spawn(name, tx.clone()),
         None       => (),
     };
 
-    server::spawn(2947, tx.clone());
-
-    done.await.unwrap();
+    server::spawn(2947, tx.clone()).await;
 }

@@ -3,9 +3,20 @@ mod ioctl;
 use crate::JsonSender;
 
 use json::object;
+use json::stringify;
+
+use libc::c_int;
 
 use std::fs::OpenOptions;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
+use std::task::Waker;
+use std::thread;
 use std::os::unix::io::AsRawFd;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::SystemTime;
 
 use tokio::fs::File;
@@ -36,43 +47,19 @@ pub fn spawn(device: String, tx: JsonSender) {
     };
 
     tokio::spawn(async move {
-        let mut data = ioctl::data::default();
-        let data_ptr: *mut ioctl::data = &mut data;
         info!("watching PPS events on {}", device);
 
         loop {
-            data.timeout.flags = ioctl::TIME_INVALID;
-
-            unsafe {
-                match ioctl::fetch(pps.as_raw_fd(), data_ptr) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        error!("fetch error on {} ({:?})", device, e);
-                        continue;
-                    }
+            let pps_obj = match FetchFuture::new(pps.as_raw_fd()).await {
+                Ok(o) => o,
+                Err(e) => {
+                    error!("fetch error on {} ({:?})", device, e);
+                    continue;
                 }
             };
 
-            let received = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-                Ok(n) => n,
-                Err(_) => {
-                    error!("error getting current time");
-                    continue;
-                },
-            };
-
-            let pps_obj = object! {
-                class:      "PPS".to_string(),
-                device:     "".to_string(),
-                real_sec:   data.info.assert_tu.sec,
-                real_nsec:  data.info.assert_tu.nsec,
-                clock_sec:  received.as_secs(),
-                clock_nsec: received.subsec_nanos(),
-                precision:  -1,
-            };
-
             match tx.send(pps_obj) {
-                Ok(_)  => debug!("sent tick"),
+                Ok(_)  => (),
                 Err(e) => error!("send error: {:?}", e),
             }
         }
@@ -114,3 +101,92 @@ fn configure(pps_fd: i32) -> Result<bool, String> {
 
     Ok(true)
 }
+
+#[derive(Debug)]
+struct FetchState {
+    result:    Option<String>,
+    completed: bool,
+    waker:     Option<Waker>,
+}
+
+struct FetchFuture {
+    shared_state: Arc<Mutex<FetchState>>,
+}
+
+impl FetchFuture {
+    pub fn new(fd: c_int) -> Self {
+        let state = FetchState {
+            result: None,
+            completed: false,
+            waker: None,
+        };
+
+        let shared_state = Arc::new(Mutex::new(state));
+
+        let thread_shared_state = shared_state.clone();
+
+        thread::spawn(move || {
+            let mut shared_state = thread_shared_state.lock().unwrap();
+
+            let mut data = ioctl::data::default();
+            data.timeout.flags = ioctl::TIME_INVALID;
+
+            let data_ptr: *mut ioctl::data = &mut data;
+            let result;
+
+            unsafe {
+                result = ioctl::fetch(fd, data_ptr);
+            }
+
+            shared_state.result = match result {
+                Ok(_)  => {
+                    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
+                    match now {
+                        Ok(n) => {
+                            let pps_obj = object! {
+                                class:      "PPS".to_string(),
+                                device:     "".to_string(),
+                                real_sec:   data.info.assert_tu.sec,
+                                real_nsec:  data.info.assert_tu.nsec,
+                                clock_sec:  n.as_secs(),
+                                clock_nsec: n.subsec_nanos(),
+                                precision:  -1,
+                            };
+
+                            Some(stringify(pps_obj))
+                        },
+                        Err(e) => {
+                            None
+                        },
+                    }
+
+                },
+                Err(e) => None,
+            };
+
+            shared_state.completed = true;
+
+            if let Some(waker) = shared_state.waker.take() {
+                waker.wake()
+            }
+        });
+
+        FetchFuture { shared_state }
+    }
+}
+
+impl Future for FetchFuture {
+    type Output = Result<String, String>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let mut guard = self.shared_state.lock().unwrap();
+
+        if guard.completed {
+            Poll::Ready(Ok(guard.result.as_ref().unwrap()))
+        } else {
+            guard.waker = Some(cx.waker().clone());
+            Poll::Pending
+        }
+    }
+}
+

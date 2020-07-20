@@ -66,6 +66,7 @@ pub unsafe fn getparams(fd: c_int, data: *mut params) -> nix::Result<c_int> {
     let res = libc::ioctl(fd, request_code_read!(MAGIC, GETPARAMS, mem::size_of::<*mut params>()), data);
     nix::errno::Errno::result(res)
 }
+
 // ioctl_write_ptr!(setparams, MAGIC, SETPARAMS, params);
 pub unsafe fn setparams(fd: c_int, data: *mut params) -> nix::Result<c_int> {
     let res = libc::ioctl(fd, request_code_write!(MAGIC, SETPARAMS, mem::size_of::<*mut params>()), data);
@@ -79,5 +80,4 @@ pub unsafe fn fetch(fd: c_int, data: *mut data) -> nix::Result<c_int> {
     let res = libc::ioctl(fd, request_code_readwrite!(MAGIC, FETCH, mem::size_of::<*mut data>()), data);
     nix::errno::Errno::result(res)
 }
-
 
