@@ -104,7 +104,8 @@ fn configure(pps_fd: i32) -> Result<bool, String> {
 
 #[derive(Debug)]
 struct FetchState {
-    result:    Option<String>,
+    result:    String,
+    ok:        bool,
     completed: bool,
     waker:     Option<Waker>,
 }
@@ -116,7 +117,8 @@ struct FetchFuture {
 impl FetchFuture {
     pub fn new(fd: c_int) -> Self {
         let state = FetchState {
-            result: None,
+            result: "incomplete".to_string(),
+            ok: false,
             completed: false,
             waker: None,
         };
@@ -153,15 +155,22 @@ impl FetchFuture {
                                 precision:  -1,
                             };
 
-                            Some(stringify(pps_obj))
+                            shared_state.ok = true;
+
+                            stringify(pps_obj)
                         },
                         Err(e) => {
-                            None
+                            shared_state.ok = false;
+
+                            format!("unable to get timestamp for PPS event ({:?})", e)
                         },
                     }
 
                 },
-                Err(e) => None,
+                Err(e) => {
+                    shared_state.ok = false;
+                    format!("unable to get PPS event ({:?})", e)
+                },
             };
 
             shared_state.completed = true;
@@ -182,7 +191,12 @@ impl Future for FetchFuture {
         let mut guard = self.shared_state.lock().unwrap();
 
         if guard.completed {
-            Poll::Ready(Ok(guard.result.as_ref().unwrap().to_string()))
+            let result = guard.result.to_string();
+
+            match guard.ok {
+                true  => Poll::Ready(Ok(result)),
+                false => Poll::Ready(Err(result)),
+            }
         } else {
             guard.waker = Some(cx.waker().clone());
             Poll::Pending
