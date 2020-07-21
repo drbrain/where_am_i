@@ -34,7 +34,6 @@ async fn handle_client(mut socket: TcpStream, tx: JsonSender) {
     let mut send = BufWriter::new(send);
 
     loop {
-        debug!("waiting for message from {:?}", rx);
         let json = match rx.recv().await {
             Ok(j) => j,
             Err(e) => {

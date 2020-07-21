@@ -10,6 +10,7 @@ use tokio::runtime;
 use tokio::sync::broadcast;
 
 use tracing::Level;
+use tracing::error;
 
 use tracing_subscriber;
 
@@ -48,7 +49,16 @@ async fn run() {
     };
 
     match pps_name {
-        Some(name) => pps::spawn(name, tx.clone()),
+        Some(name) => {
+            match pps::spawn(name, tx.clone()) {
+                Ok(()) => (),
+                Err(e) => {
+                    error!("unable to watch PPS events: {}", e);
+
+                    std::process::exit(1);
+                },
+            };
+        },
         None       => (),
     };
 

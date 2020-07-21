@@ -26,12 +26,11 @@ use tracing::error;
 use tracing::info;
 
 #[tracing::instrument]
-pub fn spawn(device: String, tx: JsonSender) {
+pub fn spawn(device: String, tx: JsonSender) -> Result<(), String> {
     let pps = match OpenOptions::new().read(true).write(true).open(&device) {
         Ok(p) => p,
         Err(e) => {
-            error!("Error opening PPS {} ({})", device, e);
-            std::process::exit(1);
+            return Err(format!("Error opening PPS {} ({})", device, e))
         }
     };
 
@@ -41,8 +40,7 @@ pub fn spawn(device: String, tx: JsonSender) {
     match configure(pps.as_raw_fd()) {
         Ok(_) => (),
         Err(e) => {
-            error!("configuring PPS device ({:?})", e);
-            std::process::exit(1);
+            return Err(format!("configuring PPS device ({:?})", e))
         }
     };
 
@@ -60,10 +58,12 @@ pub fn spawn(device: String, tx: JsonSender) {
 
             match tx.send(pps_obj) {
                 Ok(_)  => (),
-                Err(e) => error!("send error: {:?}", e),
+                Err(e) => (), // error!("send error: {:?}", e),
             }
         }
     });
+
+    Ok(())
 }
 
 #[tracing::instrument]
