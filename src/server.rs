@@ -1,4 +1,7 @@
 use crate::JsonSender;
+use crate::JsonReceiver;
+
+use std::net::SocketAddr;
 
 use tokio::io::BufWriter;
 use tokio::net::TcpListener;
@@ -22,14 +25,13 @@ pub async fn spawn(port: u16, tx: JsonSender) {
 
         info!("client connected {:?}", addr);
 
-        tokio::spawn(handle_client(socket, tx.clone())).await.unwrap();
+        tokio::spawn(handle_client(socket, tx.subscribe()));
     }
 }
 
 #[tracing::instrument]
-async fn handle_client(mut socket: TcpStream, tx: JsonSender) {
+async fn handle_client(mut socket: TcpStream, mut rx: JsonReceiver) {
     let (_recv, send) = socket.split();
-    let mut rx = tx.subscribe();
 
     let mut send = BufWriter::new(send);
 
@@ -46,6 +48,13 @@ async fn handle_client(mut socket: TcpStream, tx: JsonSender) {
 
         send.write(message.as_bytes()).await.unwrap();
 
-        send.flush().await.unwrap();
+        match send.flush().await {
+            Ok(()) => (),
+            Err(e) => {
+                break;
+            },
+        }
     }
+
+    info!("client disconnected");
 }
