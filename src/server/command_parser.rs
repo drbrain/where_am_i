@@ -32,6 +32,7 @@ pub enum Err<E> {
 pub enum Command {
     Device,
     Devices,
+    Error,
     Poll,
     Version,
     Watch,
@@ -91,17 +92,30 @@ fn version<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Comman
 }
 
 fn watch<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
-    let (input, _) = preceded(tag("?WATCH;"), newline)(input)?;
+    let (input, _) =
+        preceded(tag("?WATCH"),
+            preceded(opt(preceded(equal, json_blob)),
+                preceded(semicolon, newline)))(input)?;
 
     Ok((input, Command::Watch))
 }
 
 fn command<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
-    alt((devices,
+    let (_, command) =
+        alt((devices,
             device,
             poll,
             version,
-            watch))(input)
+            watch))(input)?;
+
+    Ok((input, command))
+}
+
+fn parse(input: &str) -> Command {
+    match command::<()>(input) {
+        Ok((_, c)) => c,
+        Err(_)      => Command::Error,
+    }
 }
 
 #[cfg(test)]
@@ -117,6 +131,7 @@ mod tests {
     #[test]
     fn test_device() {
         assert_eq!(Command::Device, device::<()>("?DEVICE;\n").unwrap().1);
+        assert_eq!(Command::Device, device::<()>("?DEVICE={\"path\":\"/dev/gps0\",\"bps\":38400};\n").unwrap().1);
     }
 
     #[test]
@@ -137,5 +152,21 @@ mod tests {
     #[test]
     fn test_watch() {
         assert_eq!(Command::Watch, watch::<()>("?WATCH;\n").unwrap().1);
+        assert_eq!(Command::Watch, watch::<()>("?WATCH={\"device\":\"/dev/gps0\",\"enable\":true};\n").unwrap().1);
+    }
+
+    #[test]
+    fn test_command() {
+        assert_eq!(Command::Device, command::<()>("?DEVICE;\n").unwrap().1);
+        assert_eq!(Command::Devices, command::<()>("?DEVICES;\n").unwrap().1);
+        assert_eq!(Command::Poll, command::<()>("?POLL;\n").unwrap().1);
+        assert_eq!(Command::Version, command::<()>("?VERSION;\n").unwrap().1);
+        assert_eq!(Command::Watch, command::<()>("?WATCH;\n").unwrap().1);
+    }
+
+    #[test]
+    fn test_parse() {
+        assert_eq!(Command::Watch, parse("?WATCH;\n"));
+        assert_eq!(Command::Error, parse("garbage\n"));
     }
 }
