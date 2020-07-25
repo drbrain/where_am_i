@@ -1,3 +1,6 @@
+use json;
+use json::JsonValue;
+
 use nom::IResult;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
@@ -5,10 +8,15 @@ use nom::bytes::complete::take;
 use nom::bytes::complete::take_while1;
 use nom::character::complete::char;
 use nom::combinator::opt;
+use nom::combinator::map_opt;
+use nom::combinator::map_res;
+use nom::combinator::recognize;
+use nom::combinator::value;
 use nom::error::ParseError;
 use nom::number::complete::be_u16;
 use nom::sequence::delimited;
 use nom::sequence::preceded;
+use nom::sequence::terminated;
 
 pub fn length_value(input: &[u8]) -> IResult<&[u8],&[u8]> {
     let (input, length) = be_u16(input)?;
@@ -28,76 +36,124 @@ pub enum Err<E> {
   Failure(E),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct DeviceData {
+    pub path: Option<String>,
+    pub bps: Option<u32>,
+    pub parity: Option<String>,
+    pub stopbits: Option<u32>,
+    pub native: Option<u32>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct WatchData {
+    pub enable: bool,
+    pub json: bool,
+    pub raw: u32,
+    pub scaled: bool,
+    pub split24: bool,
+    pub pps: bool,
+    pub device: Option<String>,
+    pub remote: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Command {
-    Device,
+    Device(Option<DeviceData>),
     Devices,
     Error,
     Poll,
     Version,
-    Watch,
+    Watch(Option<WatchData>),
 }
 
-fn question<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
-    tag("?")(input)
-}
-
-fn semicolon<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
-    tag(";")(input)
+fn json_to_string(input: &JsonValue) -> Option<String> {
+    if input.is_null() {
+        None
+    } else {
+        input.as_str().map_or(None, |v| Some(v.to_string()))
+    }
 }
 
 fn equal<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
     tag("=")(input)
 }
 
-fn newline<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, char, E> {
-    preceded(opt(char('\r')), char('\n'))(input)
+fn eol<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, char, E> {
+    preceded(char(';'), preceded(opt(char('\r')), char('\n')))(input)
 }
 
-fn json_blob<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
+fn json_blob<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, JsonValue, E> {
     let innards = take_while1(|c| c != '}');
 
-    let blob = delimited(char('{'), innards, char('}'));
+    let blob = recognize(delimited(char('{'), innards, char('}')));
 
-    blob(input)
+    map_res(blob, |j| json::parse(j))(input)
 }
 
 fn device<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
-    let (input, _) =
+    let (input, json) =
         preceded(tag("?DEVICE"),
-            preceded(opt(preceded(equal, json_blob)),
-                preceded(semicolon, newline)))(input)?;
+            terminated(opt(preceded(equal, json_blob)),
+                eol))(input)?;
 
-    Ok((input, Command::Device))
+    let device_data = match json {
+        Some(j) =>
+            Some(DeviceData {
+                path: json_to_string(&j["path"]),
+                bps: j["bps"].as_u32(),
+                parity: json_to_string(&j["parity"]),
+                stopbits: j["stopbits"].as_u32(),
+                native: j["native"].as_u32(),
+            }),
+        None => None,
+    };
+
+    Ok((input, Command::Device(device_data)))
 }
 
 fn devices<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
     let (input, _) =
-        preceded(tag("?DEVICES"), preceded(semicolon, newline))(input)?;
+        preceded(tag("?DEVICES"), eol)(input)?;
 
     Ok((input, Command::Devices))
 }
 
 fn poll<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
     let (input, _) =
-        preceded(tag("?POLL"), preceded(semicolon, newline))(input)?;
+        preceded(tag("?POLL"), eol)(input)?;
 
     Ok((input, Command::Poll))
 }
 
 fn version<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
-    let (input, _) = preceded(tag("?VERSION;"), newline)(input)?;
+    let (input, _) = preceded(tag("?VERSION"), eol)(input)?;
 
     Ok((input, Command::Version))
 }
 
 fn watch<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
-    let (input, _) =
+    let (input, json) =
         preceded(tag("?WATCH"),
-            preceded(opt(preceded(equal, json_blob)),
-                preceded(semicolon, newline)))(input)?;
+            terminated(opt(preceded(equal, json_blob)),
+                eol))(input)?;
 
-    Ok((input, Command::Watch))
+    let watch_data = match json {
+        Some(j) =>
+            Some(WatchData {
+                enable: j["enable"].as_bool().unwrap_or(false),
+                json: j["json"].as_bool().unwrap_or(false),
+                raw: 0,
+                scaled: j["scaled"].as_bool().unwrap_or(false),
+                split24: j["split24"].as_bool().unwrap_or(false),
+                pps: j["pps"].as_bool().unwrap_or(false),
+                device: json_to_string(&j["device"]),
+                remote: json_to_string(&j["remote"]),
+        }),
+        None => None,
+    };
+
+    Ok((input, Command::Watch(watch_data)))
 }
 
 fn command<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
@@ -123,15 +179,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_newline() {
-        assert_eq!('\n', newline::<()>("\n").unwrap().1);
-        assert_eq!('\n', newline::<()>("\r\n").unwrap().1);
+    fn test_eol() {
+        assert_eq!('\n', eol::<()>(";\n").unwrap().1);
+        assert_eq!('\n', eol::<()>(";\r\n").unwrap().1);
+    }
+
+    #[test]
+    fn test_json_blob() {
+        let expected = json::parse("{\"hello\":true}").unwrap();
+
+        assert_eq!(expected, json_blob::<()>("{\"hello\":true}").unwrap().1);
     }
 
     #[test]
     fn test_device() {
-        assert_eq!(Command::Device, device::<()>("?DEVICE;\n").unwrap().1);
-        assert_eq!(Command::Device, device::<()>("?DEVICE={\"path\":\"/dev/gps0\",\"bps\":38400};\n").unwrap().1);
+        assert_eq!(Command::Device(None), device::<()>("?DEVICE;\n").unwrap().1);
+
+        let device_data = DeviceData {
+            path: Some("/dev/gps0".to_string()),
+            bps: Some(38400),
+            parity: None,
+            stopbits: None,
+            native: None,
+        };
+
+        assert_eq!(Command::Device(Some(device_data)), device::<()>("?DEVICE={\"path\":\"/dev/gps0\",\"bps\":38400};\n").unwrap().1);
     }
 
     #[test]
@@ -151,22 +223,34 @@ mod tests {
 
     #[test]
     fn test_watch() {
-        assert_eq!(Command::Watch, watch::<()>("?WATCH;\n").unwrap().1);
-        assert_eq!(Command::Watch, watch::<()>("?WATCH={\"device\":\"/dev/gps0\",\"enable\":true};\n").unwrap().1);
+        assert_eq!(Command::Watch(None), watch::<()>("?WATCH;\n").unwrap().1);
+
+        let watch_data = WatchData {
+            enable: true,
+            json: false,
+            raw: 0,
+            scaled: false,
+            split24: false,
+            pps: false,
+            device: Some("/dev/gps0".to_string()),
+            remote: None,
+        };
+
+        assert_eq!(Command::Watch(Some(watch_data)), watch::<()>("?WATCH={\"device\":\"/dev/gps0\",\"enable\":true};\n").unwrap().1);
     }
 
     #[test]
     fn test_command() {
-        assert_eq!(Command::Device, command::<()>("?DEVICE;\n").unwrap().1);
+        assert_eq!(Command::Device(None), command::<()>("?DEVICE;\n").unwrap().1);
         assert_eq!(Command::Devices, command::<()>("?DEVICES;\n").unwrap().1);
         assert_eq!(Command::Poll, command::<()>("?POLL;\n").unwrap().1);
         assert_eq!(Command::Version, command::<()>("?VERSION;\n").unwrap().1);
-        assert_eq!(Command::Watch, command::<()>("?WATCH;\n").unwrap().1);
+        assert_eq!(Command::Watch(None), command::<()>("?WATCH;\n").unwrap().1);
     }
 
     #[test]
     fn test_parse() {
-        assert_eq!(Command::Watch, parse("?WATCH;\n"));
+        assert_eq!(Command::Watch(None), parse("?WATCH;\n"));
         assert_eq!(Command::Error, parse("garbage\n"));
     }
 }
