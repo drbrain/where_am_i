@@ -18,7 +18,6 @@ use tokio::prelude::*;
 
 use tokio_serial::SerialPortSettings;
 
-use tracing::debug;
 use tracing::error;
 
 #[tracing::instrument]
