@@ -1,8 +1,8 @@
-mod command_parser;
-mod gpsd_codec;
+mod parser;
+mod codec;
 
-use command_parser::Command;
-use gpsd_codec::GpsdCodec;
+use parser::Command;
+use codec::Codec;
 
 use crate::JsonSender;
 
@@ -77,7 +77,7 @@ pub async fn spawn(port: u16, tx: JsonSender) {
             },
         };
 
-        let mut gpsd = Framed::new(socket, GpsdCodec::new());
+        let mut gpsd = Framed::new(socket, Codec::new());
         debug!("{:?}", gpsd);
 
         let result = match gpsd.next().await {

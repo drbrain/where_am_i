@@ -2,7 +2,7 @@ mod args;
 mod gps;
 mod pps;
 mod serial;
-mod server;
+mod gpsd_server;
 
 #[macro_use] extern crate nix;
 
@@ -62,5 +62,5 @@ async fn run() {
         None       => (),
     };
 
-    server::spawn(2947, tx.clone()).await;
+    gpsd_server::spawn(2947, tx.clone()).await;
 }

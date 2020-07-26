@@ -1,5 +1,5 @@
-use super::command_parser;
-use super::command_parser::Command;
+use super::parser;
+use super::parser::Command;
 
 use bytes::Buf;
 use bytes::BufMut;
@@ -18,15 +18,15 @@ use tokio_util::codec::Decoder;
 use tokio_util::codec::Encoder;
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct GpsdCodec {
+pub struct Codec {
     next_index: usize,
     max_length: usize,
     is_discarding: bool,
 }
 
-impl GpsdCodec {
-    pub fn new() -> GpsdCodec {
-        GpsdCodec {
+impl Codec {
+    pub fn new() -> Codec {
+        Codec {
             next_index: 0,
             max_length: 80,
             is_discarding: false,
@@ -39,11 +39,11 @@ fn utf8(buf: &[u8]) -> Result<&str, io::Error> {
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Unable to decode input as UTF8"))
 }
 
-impl Decoder for GpsdCodec {
+impl Decoder for Codec {
     type Item = Command;
-    type Error = GpsdCodecError;
+    type Error = CodecError;
 
-    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Command>, GpsdCodecError> {
+    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Command>, CodecError> {
         loop {
             let read_to = cmp::min(81, buf.len());
 
@@ -61,7 +61,7 @@ impl Decoder for GpsdCodec {
                     buf.advance(read_to);
                     self.next_index = 0;
                     if buf.is_empty() {
-                        return Err(GpsdCodecError::UnrecognizedRequest);
+                        return Err(CodecError::UnrecognizedRequest);
                     }
                 }
                 (false, Some(offset)) => {
@@ -71,14 +71,14 @@ impl Decoder for GpsdCodec {
                     let line = buf.split_to(newline_index + 1);
                     let line = &line[..line.len()];
                     let line = utf8(line)?;
-                    return Ok(Some(command_parser::parse(line)));
+                    return Ok(Some(parser::parse(line)));
                 }
                 (false, None) if buf.len() > self.max_length => {
                     // Reached the maximum length without finding a
                     // newline, return an error and start discarding on the
                     // next call.
                     self.is_discarding = true;
-                    return Err(GpsdCodecError::UnrecognizedRequest);
+                    return Err(CodecError::UnrecognizedRequest);
                 }
                 (false, None) => {
                     // We didn't find a line or reach the length limit, so the next
@@ -91,13 +91,13 @@ impl Decoder for GpsdCodec {
     }
 }
 
-impl<T> Encoder<T> for GpsdCodec
+impl<T> Encoder<T> for Codec
 where
     T: Serialize,
 {
-    type Error = GpsdCodecError;
+    type Error = CodecError;
 
-    fn encode(&mut self, json: T, buf: &mut BytesMut) -> Result<(), GpsdCodecError> {
+    fn encode(&mut self, json: T, buf: &mut BytesMut) -> Result<(), CodecError> {
         let serialized = serde_json::to_string(&json);
 
         let out = match serialized {
@@ -106,7 +106,7 @@ where
                 let internal_error = json!({"class": "ERROR", "message": "internal error"});
                 match serde_json::to_string(&internal_error) {
                     Ok(s) => s,
-                    Err(e) => return Err(GpsdCodecError::InternalError),
+                    Err(e) => return Err(CodecError::InternalError),
                 }
             },
         };
@@ -119,33 +119,33 @@ where
     }
 }
 
-impl Default for GpsdCodec {
+impl Default for Codec {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[derive(Debug)]
-pub enum GpsdCodecError {
+pub enum CodecError {
     InternalError,
     UnrecognizedRequest,
     Io(io::Error),
 }
 
-impl fmt::Display for GpsdCodecError {
+impl fmt::Display for CodecError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            GpsdCodecError::InternalError => write!(f, "internal error"),
-            GpsdCodecError::UnrecognizedRequest => write!(f, "unrecognized request"),
-            GpsdCodecError::Io(e) => write!(f, "{}", e),
+            CodecError::InternalError => write!(f, "internal error"),
+            CodecError::UnrecognizedRequest => write!(f, "unrecognized request"),
+            CodecError::Io(e) => write!(f, "{}", e),
         }
     }
 }
 
-impl From<io::Error> for GpsdCodecError {
-    fn from(e: io::Error) -> GpsdCodecError {
-        GpsdCodecError::Io(e)
+impl From<io::Error> for CodecError {
+    fn from(e: io::Error) -> CodecError {
+        CodecError::Io(e)
     }
 }
 
-impl std::error::Error for GpsdCodecError {}
+impl std::error::Error for CodecError {}
