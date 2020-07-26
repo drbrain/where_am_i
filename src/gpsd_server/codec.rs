@@ -106,7 +106,7 @@ where
                 let internal_error = json!({"class": "ERROR", "message": "internal error"});
                 match serde_json::to_string(&internal_error) {
                     Ok(s) => s,
-                    Err(e) => return Err(CodecError::InternalError),
+                    Err(_) => return Err(CodecError::InternalError),
                 }
             },
         };
