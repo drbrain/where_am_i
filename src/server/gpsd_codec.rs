@@ -6,7 +6,7 @@ use bytes::BufMut;
 use bytes::BytesMut;
 
 use serde_json;
-use serde_json::Value;
+use serde_json::json;
 use serde::Serialize;
 
 use std::cmp;
@@ -98,7 +98,18 @@ where
     type Error = GpsdCodecError;
 
     fn encode(&mut self, json: T, buf: &mut BytesMut) -> Result<(), GpsdCodecError> {
-        let out = serde_json::to_string(&json).unwrap();
+        let serialized = serde_json::to_string(&json);
+
+        let out = match serialized {
+            Ok(s) => s,
+            Err(_) => {
+                let internal_error = json!({"class": "ERROR", "message": "internal error"});
+                match serde_json::to_string(&internal_error) {
+                    Ok(s) => s,
+                    Err(e) => return Err(GpsdCodecError::InternalError),
+                }
+            },
+        };
 
         buf.reserve(out.len() + 1);
         buf.put(out.as_bytes());
@@ -116,6 +127,7 @@ impl Default for GpsdCodec {
 
 #[derive(Debug)]
 pub enum GpsdCodecError {
+    InternalError,
     UnrecognizedRequest,
     Io(io::Error),
 }
@@ -123,6 +135,7 @@ pub enum GpsdCodecError {
 impl fmt::Display for GpsdCodecError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            GpsdCodecError::InternalError => write!(f, "internal error"),
             GpsdCodecError::UnrecognizedRequest => write!(f, "unrecognized request"),
             GpsdCodecError::Io(e) => write!(f, "{}", e),
         }
