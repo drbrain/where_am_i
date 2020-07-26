@@ -6,9 +6,6 @@ mod server;
 
 #[macro_use] extern crate nix;
 
-#[macro_use]
-extern crate nom;
-
 use tokio::runtime;
 use tokio::sync::broadcast;
 

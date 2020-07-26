@@ -1,16 +1,27 @@
 mod command_parser;
+mod gpsd_codec;
+
+use command_parser::Command;
+use gpsd_codec::GpsdCodec;
 
 use crate::JsonSender;
-use crate::JsonReceiver;
+
+use futures::SinkExt;
+
+use serde_json::json;
 
 use std::cell::RefCell;
-use std::cmp;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use tokio::net::TcpListener;
+use tokio::stream::StreamExt;
 
+use tokio_util::codec::Framed;
+
+use tracing::debug;
+use tracing::error;
 use tracing::info;
 
 #[derive(Clone)]
@@ -52,144 +63,66 @@ pub async fn spawn(port: u16, tx: JsonSender) {
     let address = ("0.0.0.0", port);
 
     let mut listener = TcpListener::bind(address).await.unwrap();
-    let clienst = Clients::new();
+    let mut incoming = listener.incoming();
 
-    loop {
-        info!("waiting for client");
+    while let Some(socket) = incoming.next().await {
+        let socket = match socket {
+            Ok(s) => {
+                info!("client connected {:?}", s.peer_addr());
+                s
+            },
+            Err(e) => {
+                error!("connect failed {:?}", e);
+                break;
+            },
+        };
 
-        let (socket, addr) = listener.accept().await.unwrap();
+        let mut gpsd = Framed::new(socket, GpsdCodec::new());
+        debug!("{:?}", gpsd);
 
-        info!("client connected {:?}", addr);
+        let result = match gpsd.next().await {
+            Some(r) => r,
+            None => break,
+        };
 
-        let gpsd = Framed::new(socket, GpsdCodec::new());
+        let command = match result {
+            Ok(c) => c,
+            Err(e) => Command::Error("unrecognized command".to_string()),
+        };
+
+        let response = match command {
+            Command::Devices => json!({
+                "class": "DEVICES",
+                "devices": [],
+            }),
+            Command::Device(_) => json!({
+                "class": "DEVICE",
+                "stopbits": 1,
+            }),
+            Command::Error(e) => json!({
+                "class": "ERROR",
+                "message": "unrecognized command",
+            }),
+            Command::Poll => json!({
+                "class": "POLL",
+                "time": 0,
+                "active": 0,
+                "tpv": [],
+                "sky": [],
+            }),
+            Command::Version => json!( {
+                "class": "VERSION",
+                "release": "",
+                "rev": "",
+                "proto_major": 3,
+                "proto_minor": 10,
+            }),
+            Command::Watch(_) => json!({
+                "class": "WATCH",
+            }),
+        };
+
+        debug!("{:?}", response);
+        gpsd.send(response).await.unwrap();
     }
 }
-
-use bytes::Buf;
-use bytes::BytesMut;
-
-use std::fmt;
-use std::io;
-use std::str;
-
-use tokio_util::codec::Framed;
-use tokio_util::codec::Decoder;
-use tokio_util::codec::Encoder;
-
-pub enum Command {
-    Device,
-    Devices,
-    Poll,
-    Version,
-    Watch,
-}
-
-pub struct GpsdCodec {
-    next_index: usize,
-    max_length: usize,
-    is_discarding: bool,
-}
-
-impl GpsdCodec {
-    pub fn new() -> GpsdCodec {
-        GpsdCodec {
-            next_index: 0,
-            max_length: 80,
-            is_discarding: false,
-        }
-    }
-}
-
-fn utf8(buf: &[u8]) -> Result<&str, io::Error> {
-    str::from_utf8(buf)
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Unable to decode input as UTF8"))
-}
-
-fn without_carriage_return(s: &[u8]) -> &[u8] {
-    if let Some(&b'\r') = s.last() {
-        &s[..s.len() - 1]
-    } else {
-        s
-    }
-}
-
-fn decode_line(line: String) -> Result<Option<Command>, GpsdCodecError> {
-    todo!()
-}
-
-impl Decoder for GpsdCodec {
-    type Item = String;
-    type Error = GpsdCodecError;
-
-    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<String>, GpsdCodecError> {
-        loop {
-            let read_to = cmp::min(81, buf.len());
-
-            let newline_offset = buf[self.next_index..read_to]
-                .iter()
-                .position(|b| *b == b'\n');
-
-            match (self.is_discarding, newline_offset) {
-                (true, Some(offset)) => {
-                    buf.advance(offset + self.next_index + 1);
-                    self.is_discarding = false;
-                    self.next_index = 0;
-                }
-                (true, None) => {
-                    buf.advance(read_to);
-                    self.next_index = 0;
-                    if buf.is_empty() {
-                        return Err(GpsdCodecError::UnrecognizedRequest);
-                    }
-                }
-                (false, Some(offset)) => {
-                    // Found a line!
-                    let newline_index = offset + self.next_index;
-                    self.next_index = 0;
-                    let line = buf.split_to(newline_index + 1);
-                    let line = &line[..line.len() - 1];
-                    let line = without_carriage_return(line);
-                    let line = utf8(line)?;
-                    return Ok(Some(line.to_string()));
-                }
-                (false, None) if buf.len() > self.max_length => {
-                    // Reached the maximum length without finding a
-                    // newline, return an error and start discarding on the
-                    // next call.
-                    self.is_discarding = true;
-                    return Err(GpsdCodecError::UnrecognizedRequest);
-                }
-                (false, None) => {
-                    // We didn't find a line or reach the length limit, so the next
-                    // call will resume searching at the current offset.
-                    self.next_index = read_to;
-                    return Ok(None);
-                }
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum GpsdCodecError {
-    UnrecognizedRequest,
-    Io(io::Error),
-}
-
-impl fmt::Display for GpsdCodecError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            GpsdCodecError::UnrecognizedRequest => write!(f, "unrecognized request"),
-            GpsdCodecError::Io(e) => write!(f, "{}", e),
-        }
-    }
-}
-
-impl From<io::Error> for GpsdCodecError {
-    fn from(e: io::Error) -> GpsdCodecError {
-        GpsdCodecError::Io(e)
-    }
-}
-
-impl std::error::Error for GpsdCodecError {}
-

@@ -5,8 +5,7 @@ use chrono::DateTime;
 use chrono::NaiveDateTime;
 use chrono::Utc;
 
-use json::object;
-use json::stringify;
+use serde_json::json;
 
 use std::time::Duration;
 use std::time::SystemTime;
@@ -84,16 +83,16 @@ fn report_time(rmc: nmea::RmcData, received: Duration, tx: &JsonSender) {
     let sec  = timestamp.timestamp();
     let nsec = timestamp.timestamp_subsec_nanos();
 
-    let toff = object! {
-        class:      "TOFF".to_string(),
-        device:     "".to_string(),
-        real_sec:   sec,
-        real_nsec:  nsec,
-        clock_sec:  received.as_secs(),
-        clock_nsec: received.subsec_nanos(),
-    };
+    let toff = json!({
+        "class":      "TOFF".to_string(),
+        "device":     "".to_string(),
+        "real_sec":   sec,
+        "real_nsec":  nsec,
+        "clock_sec":  received.as_secs(),
+        "clock_nsec": received.subsec_nanos(),
+    });
 
-    match tx.send(stringify(toff)) {
+    match tx.send(toff.to_string()) {
         Ok(_)  => (),
         Err(_) => (), // error!("send error: {:?}", e),
     }

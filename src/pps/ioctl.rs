@@ -39,20 +39,20 @@ pub struct time {
 pub const TIME_INVALID: u32 = 1<<0;
 
 pub const CAPTUREASSERT: i32 = 0x01;   // capture assert events
-pub const CAPTURECLEAR:  i32 = 0x02;   // capture clear events
-pub const CAPTUREBOTH:   i32 = 0x03;   // capture both event types
+// pub const CAPTURECLEAR:  i32 = 0x02;   // capture clear events
+// pub const CAPTUREBOTH:   i32 = 0x03;   // capture both event types
 
-pub const OFFSETASSERT:  i32 = 0x10;   // apply compensation for assert event
-pub const OFFSETCLEAR:   i32 = 0x20;   // apply compensation for clear event
+// pub const OFFSETASSERT:  i32 = 0x10;   // apply compensation for assert event
+// pub const OFFSETCLEAR:   i32 = 0x20;   // apply compensation for clear event
 
-pub const ECHOASSERT:    i32 = 0x40;   // feed back assert event to output
-pub const ECHOCLEAR:     i32 = 0x80;   // feed back clear event to output
+// pub const ECHOASSERT:    i32 = 0x40;   // feed back assert event to output
+// pub const ECHOCLEAR:     i32 = 0x80;   // feed back clear event to output
 
 pub const CANWAIT:       i32 = 0x100;  // Can we wait for an event?
-pub const CANPOLL:       i32 = 0x200;  // Reserved
+// pub const CANPOLL:       i32 = 0x200;  // Reserved
 
-pub const DSFMT_TSPEC:   i32 = 0x1000; // struct timespec format
-pub const DSFMT_NTPFP:   i32 = 0x2000; // NTP time format
+// pub const DSFMT_TSPEC:   i32 = 0x1000; // struct timespec format
+// pub const DSFMT_NTPFP:   i32 = 0x2000; // NTP time format
 
 pub const MAGIC: u8 = b'p';
 

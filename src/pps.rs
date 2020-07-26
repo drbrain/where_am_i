@@ -2,8 +2,7 @@ mod ioctl;
 
 use crate::JsonSender;
 
-use json::object;
-use json::stringify;
+use serde_json::json;
 
 use libc::c_int;
 
@@ -57,7 +56,7 @@ pub fn spawn(device: String, tx: JsonSender) -> Result<(), String> {
 
             match tx.send(pps_obj) {
                 Ok(_)  => (),
-                Err(e) => (), // error!("send error: {:?}", e),
+                Err(_) => (), // error!("send error: {:?}", e),
             }
         }
     });
@@ -144,19 +143,19 @@ impl FetchFuture {
                     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
                     match now {
                         Ok(n) => {
-                            let pps_obj = object! {
-                                class:      "PPS".to_string(),
-                                device:     "".to_string(),
-                                real_sec:   data.info.assert_tu.sec,
-                                real_nsec:  data.info.assert_tu.nsec,
-                                clock_sec:  n.as_secs(),
-                                clock_nsec: n.subsec_nanos(),
-                                precision:  -1,
-                            };
+                            let pps_obj = json!({
+                                "class":      "PPS".to_string(),
+                                "device":     "".to_string(),
+                                "real_sec":   data.info.assert_tu.sec,
+                                "real_nsec":  data.info.assert_tu.nsec,
+                                "clock_sec":  n.as_secs(),
+                                "clock_nsec": n.subsec_nanos(),
+                                "precision":  -1,
+                            });
 
                             shared_state.ok = true;
 
-                            stringify(pps_obj)
+                            pps_obj.to_string()
                         },
                         Err(e) => {
                             shared_state.ok = false;

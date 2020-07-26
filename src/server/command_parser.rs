@@ -1,55 +1,34 @@
-use json;
-use json::JsonValue;
+use serde_json;
+use serde_json::Value;
 
 use nom::IResult;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
-use nom::bytes::complete::take;
 use nom::bytes::complete::take_while1;
 use nom::character::complete::char;
-use nom::combinator::opt;
-use nom::combinator::map_opt;
 use nom::combinator::map_res;
+use nom::combinator::opt;
 use nom::combinator::recognize;
-use nom::combinator::value;
 use nom::error::ParseError;
-use nom::number::complete::be_u16;
+use nom::error::VerboseError;
 use nom::sequence::delimited;
 use nom::sequence::preceded;
 use nom::sequence::terminated;
 
-pub fn length_value(input: &[u8]) -> IResult<&[u8],&[u8]> {
-    let (input, length) = be_u16(input)?;
-    take(length)(input)
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Needed {
-  Unknown,
-  Size(u32)
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Err<E> {
-  Incomplete(Needed),
-  Error(E),
-  Failure(E),
-}
-
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct DeviceData {
     pub path: Option<String>,
-    pub bps: Option<u32>,
+    pub bps: Option<u64>,
     pub parity: Option<String>,
-    pub stopbits: Option<u32>,
-    pub native: Option<u32>,
+    pub stopbits: Option<u64>,
+    pub native: Option<u64>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct WatchData {
     pub enable: bool,
     pub json: bool,
-    pub raw: u32,
+    pub raw: u64,
     pub scaled: bool,
     pub split24: bool,
     pub pps: bool,
@@ -61,13 +40,13 @@ pub struct WatchData {
 pub enum Command {
     Device(Option<DeviceData>),
     Devices,
-    Error,
+    Error(String),
     Poll,
     Version,
     Watch(Option<WatchData>),
 }
 
-fn json_to_string(input: &JsonValue) -> Option<String> {
+fn json_to_string(input: &Value) -> Option<String> {
     if input.is_null() {
         None
     } else {
@@ -83,12 +62,12 @@ fn eol<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, char, E> {
     preceded(char(';'), preceded(opt(char('\r')), char('\n')))(input)
 }
 
-fn json_blob<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, JsonValue, E> {
+fn json_blob<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Value, E> {
     let innards = take_while1(|c| c != '}');
 
     let blob = recognize(delimited(char('{'), innards, char('}')));
 
-    map_res(blob, |j| json::parse(j))(input)
+    map_res(blob, |j| serde_json::from_str(j))(input)
 }
 
 fn device<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
@@ -101,10 +80,10 @@ fn device<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command
         Some(j) =>
             Some(DeviceData {
                 path: json_to_string(&j["path"]),
-                bps: j["bps"].as_u32(),
+                bps: j["bps"].as_u64(),
                 parity: json_to_string(&j["parity"]),
-                stopbits: j["stopbits"].as_u32(),
-                native: j["native"].as_u32(),
+                stopbits: j["stopbits"].as_u64(),
+                native: j["native"].as_u64(),
             }),
         None => None,
     };
@@ -167,10 +146,10 @@ fn command<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Comman
     Ok((input, command))
 }
 
-fn parse(input: &str) -> Command {
-    match command::<()>(input) {
+pub fn parse(input: &str) -> Command {
+    match command::<VerboseError<&str>>(input) {
         Ok((_, c)) => c,
-        Err(_)      => Command::Error,
+        Err(e)      => Command::Error(e.to_string()),
     }
 }
 
@@ -251,6 +230,6 @@ mod tests {
     #[test]
     fn test_parse() {
         assert_eq!(Command::Watch(None), parse("?WATCH;\n"));
-        assert_eq!(Command::Error, parse("garbage\n"));
+        assert_eq!(Command::Error("garbage"), parse("garbage\n"));
     }
 }
