@@ -6,6 +6,8 @@ mod gpsd_server;
 
 #[macro_use] extern crate nix;
 
+use serde_json::Value;
+
 use tokio::runtime;
 use tokio::sync::broadcast;
 
@@ -14,8 +16,8 @@ use tracing::error;
 
 use tracing_subscriber;
 
-pub type JsonReceiver = broadcast::Receiver<String>;
-pub type JsonSender = broadcast::Sender<String>;
+pub type JsonReceiver = broadcast::Receiver<Value>;
+pub type JsonSender = broadcast::Sender<Value>;
 
 fn main() {
     let mut runtime =
@@ -62,5 +64,5 @@ async fn run() {
         None       => (),
     };
 
-    gpsd_server::spawn(2947, tx.clone()).await;
+    gpsd_server::run(2947, tx.clone()).await;
 }

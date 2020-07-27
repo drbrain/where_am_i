@@ -2,6 +2,7 @@ mod ioctl;
 
 use crate::JsonSender;
 
+use serde_json::Value;
 use serde_json::json;
 
 use libc::c_int;
@@ -101,8 +102,16 @@ fn configure(pps_fd: i32) -> Result<bool, String> {
 }
 
 #[derive(Debug)]
+struct FetchTime {
+    real_sec:   i64,
+    real_nsec:  i32,
+    clock_sec:  u64,
+    clock_nsec: u32,
+}
+
+#[derive(Debug)]
 struct FetchState {
-    result:    String,
+    result:    Option<FetchTime>,
     ok:        bool,
     completed: bool,
     waker:     Option<Waker>,
@@ -115,7 +124,7 @@ struct FetchFuture {
 impl FetchFuture {
     pub fn new(fd: c_int) -> Self {
         let state = FetchState {
-            result: "incomplete".to_string(),
+            result: None,
             ok: false,
             completed: false,
             waker: None,
@@ -143,31 +152,31 @@ impl FetchFuture {
                     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
                     match now {
                         Ok(n) => {
-                            let pps_obj = json!({
-                                "class":      "PPS".to_string(),
-                                "device":     "".to_string(),
-                                "real_sec":   data.info.assert_tu.sec,
-                                "real_nsec":  data.info.assert_tu.nsec,
-                                "clock_sec":  n.as_secs(),
-                                "clock_nsec": n.subsec_nanos(),
-                                "precision":  -1,
-                            });
+                            let pps_obj = FetchTime {
+                                real_sec:   data.info.assert_tu.sec,
+                                real_nsec:  data.info.assert_tu.nsec,
+                                clock_sec:  n.as_secs(),
+                                clock_nsec: n.subsec_nanos(),
+                            };
 
                             shared_state.ok = true;
 
-                            pps_obj.to_string()
+                            Some(pps_obj)
                         },
                         Err(e) => {
                             shared_state.ok = false;
+                            error!("unable to get timestamp for PPS event ({:?})", e);
 
-                            format!("unable to get timestamp for PPS event ({:?})", e)
+                            None
                         },
                     }
 
                 },
                 Err(e) => {
                     shared_state.ok = false;
-                    format!("unable to get PPS event ({:?})", e)
+                    error!("unable to get PPS event ({:?})", e);
+
+                    None
                 },
             };
 
@@ -183,17 +192,25 @@ impl FetchFuture {
 }
 
 impl Future for FetchFuture {
-    type Output = Result<String, String>;
+    type Output = Result<Value, String>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut guard = self.shared_state.lock().unwrap();
 
         if guard.completed {
-            let result = guard.result.to_string();
+            let fetch_time = guard.result.as_ref().unwrap();
 
             match guard.ok {
-                true  => Poll::Ready(Ok(result)),
-                false => Poll::Ready(Err(result)),
+                true  => Poll::Ready(Ok(json!({
+                                "class":      "PPS".to_string(),
+                                "device":     "".to_string(),
+                                "real_sec":   fetch_time.real_sec,
+                                "real_nsec":  fetch_time.real_nsec,
+                                "clock_sec":  fetch_time.clock_sec,
+                                "clock_nsec": fetch_time.clock_nsec,
+                                "precision":  -1,
+                            }))),
+                false => Poll::Ready(Err("something went wrong".to_string())),
             }
         } else {
             guard.waker = Some(cx.waker().clone());

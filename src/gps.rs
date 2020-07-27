@@ -92,7 +92,7 @@ fn report_time(rmc: nmea::RmcData, received: Duration, tx: &JsonSender) {
         "clock_nsec": received.subsec_nanos(),
     });
 
-    match tx.send(toff.to_string()) {
+    match tx.send(toff) {
         Ok(_)  => (),
         Err(_) => (), // error!("send error: {:?}", e),
     }
