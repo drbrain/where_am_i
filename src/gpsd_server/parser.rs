@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn test_json_blob() {
-        let expected = json::parse("{\"hello\":true}").unwrap();
+        let expected: Value = serde_json::from_str("{\"hello\":true}").unwrap();
 
         assert_eq!(expected, json_blob::<()>("{\"hello\":true}").unwrap().1);
     }
@@ -230,6 +230,6 @@ mod tests {
     #[test]
     fn test_parse() {
         assert_eq!(Command::Watch(None), parse("?WATCH;\n"));
-        assert_eq!(Command::Error("garbage"), parse("garbage\n"));
+        assert_eq!(Command::Error("Parsing Error: VerboseError { errors: [(\"garbage\\n\", Nom(Tag)), (\"garbage\\n\", Nom(Alt))] }".to_string()), parse("garbage\n"));
     }
 }
