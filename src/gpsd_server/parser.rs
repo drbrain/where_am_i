@@ -28,6 +28,7 @@ pub struct DeviceData {
 pub struct WatchData {
     pub enable: bool,
     pub json: bool,
+    pub nmea: bool,
     pub raw: u64,
     pub scaled: bool,
     pub split24: bool,
@@ -122,6 +123,7 @@ fn watch<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command,
             Some(WatchData {
                 enable: j["enable"].as_bool().unwrap_or(false),
                 json: j["json"].as_bool().unwrap_or(false),
+                nmea: j["nmea"].as_bool().unwrap_or(false),
                 raw: 0,
                 scaled: j["scaled"].as_bool().unwrap_or(false),
                 split24: j["split24"].as_bool().unwrap_or(false),
@@ -207,6 +209,7 @@ mod tests {
         let watch_data = WatchData {
             enable: true,
             json: false,
+            nmea: false,
             raw: 0,
             scaled: false,
             split24: false,
