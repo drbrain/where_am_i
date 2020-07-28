@@ -19,15 +19,13 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::io;
 use std::net::SocketAddr;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
 
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 use tokio::stream::StreamExt;
 use tokio::sync::Mutex;
+use tokio::sync::broadcast;
 
 use tokio_util::codec::Framed;
 
@@ -91,9 +89,12 @@ struct Watch {
     remote: Option<String>,
 }
 
+type ValueReceiver = broadcast::Receiver<Value>;
+
 struct Client {
     client: Framed<TcpStream, Codec>,
-    tx: JsonSender,
+    watch_tx: JsonSender,
+    watch_rx: Option<ValueReceiver>,
 }
 
 impl Client {
@@ -104,32 +105,24 @@ impl Client {
 
         server.clients.insert(addr, ());
 
-        let tx = server.tx.clone();
+        let watch_tx = server.tx.clone();
+        let watch_rx = None;
 
-        Ok(Client { client, tx })
+        Ok(Client { client, watch_tx, watch_rx })
+    }
+
+    async fn next(&mut self) -> Option<Result<Command, CodecError>> {
+        self.client.next().await
+    }
+
+    async fn send(&mut self, response: Value) -> Result<(), CodecError> {
+        self.client.send(response).await
     }
 }
 
-// impl Stream for Client {
-//     type Item = Result<Value, CodecError>;
-// 
-//     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context <'_>) -> Poll<Option<Self::Item>> {
-//         if let Poll::Ready(Some(v)) = Pin::new(&mut self.rx).poll_next(cx) {
-//             return Poll::Ready(Some(Ok(v)));
-//         }
-// 
-//         let result: Option<_> = futures::ready!(Pin::new(&mut self.client).poll_next(cx));
-// 
-//         Poll::Ready(match result {
-//             Some(Ok(command)) => Some(Ok(command)),
-//             Some(Err(e)) => Some(Err(e)),
-//             None => None,
-//         })
-//     }
-// }
-
 async fn client(server: Arc<Mutex<GpsdServer>>, stream: TcpStream, addr: SocketAddr) -> Result<(), Box<dyn Error>> {
-    let mut client = Framed::new(stream, Codec::new());
+    let framed = Framed::new(stream, Codec::new());
+    let mut client = Client::new(server.clone(), framed).await?;
 
     while let Some(result) = client.next().await {
         let command = match result {
