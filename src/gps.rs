@@ -1,5 +1,4 @@
 use crate::JsonSender;
-use crate::serial;
 
 use chrono::DateTime;
 use chrono::NaiveDateTime;
@@ -7,62 +6,113 @@ use chrono::Utc;
 
 use serde_json::json;
 
+use std::fmt;
+use std::io;
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
 use nmea::Nmea;
 use nmea::ParseResult;
 
-use tokio::prelude::*;
+use tokio::io::AsyncBufRead;
+use tokio::io::AsyncBufReadExt;
+use tokio::io::BufReader;
+use tokio::sync::Mutex;
+use tokio::sync::broadcast;
+use tokio::sync::oneshot;
 
+use tokio_serial::Serial;
 use tokio_serial::SerialPortSettings;
 
 use tracing::error;
+use tracing::info;
 
-#[tracing::instrument]
-pub fn spawn(device: String, settings: SerialPortSettings, tx: JsonSender) {
-    tokio::spawn(async move {
-        let gps = serial::open(device, settings).await;
+pub struct GPS {
+    pub name: String,
+    pub tx: JsonSender,
+    settings: SerialPortSettings,
+}
 
-        let mut lines = gps.lines();
+impl GPS {
+    pub fn new(name: String, settings: SerialPortSettings) -> Self {
+        let (tx, _) = broadcast::channel(5);
 
-        let mut nmea = Nmea::new();
+        let gps = GPS {
+            name: name,
+            tx: tx,
+            settings: settings,
+        };
 
-        loop {
-            let line = match lines.next_line().await {
-                Ok(l)  => l,
+        gps
+    }
+
+    #[tracing::instrument]
+    pub async fn run(&self) -> Result<(), io::Error> {
+        let (result_tx, mut result_rx) = oneshot::channel();
+        let name = self.name.clone();
+        let settings = self.settings.clone();
+        let tx = self.tx.clone();
+
+        tokio::spawn(async move {
+            let serial = match Serial::from_path(name.clone(), &settings) {
+                Ok(s) => {
+                    result_tx.send(Ok(())).unwrap();
+                    s
+                },
                 Err(e) => {
-                    error!("Failed to read from GPS ({:?})", e);
-                    break;
+                    result_tx.send(Err(e)).unwrap();
+                    return;
                 }
             };
 
-            let received = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-                Ok(n) => n,
-                Err(_) => continue,
-            };
+            info!("Opened GPS device {}", name);
 
-            let line = match line {
-                Some(l) => l,
-                None => {
-                    error!("No line from GPS");
-                    break;
+            let mut lines = BufReader::new(serial).lines();
+
+            let mut nmea = Nmea::new();
+
+            loop {
+                let line = match lines.next_line().await {
+                    Ok(l)  => l,
+                    Err(e) => {
+                        error!("Failed to read from GPS ({:?})", e);
+                        break;
+                    }
+                };
+
+                let received = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+                    Ok(n) => n,
+                    Err(_) => continue,
+                };
+
+                let line = match line {
+                    Some(l) => l,
+                    None => {
+                        error!("No line from GPS");
+                        break;
+                    }
+                };
+
+                let parsed = nmea.parse(&line);
+
+                if parsed.is_err() {
+                    //error!("Failed to parse {} ({:?})", line, parsed.err());
+                    continue;
                 }
-            };
 
-            let parsed = nmea.parse(&line);
-
-            if parsed.is_err() {
-                //error!("Failed to parse {} ({:?})", line, parsed.err());
-                continue;
+                match parsed.unwrap() {
+                    ParseResult::RMC(rmc) => report_time(rmc, received, &tx),
+                    _ => (),
+                };
             }
+        });
 
-            match parsed.unwrap() {
-                ParseResult::RMC(rmc) => report_time(rmc, received, &tx),
-                _ => (),
-            };
+        match result_rx.try_recv() {
+            Ok(r) => r,
+            Err(_) => Ok(()),
         }
-    });
+    }
 }
 
 #[tracing::instrument]
@@ -98,3 +148,11 @@ fn report_time(rmc: nmea::RmcData, received: Duration, tx: &JsonSender) {
     }
 }
 
+impl fmt::Debug for GPS {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GPS")
+            .field("name", &self.name)
+            .field("tx", &self.tx)
+            .finish()
+    }
+}

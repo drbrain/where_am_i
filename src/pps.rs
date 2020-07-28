@@ -7,7 +7,9 @@ use serde_json::json;
 
 use libc::c_int;
 
+use std::error::Error;
 use std::fs::OpenOptions;
+use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::Context;
@@ -20,85 +22,119 @@ use std::sync::Mutex;
 use std::time::SystemTime;
 
 use tokio::fs::File;
+use tokio::sync::broadcast;
 
+use tracing::debug;
 use tracing::error;
 use tracing::info;
 
-#[tracing::instrument]
-pub fn spawn(device: String, tx: JsonSender) -> Result<(), String> {
-    let pps = match OpenOptions::new().read(true).write(true).open(&device) {
-        Ok(p) => p,
-        Err(e) => {
-            return Err(format!("Error opening PPS {} ({})", device, e))
-        }
-    };
-
-    info!("Opened {}", device);
-    let pps = File::from_std(pps);
-
-    match configure(pps.as_raw_fd()) {
-        Ok(_) => (),
-        Err(e) => {
-            return Err(format!("configuring PPS device ({:?})", e))
-        }
-    };
-
-    tokio::spawn(async move {
-        info!("watching PPS events on {}", device);
-
-        loop {
-            let pps_obj = match FetchFuture::new(pps.as_raw_fd()).await {
-                Ok(o) => o,
-                Err(e) => {
-                    error!("fetch error on {} ({:?})", device, e);
-                    continue;
-                }
-            };
-
-            match tx.send(pps_obj) {
-                Ok(_)  => (),
-                Err(_) => (), // error!("send error: {:?}", e),
-            }
-        }
-    });
-
-    Ok(())
+#[derive(Debug)]
+pub struct PPS {
+    pub name: String,
+    pub tx: JsonSender,
+    file: Option<File>,
 }
 
-#[tracing::instrument]
-fn configure(pps_fd: i32) -> Result<bool, String> {
-    unsafe {
-        let mut mode = 0;
+impl PPS {
+    pub fn new(name: String) -> Self {
+        let (tx, _) = broadcast::channel(5);
 
-        match ioctl::getcap(pps_fd, &mut mode) {
-            Ok(_) => (),
-            Err(_) => return Err("unable to get capabilities".to_string()),
+        PPS {
+            name: name,
+            tx: tx,
+            file: None,
         }
-
-        if mode & ioctl::CANWAIT == 0 {
-            return Err("cannot wait".to_string());
-        }
-
-        if (mode & ioctl::CAPTUREASSERT) == 0 {
-            return Err("cannot capture asserts".to_string());
-        }
-
-        let mut params = ioctl::params::default();
-
-        match ioctl::getparams(pps_fd, &mut params) {
-            Ok(_) => (),
-            Err(_) => return Err("unable to set parameters".to_string()),
-        };
-
-        params.mode |= ioctl::CAPTUREASSERT;
-
-        match ioctl::setparams(pps_fd, &mut params) {
-            Ok(_) => (),
-            Err(_) => return Err("unable to set parameters".to_string()),
-        };
     }
 
-    Ok(true)
+    #[tracing::instrument]
+    fn open(&mut self) -> Result<(), Box<dyn Error>> {
+        if let Some(_) = self.file {
+            return Err(Box::new(PPSError::AlreadyOpen(self.name.clone())))
+        }
+
+        let pps = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(self.name.clone())?;
+
+        info!("Opened {}", self.name);
+        self.file = Some(File::from_std(pps));
+
+        Ok(())
+    }
+
+    #[tracing::instrument]
+    fn configure(&self) -> Result<(), Box<dyn Error>> {
+        let pps_fd = match &self.file {
+            Some(f) => f.as_raw_fd(),
+            None => {
+                return Err(Box::new(PPSError::NotOpen(self.name.clone())));
+            },
+        };
+
+        unsafe {
+            let mut mode = 0;
+
+            if let Err(_) = ioctl::getcap(pps_fd, &mut mode) {
+                return Err(Box::new(PPSError::CapabilitiesFailed(self.name.clone())));
+            };
+
+            if mode & ioctl::CANWAIT == 0 {
+                return Err(Box::new(PPSError::CannotWait(self.name.clone())));
+            };
+
+            if (mode & ioctl::CAPTUREASSERT) == 0 {
+                return Err(Box::new(PPSError::CannotCaptureAssert(self.name.clone())));
+            };
+
+            let mut params = ioctl::params::default();
+
+            if let Err(_) = ioctl::getparams(pps_fd, &mut params) {
+                return Err(Box::new(PPSError::CannotGetParameters(self.name.clone())));
+            };
+
+            params.mode |= ioctl::CAPTUREASSERT;
+
+            if let Err(_) = ioctl::setparams(pps_fd, &mut params) {
+                return Err(Box::new(PPSError::CannotSetParameters(self.name.clone())));
+            };
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument]
+    pub async fn run(&mut self) -> Result<(), Box<dyn Error>> {
+        if let None = self.file {
+            self.open()?;
+        }
+
+        self.configure()?;
+
+        let fd = self.file.as_ref().unwrap().as_raw_fd();
+        let name = self.name.clone();
+        let tx = self.tx.clone();
+
+        tokio::spawn(async move {
+            info!("watching PPS events on {}", name);
+
+            loop {
+                let pps_data = match FetchFuture::new(fd).await {
+                    Ok(d) => d,
+                    Err(e) => {
+                        error!("fetch error on {} ({:?})", name, e);
+                        continue;
+                    }
+                };
+
+                if let Err(_e) = tx.send(pps_data) {
+                    // error!("send error: {:?}", _e),
+                }
+            }
+        });
+
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -143,6 +179,7 @@ impl FetchFuture {
             let data_ptr: *mut ioctl::data = &mut data;
             let result;
 
+            debug!("ioctl fetch fd: {}", fd);
             unsafe {
                 result = ioctl::fetch(fd, data_ptr);
             }
@@ -219,3 +256,29 @@ impl Future for FetchFuture {
     }
 }
 
+#[derive(Debug)]
+pub enum PPSError {
+    AlreadyOpen(String),
+    CannotCaptureAssert(String),
+    CannotGetParameters(String),
+    CannotSetParameters(String),
+    CannotWait(String),
+    CapabilitiesFailed(String),
+    NotOpen(String),
+}
+
+impl fmt::Display for PPSError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PPSError::AlreadyOpen(n) => write!(f, "{} is already open", n),
+            PPSError::CannotCaptureAssert(n) => write!(f, "cannot capture assert events for PPS device {}", n),
+            PPSError::CannotGetParameters(n) => write!(f, "cannot get parameters for PPS device {}", n),
+            PPSError::CannotSetParameters(n) => write!(f, "cannot set parameters for PPS device {}", n),
+            PPSError::CannotWait(n) => write!(f, "{} cannot wait for PPS events", n),
+            PPSError::CapabilitiesFailed(n) => write!(f, "unable to get capabilities of PPS device {}", n),
+            PPSError::NotOpen(n) => write!(f, "{} is not yet open", n),
+        }
+    }
+}
+
+impl Error for PPSError {}

@@ -1,6 +1,9 @@
 mod parser;
 mod codec;
 
+use super::gps::GPS;
+use super::pps::PPS;
+
 use parser::Command;
 use codec::Codec;
 use codec::CodecError;
@@ -53,12 +56,12 @@ impl GpsdServer {
         }
     }
 
-    pub fn add_gps(&mut self, name: String, sender: JsonSender) {
-        self.gps_tx.insert(name, sender);
+    pub fn add_gps(&mut self, gps: GPS) {
+        self.gps_tx.insert(gps.name.clone(), gps.tx.clone());
     }
 
-    pub fn add_pps(&mut self, name: String, sender: JsonSender) {
-        self.pps_tx.insert(name, sender);
+    pub fn add_pps(&mut self, pps: PPS) {
+        self.pps_tx.insert(pps.name.clone(), pps.tx.clone());
     }
 
     #[tracing::instrument]

@@ -1,12 +1,13 @@
 mod args;
 mod gps;
 mod pps;
-mod serial;
 mod gpsd_server;
 
 #[macro_use] extern crate nix;
 
+use gps::GPS;
 use gpsd_server::GpsdServer;
+use pps::PPS;
 
 use serde_json::Value;
 
@@ -36,8 +37,6 @@ fn main() {
 }
 
 async fn run() {
-    let (tx, _) = broadcast::channel(1);
-
     let subscriber = tracing_subscriber::fmt()
         .with_max_level(Level::TRACE)
         .finish();
@@ -47,25 +46,49 @@ async fn run() {
 
     let (gps_name, serial_port_settings, pps_name) = args::parse();
 
-    match gps_name {
-        Some(name) => gps::spawn(name, serial_port_settings, tx.clone()),
-        None       => (),
-    };
-
-    match pps_name {
+    let gps = match gps_name {
         Some(name) => {
-            match pps::spawn(name, tx.clone()) {
+            let gps = GPS::new(name, serial_port_settings);
+
+            match gps.run().await {
                 Ok(()) => (),
                 Err(e) => {
-                    error!("unable to watch PPS events: {}", e);
+                    error!("{}", e);
+                    std::process::exit(1);
+                }
+            }
 
+            Some(gps)
+        },
+        None => None,
+    };
+
+    let pps = match pps_name {
+        Some(name) => {
+            let mut pps = PPS::new(name);
+
+            match pps.run().await {
+                Ok(()) => (),
+                Err(e) => {
+                    error!("{}", e);
                     std::process::exit(1);
                 },
             };
+
+            Some(pps)
         },
-        None       => (),
+        None => None,
     };
 
-    GpsdServer::new(2947)
-        .run().await.unwrap();
+    let mut gpsd = GpsdServer::new(2947);
+
+    if let Some(g) = gps {
+        gpsd.add_gps(g);
+    }
+
+    if let Some(p) = pps {
+        gpsd.add_pps(p);
+    }
+
+    gpsd.run().await.unwrap();
 }
