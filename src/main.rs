@@ -6,6 +6,8 @@ mod gpsd_server;
 
 #[macro_use] extern crate nix;
 
+use gpsd_server::GpsdServer;
+
 use serde_json::Value;
 
 use tokio::runtime;
@@ -64,5 +66,6 @@ async fn run() {
         None       => (),
     };
 
-    gpsd_server::run(2947).await;
+    GpsdServer::new()
+        .run(2947).await.unwrap();
 }

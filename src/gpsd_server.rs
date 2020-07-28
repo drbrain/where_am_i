@@ -33,29 +33,8 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 
-#[tracing::instrument]
-pub async fn run(port: u16) -> Result<(), Box<dyn Error>> {
-    let server = Arc::new(Mutex::new(GpsdServer::new()));
-    let address = ("0.0.0.0", port);
-
-    let mut listener = TcpListener::bind(address).await?;
-    info!("listening on {} port {}", listener.local_addr()?.ip(), port);
-
-    loop {
-        let (stream, addr) = listener.accept().await?;
-
-        let server = Arc::clone(&server);
-
-        tokio::spawn(async move {
-            match client(server, stream, addr).await {
-                Ok(_) => debug!("client {:?} disconnected", addr),
-                Err(e) => error!("client {:?} errored: {:?}", addr, e),
-            }
-        });
-    }
-}
-
-struct GpsdServer {
+#[derive(Debug)]
+pub struct GpsdServer {
     clients: HashMap<SocketAddr, ()>,
     gps_tx: HashMap<String, JsonSender>,
     pps_tx: HashMap<String, JsonSender>,
@@ -63,7 +42,7 @@ struct GpsdServer {
 }
 
 impl GpsdServer {
-    fn new() -> Self {
+    pub fn new() -> Self {
         GpsdServer {
             clients: HashMap::new(),
             gps_tx: HashMap::new(),
@@ -72,12 +51,34 @@ impl GpsdServer {
         }
     }
 
-    fn add_gps(&mut self, name: String, sender: JsonSender) {
+    pub fn add_gps(&mut self, name: String, sender: JsonSender) {
         self.gps_tx.insert(name, sender);
     }
 
-    fn add_pps(&mut self, name: String, sender: JsonSender) {
+    pub fn add_pps(&mut self, name: String, sender: JsonSender) {
         self.pps_tx.insert(name, sender);
+    }
+
+    #[tracing::instrument]
+    pub async fn run(self, port: u16) -> Result<(), Box<dyn Error>> {
+        let server = Arc::new(Mutex::new(self));
+        let address = ("0.0.0.0", port);
+
+        let mut listener = TcpListener::bind(address).await?;
+        info!("listening on {} port {}", listener.local_addr()?.ip(), port);
+
+        loop {
+            let (stream, addr) = listener.accept().await?;
+
+            let server = Arc::clone(&server);
+
+            tokio::spawn(async move {
+                match client(server, stream, addr).await {
+                    Ok(_) => debug!("client {:?} disconnected", addr),
+                    Err(e) => error!("client {:?} errored: {:?}", addr, e),
+                }
+            });
+        }
     }
 }
 
