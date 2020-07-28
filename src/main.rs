@@ -66,6 +66,6 @@ async fn run() {
         None       => (),
     };
 
-    GpsdServer::new()
-        .run(2947).await.unwrap();
+    GpsdServer::new(2947)
+        .run().await.unwrap();
 }

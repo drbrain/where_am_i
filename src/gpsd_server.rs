@@ -35,6 +35,7 @@ use tracing::info;
 
 #[derive(Debug)]
 pub struct GpsdServer {
+    port: u16,
     clients: HashMap<SocketAddr, ()>,
     gps_tx: HashMap<String, JsonSender>,
     pps_tx: HashMap<String, JsonSender>,
@@ -42,8 +43,9 @@ pub struct GpsdServer {
 }
 
 impl GpsdServer {
-    pub fn new() -> Self {
+    pub fn new(port: u16) -> Self {
         GpsdServer {
+            port: port,
             clients: HashMap::new(),
             gps_tx: HashMap::new(),
             pps_tx: HashMap::new(),
@@ -60,7 +62,9 @@ impl GpsdServer {
     }
 
     #[tracing::instrument]
-    pub async fn run(self, port: u16) -> Result<(), Box<dyn Error>> {
+    pub async fn run(self) -> Result<(), Box<dyn Error>> {
+        let port = self.port;
+
         let server = Arc::new(Mutex::new(self));
         let address = ("0.0.0.0", port);
 
