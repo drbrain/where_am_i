@@ -64,5 +64,5 @@ async fn run() {
         None       => (),
     };
 
-    gpsd_server::run(2947, tx.clone()).await;
+    gpsd_server::run(2947).await;
 }

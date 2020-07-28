@@ -34,8 +34,8 @@ use tracing::error;
 use tracing::info;
 
 #[tracing::instrument]
-pub async fn run(port: u16, tx: JsonSender) -> Result<(), Box<dyn Error>> {
-    let server = Arc::new(Mutex::new(GpsdServer::new(tx)));
+pub async fn run(port: u16) -> Result<(), Box<dyn Error>> {
+    let server = Arc::new(Mutex::new(GpsdServer::new()));
     let address = ("0.0.0.0", port);
 
     let mut listener = TcpListener::bind(address).await?;
@@ -57,21 +57,27 @@ pub async fn run(port: u16, tx: JsonSender) -> Result<(), Box<dyn Error>> {
 
 struct GpsdServer {
     clients: HashMap<SocketAddr, ()>,
-    tx: JsonSender,
+    gps_tx: HashMap<String, JsonSender>,
+    pps_tx: HashMap<String, JsonSender>,
     watch: Watch,
 }
 
 impl GpsdServer {
-    fn new(tx: JsonSender) -> Self {
+    fn new() -> Self {
         GpsdServer {
             clients: HashMap::new(),
-            tx: tx,
+            gps_tx: HashMap::new(),
+            pps_tx: HashMap::new(),
             watch: Watch { class: "WATCH".to_string(), ..Default::default() },
         }
     }
 
-    async fn send(&mut self, message: Value) {
-        self.tx.send(message);
+    fn add_gps(&mut self, name: String, sender: JsonSender) {
+        self.gps_tx.insert(name, sender);
+    }
+
+    fn add_pps(&mut self, name: String, sender: JsonSender) {
+        self.pps_tx.insert(name, sender);
     }
 }
 
@@ -93,8 +99,6 @@ type ValueReceiver = broadcast::Receiver<Value>;
 
 struct Client {
     client: Framed<TcpStream, Codec>,
-    watch_tx: JsonSender,
-    watch_rx: Option<ValueReceiver>,
 }
 
 impl Client {
@@ -105,10 +109,7 @@ impl Client {
 
         server.clients.insert(addr, ());
 
-        let watch_tx = server.tx.clone();
-        let watch_rx = None;
-
-        Ok(Client { client, watch_tx, watch_rx })
+        Ok(Client { client })
     }
 
     async fn next(&mut self) -> Option<Result<Command, CodecError>> {
