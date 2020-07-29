@@ -1,8 +1,8 @@
-use super::Codec;
-use super::CodecError;
-use super::Command;
-use super::Server;
-use super::parser;
+use super::codec::Codec;
+use super::codec::CodecError;
+use super::parser::Command;
+use super::parser::json_to_string;
+use super::server::Server;
 
 use futures::SinkExt;
 
@@ -132,11 +132,11 @@ async fn command_watch(server: Arc<Mutex<Server>>, updates: Option<Value>) -> Va
             }
 
             if j["device"].is_string() {
-                server.watch.device = parser::json_to_string(&j["device"]);
+                server.watch.device = json_to_string(&j["device"]);
             }
 
             if j["remote"].is_string() {
-                server.watch.remote = parser::json_to_string(&j["remote"]);
+                server.watch.remote = json_to_string(&j["remote"]);
             }
         },
         None => (),

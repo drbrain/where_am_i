@@ -1,19 +1,9 @@
-mod parser;
-mod codec;
-mod client;
-
-use super::gps::GPS;
-use super::pps::PPS;
-
-use parser::Command;
-use codec::Codec;
-use codec::CodecError;
+use super::watch::Watch;
+use super::super::gps::GPS;
+use super::super::pps::PPS;
 
 use crate::JsonSender;
 use crate::gpsd::client::client;
-
-use serde::Deserialize;
-use serde::Serialize;
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -30,10 +20,10 @@ use tracing::info;
 #[derive(Debug)]
 pub struct Server {
     port: u16,
-    clients: HashMap<SocketAddr, ()>,
+    pub clients: HashMap<SocketAddr, ()>,
     gps_tx: HashMap<String, JsonSender>,
     pps_tx: HashMap<String, JsonSender>,
-    watch: Watch,
+    pub watch: Watch,
 }
 
 impl Server {
@@ -78,19 +68,5 @@ impl Server {
             });
         }
     }
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-struct Watch {
-    class: String,
-    enable: bool,
-    json: bool,
-    nmea: bool,
-    raw: u64,
-    scaled: bool,
-    split24: bool,
-    pps: bool,
-    device: Option<String>,
-    remote: Option<String>,
 }
 
