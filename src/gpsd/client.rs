@@ -1,7 +1,6 @@
 use super::codec::Codec;
 use super::codec::CodecError;
 use super::parser::Command;
-use super::parser::json_to_string;
 use super::server::Server;
 
 use futures::SinkExt;
@@ -106,43 +105,7 @@ impl Client {
         let mut server = self.server.lock().await;
 
         match updates {
-            Some(j) => {
-                if j["enable"].is_boolean() {
-                    server.watch.enable = j["enable"].as_bool().unwrap_or(false);
-                }
-
-                if j["json"].is_boolean() {
-                    server.watch.json = j["json"].as_bool().unwrap_or(false);
-                }
-
-                if j["nmea"].is_boolean() {
-                    server.watch.nmea = j["nmea"].as_bool().unwrap_or(false);
-                }
-
-                if j["raw"].is_u64() {
-                    server.watch.raw = j["raw"].as_u64().unwrap_or(0);
-                }
-
-                if j["scaled"].is_boolean() {
-                    server.watch.scaled = j["scaled"].as_bool().unwrap_or(false);
-                }
-
-                if j["split24"].is_boolean() {
-                    server.watch.split24 = j["split24"].as_bool().unwrap_or(false);
-                }
-
-                if j["pps"].is_boolean() {
-                    server.watch.pps = j["pps"].as_bool().unwrap_or(false);
-                }
-
-                if j["device"].is_string() {
-                    server.watch.device = json_to_string(&j["device"]);
-                }
-
-                if j["remote"].is_string() {
-                    server.watch.remote = json_to_string(&j["remote"]);
-                }
-            },
+            Some(j) => server.watch.update(j),
             None => (),
         };
 
