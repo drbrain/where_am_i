@@ -3,7 +3,8 @@ use super::codec::CodecError;
 use super::parser::Command;
 use super::server::Server;
 
-use futures::SinkExt;
+use futures_util::sink::SinkExt;
+use futures_util::stream::StreamExt;
 
 use serde_json::Value;
 use serde_json::json;
@@ -14,7 +15,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use tokio::net::TcpStream;
-use tokio::stream::StreamExt;
 use tokio::sync::Mutex;
 
 use tokio_util::codec::Framed;
@@ -24,12 +24,13 @@ use tracing::debug;
 pub struct Client {
     server: Arc<Mutex<Server>>,
     pub addr: SocketAddr,
-    framed: Framed<TcpStream, Codec>,
+    req: futures_util::stream::SplitStream<Framed<TcpStream, Codec>>,
+    res: futures_util::stream::SplitSink<Framed<TcpStream, Codec>, Value>,
 }
 
 impl Client {
     pub async fn new(server: Arc<Mutex<Server>>, stream: TcpStream, addr: SocketAddr) -> io::Result<Client> {
-        let framed = Framed::new(stream, Codec::new());
+        let (res, req) = Framed::new(stream, Codec::new()).split();
 
         {
             let mut s = server.lock().await;
@@ -40,16 +41,17 @@ impl Client {
         Ok(Client {
             server: server,
             addr: addr,
-            framed: framed
+            req: req,
+            res: res,
         })
     }
 
     async fn next(&mut self) -> Option<Result<Command, CodecError>> {
-        self.framed.next().await
+        self.req.next().await
     }
 
     async fn send(&mut self, response: Value) -> Result<(), CodecError> {
-        self.framed.send(response).await
+        self.res.send(response).await
     }
 
     pub async fn run(&mut self) -> Result<(), Box<dyn Error>> {
