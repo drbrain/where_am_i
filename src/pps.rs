@@ -32,7 +32,6 @@ use tracing::info;
 pub struct PPS {
     pub name: String,
     pub tx: JsonSender,
-    file: Option<File>,
 }
 
 impl PPS {
@@ -42,35 +41,24 @@ impl PPS {
         PPS {
             name: name,
             tx: tx,
-            file: None,
         }
     }
 
     #[tracing::instrument]
-    fn open(&mut self) -> Result<(), Box<dyn Error>> {
-        if let Some(_) = self.file {
-            return Err(Box::new(PPSError::AlreadyOpen(self.name.clone())))
-        }
-
+    fn open(&mut self) -> Result<File, Box<dyn Error>> {
         let pps = OpenOptions::new()
             .read(true)
             .write(true)
             .open(self.name.clone())?;
 
         info!("Opened {}", self.name);
-        self.file = Some(File::from_std(pps));
 
-        Ok(())
+        Ok(File::from_std(pps))
     }
 
     #[tracing::instrument]
-    fn configure(&self) -> Result<(), Box<dyn Error>> {
-        let pps_fd = match &self.file {
-            Some(f) => f.as_raw_fd(),
-            None => {
-                return Err(Box::new(PPSError::NotOpen(self.name.clone())));
-            },
-        };
+    fn configure(&self, pps: File) -> Result<File, Box<dyn Error>> {
+        let pps_fd = pps.as_raw_fd();
 
         unsafe {
             let mut mode = 0;
@@ -100,22 +88,20 @@ impl PPS {
             };
         }
 
-        Ok(())
+        Ok(pps)
     }
 
     #[tracing::instrument]
     pub async fn run(&mut self) -> Result<(), Box<dyn Error>> {
-        if let None = self.file {
-            self.open()?;
-        }
+        let file = self.open()?;
+        let pps = self.configure(file)?;
 
-        self.configure()?;
-
-        let fd = self.file.as_ref().unwrap().as_raw_fd();
         let name = self.name.clone();
         let tx = self.tx.clone();
 
         tokio::spawn(async move {
+            let fd = pps.as_raw_fd();
+
             info!("watching PPS events on {}", name);
 
             loop {
@@ -179,7 +165,6 @@ impl FetchFuture {
             let data_ptr: *mut ioctl::data = &mut data;
             let result;
 
-            debug!("ioctl fetch fd: {}", fd);
             unsafe {
                 result = ioctl::fetch(fd, data_ptr);
             }
