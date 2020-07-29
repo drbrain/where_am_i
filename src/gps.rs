@@ -17,7 +17,7 @@ use nmea::ParseResult;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
 use tokio::sync::broadcast;
-use tokio::sync::oneshot;
+use tokio::sync::mpsc;
 
 use tokio_serial::Serial;
 use tokio_serial::SerialPortSettings;
@@ -46,7 +46,7 @@ impl GPS {
 
     #[tracing::instrument]
     pub async fn run(&self) -> Result<(), io::Error> {
-        let (result_tx, mut result_rx) = oneshot::channel();
+        let (mut result_tx, mut result_rx) = mpsc::channel(1);
         let name = self.name.clone();
         let settings = self.settings.clone();
         let tx = self.tx.clone();
@@ -54,18 +54,18 @@ impl GPS {
         tokio::spawn(async move {
             let serial = match Serial::from_path(name.clone(), &settings) {
                 Ok(s) => {
-                    result_tx.send(Ok(())).unwrap();
+                    result_tx.send(Ok(())).await.unwrap();
                     s
                 },
                 Err(e) => {
-                    result_tx.send(Err(e)).unwrap();
+                    result_tx.send(Err(e)).await.unwrap();
                     return;
                 }
             };
 
-            info!("Opened GPS device {}", name);
-
             let mut lines = BufReader::new(serial).lines();
+
+            info!("Opened GPS device {}", name);
 
             let mut nmea = Nmea::new();
 
@@ -105,9 +105,10 @@ impl GPS {
             }
         });
 
-        match result_rx.try_recv() {
-            Ok(r) => r,
-            Err(_) => Ok(()),
+        match result_rx.recv().await {
+            Some(Ok(_)) => Ok(()),
+            Some(Err(e)) => Err(e),
+            None => Ok(()), // Should raise a different error
         }
     }
 }
