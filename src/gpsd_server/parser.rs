@@ -25,29 +25,16 @@ pub struct DeviceData {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct WatchData {
-    pub enable: bool,
-    pub json: bool,
-    pub nmea: bool,
-    pub raw: u64,
-    pub scaled: bool,
-    pub split24: bool,
-    pub pps: bool,
-    pub device: Option<String>,
-    pub remote: Option<String>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Command {
     Device(Option<DeviceData>),
     Devices,
     Error(String),
     Poll,
     Version,
-    Watch(Option<WatchData>),
+    Watch(Option<Value>),
 }
 
-fn json_to_string(input: &Value) -> Option<String> {
+pub fn json_to_string(input: &Value) -> Option<String> {
     if input.is_null() {
         None
     } else {
@@ -118,23 +105,7 @@ fn watch<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command,
             terminated(opt(preceded(equal, json_blob)),
                 eol))(input)?;
 
-    let watch_data = match json {
-        Some(j) =>
-            Some(WatchData {
-                enable: j["enable"].as_bool().unwrap_or(false),
-                json: j["json"].as_bool().unwrap_or(false),
-                nmea: j["nmea"].as_bool().unwrap_or(false),
-                raw: 0,
-                scaled: j["scaled"].as_bool().unwrap_or(false),
-                split24: j["split24"].as_bool().unwrap_or(false),
-                pps: j["pps"].as_bool().unwrap_or(false),
-                device: json_to_string(&j["device"]),
-                remote: json_to_string(&j["remote"]),
-        }),
-        None => None,
-    };
-
-    Ok((input, Command::Watch(watch_data)))
+    Ok((input, Command::Watch(json)))
 }
 
 fn command<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
@@ -206,17 +177,10 @@ mod tests {
     fn test_watch() {
         assert_eq!(Command::Watch(None), watch::<()>("?WATCH;\n").unwrap().1);
 
-        let watch_data = WatchData {
-            enable: true,
-            json: false,
-            nmea: false,
-            raw: 0,
-            scaled: false,
-            split24: false,
-            pps: false,
-            device: Some("/dev/gps0".to_string()),
-            remote: None,
-        };
+        let watch_data = json!({
+            "device": "/dev/gps0",
+            "enable": true,
+        });
 
         assert_eq!(Command::Watch(Some(watch_data)), watch::<()>("?WATCH={\"device\":\"/dev/gps0\",\"enable\":true};\n").unwrap().1);
     }
