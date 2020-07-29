@@ -1,4 +1,5 @@
 mod client;
+pub use client::Client;
 mod codec;
 mod parser;
 mod server;

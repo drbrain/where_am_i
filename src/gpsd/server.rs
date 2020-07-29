@@ -1,9 +1,9 @@
+use super::client::Client;
 use super::watch::Watch;
 use super::super::gps::GPS;
 use super::super::pps::PPS;
 
 use crate::JsonSender;
-use crate::gpsd::client::client;
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -13,7 +13,6 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
-use tracing::debug;
 use tracing::error;
 use tracing::info;
 
@@ -60,11 +59,13 @@ impl Server {
 
             let server = Arc::clone(&server);
 
+            let mut client = Client::new(server, stream, addr).await?;
+
             tokio::spawn(async move {
-                match client(server, stream, addr).await {
-                    Ok(_) => debug!("client {:?} disconnected", addr),
-                    Err(e) => error!("client {:?} errored: {:?}", addr, e),
-                }
+                match client.run().await {
+                    Ok(_) => info!("Client {} disconnected", client.addr),
+                    Err(e) => error!("Error handling client {}: {:?}", client.addr, e),
+                };
             });
         }
     }
