@@ -24,7 +24,6 @@ use std::time::SystemTime;
 use tokio::fs::File;
 use tokio::sync::broadcast;
 
-use tracing::debug;
 use tracing::error;
 use tracing::info;
 
@@ -243,25 +242,21 @@ impl Future for FetchFuture {
 
 #[derive(Debug)]
 pub enum PPSError {
-    AlreadyOpen(String),
     CannotCaptureAssert(String),
     CannotGetParameters(String),
     CannotSetParameters(String),
     CannotWait(String),
     CapabilitiesFailed(String),
-    NotOpen(String),
 }
 
 impl fmt::Display for PPSError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PPSError::AlreadyOpen(n) => write!(f, "{} is already open", n),
             PPSError::CannotCaptureAssert(n) => write!(f, "cannot capture assert events for PPS device {}", n),
             PPSError::CannotGetParameters(n) => write!(f, "cannot get parameters for PPS device {}", n),
             PPSError::CannotSetParameters(n) => write!(f, "cannot set parameters for PPS device {}", n),
             PPSError::CannotWait(n) => write!(f, "{} cannot wait for PPS events", n),
             PPSError::CapabilitiesFailed(n) => write!(f, "unable to get capabilities of PPS device {}", n),
-            PPSError::NotOpen(n) => write!(f, "{} is not yet open", n),
         }
     }
 }

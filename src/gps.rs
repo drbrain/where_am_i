@@ -8,17 +8,14 @@ use serde_json::json;
 
 use std::fmt;
 use std::io;
-use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
 use nmea::Nmea;
 use nmea::ParseResult;
 
-use tokio::io::AsyncBufRead;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
-use tokio::sync::Mutex;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 
