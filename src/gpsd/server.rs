@@ -1,6 +1,5 @@
 use super::codec::Codec;
 use super::client::Client;
-use super::watch::Watch;
 use super::super::gps::GPS;
 use super::super::pps::PPS;
 
@@ -28,7 +27,6 @@ pub struct Server {
     pub clients: HashMap<SocketAddr, ()>,
     gps_tx: HashMap<String, JsonSender>,
     pps_tx: HashMap<String, JsonSender>,
-    pub watch: Watch,
 }
 
 impl Server {
@@ -38,7 +36,6 @@ impl Server {
             clients: HashMap::new(),
             gps_tx: HashMap::new(),
             pps_tx: HashMap::new(),
-            watch: Watch { class: "WATCH".to_string(), ..Default::default() },
         }
     }
 

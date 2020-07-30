@@ -1,6 +1,7 @@
 use super::codec::Codec;
 use super::parser::Command;
 use super::server::Server;
+use super::watch::Watch;
 
 use futures_util::stream::StreamExt;
 
@@ -27,6 +28,7 @@ pub struct Client {
     pub addr: SocketAddr,
     req: FramedRead<OwnedReadHalf, Codec>,
     res: Sender,
+    pub watch: Arc<Mutex<Watch>>,
 }
 
 impl Client {
@@ -39,11 +41,14 @@ impl Client {
             s.clients.insert(addr, ());
         }
 
+        let watch = Watch { class: "WATCH".to_string(), ..Default::default() };
+
         Ok(Client {
             server: server,
             addr: addr,
             req: req,
             res: res,
+            watch: Arc::new(Mutex::new(watch)),
         })
     }
 
@@ -97,14 +102,16 @@ impl Client {
     }
 
     async fn command_watch(&self, updates: Option<Value>) -> Value {
-        let mut server = self.server.lock().await;
+        let mut watch = self.watch.lock().await;
 
         match updates {
-            Some(j) => server.watch.update(j),
+            Some(j) => watch.update(j),
             None => (),
         };
 
-        match serde_json::to_value(&server.watch) {
+        let updated = watch.clone();
+
+        match serde_json::to_value(updated) {
             Ok(w) => w,
             Err(_) => json!({
                 "class": "ERROR",
