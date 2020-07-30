@@ -196,26 +196,33 @@ impl Client {
     }
 }
 
-#[tracing::instrument]
-fn relay_messages(mut tx: Sender, mut rx: JsonReceiver) {
+fn relay_messages(tx: Sender, rx: JsonReceiver) {
     tokio::spawn(async move {
-        loop {
-            let message = rx.recv().await;
-
-            match message {
-                Ok(message) => {
-                    match tx.send(message).await {
-                        Ok(_) => (),
-                        Err(e) => {
-                            error!("error relaying message: {:?}", e);
-                            break;
-                        },
-                    }
-                },
-                Err(e) => error!("error receiving message to relay: {:?}", e),
-            }
-        }
+        relay(tx, rx).await;
     });
+}
+
+#[tracing::instrument]
+async fn relay (mut tx: Sender, mut rx: JsonReceiver) {
+    loop {
+        let message = rx.recv().await;
+
+        let value = match message {
+            Ok(v) => v,
+            Err(e) => {
+                error!("error receiving message to relay: {:?}", e);
+                break;
+            },
+        };
+
+        match tx.send(value).await {
+            Ok(_) => (),
+            Err(e) => {
+                error!("error relaying message: {:?}", e);
+                break;
+            },
+        }
+    }
 }
 
 async fn start_client_rx(client: Client) {
