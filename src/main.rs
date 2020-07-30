@@ -66,7 +66,12 @@ async fn run() {
 
     let pps = match pps_name {
         Some(name) => {
-            let mut pps = PPS::new(name);
+            let device_name = match gps_name.clone() {
+                Some(n) => n,
+                None => name.clone(),
+            };
+
+            let mut pps = PPS::new(name, device_name);
 
             match pps.run().await {
                 Ok(()) => (),
@@ -89,12 +94,12 @@ async fn run() {
     }
 
     if let Some(p) = pps {
-        let pps_name = match gps_name {
+        let device_name = match gps_name {
             Some(n) => n,
             None => p.name.clone(),
         };
 
-        server.add_pps(p, pps_name.clone());
+        server.add_pps(p, device_name.clone());
         info!("registered PPS");
     }
 

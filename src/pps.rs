@@ -31,15 +31,18 @@ use tracing::info;
 pub struct PPS {
     pub name: String,
     pub tx: JsonSender,
+    // Name of the device sent in PPS records
+    device_name: String,
 }
 
 impl PPS {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: String, device_name: String) -> Self {
         let (tx, _) = broadcast::channel(5);
 
         PPS {
             name: name,
             tx: tx,
+            device_name: device_name,
         }
     }
 
@@ -97,6 +100,7 @@ impl PPS {
 
         let name = self.name.clone();
         let tx = self.tx.clone();
+        let device_name = self.device_name.clone();
 
         tokio::spawn(async move {
             let fd = pps.as_raw_fd();
@@ -104,13 +108,15 @@ impl PPS {
             info!("watching PPS events on {}", name);
 
             loop {
-                let pps_data = match FetchFuture::new(fd).await {
+                let mut pps_data = match FetchFuture::new(fd).await {
                     Ok(d) => d,
                     Err(e) => {
                         error!("fetch error on {} ({:?})", name, e);
                         continue;
                     }
                 };
+
+                pps_data["device"] = device_name.clone().into();
 
                 if let Err(_e) = tx.send(pps_data) {
                     // error!("send error: {:?}", e);
