@@ -5,6 +5,7 @@ use super::watch::Watch;
 
 use crate::JsonReceiver;
 
+use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 
 use serde_json::Value;
@@ -16,14 +17,18 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use tokio::net::TcpStream;
 use tokio::net::tcp::OwnedReadHalf;
+use tokio::net::tcp::OwnedWriteHalf;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 
 use tokio_util::codec::FramedRead;
+use tokio_util::codec::FramedWrite;
 
 use tracing::debug;
 use tracing::error;
+use tracing::info;
 
 type Sender = mpsc::Sender<Value>;
 
@@ -36,6 +41,19 @@ pub struct Client {
 }
 
 impl Client {
+    pub async fn start(server: Arc<Mutex<Server>>, addr: SocketAddr, stream: TcpStream) -> io::Result<()> {
+        let (read, write) = stream.into_split();
+        let (res_tx, res_rx) = mpsc::channel(5);
+
+        let client = Client::new(server, read, addr, res_tx).await?;
+
+        start_client_rx(client).await;
+
+        start_client_tx(write, res_rx).await;
+
+        Ok(())
+    }
+
     pub async fn new(server: Arc<Mutex<Server>>, read: OwnedReadHalf, addr: SocketAddr, res: Sender) -> io::Result<Client> {
         let req = FramedRead::new(read, Codec::new());
 
@@ -194,6 +212,29 @@ impl Client {
     fn disable_watch(&self) {
         debug!("disabling watch for {:?}", self.addr);
     }
+}
+
+#[tracing::instrument]
+async fn start_client_rx(mut client: Client) {
+    tokio::spawn(async move {
+        match client.run().await {
+            Ok(_) => info!("Client {} disconnected", client.addr),
+            Err(e) => error!("Error handling client {}: {:?}", client.addr, e),
+        };
+    });
+}
+
+async fn start_client_tx(write: OwnedWriteHalf, mut rx: mpsc::Receiver<Value>) {
+    let mut res = FramedWrite::new(write, Codec::new());
+
+    tokio::spawn(async move {
+        while let Some(value) = rx.recv().await {
+            match res.send(value).await {
+                Ok(_) => (),
+                Err(e) => error!("Error responding to client: {:?}", e),
+            }
+        }
+    });
 }
 
 impl fmt::Debug for Client {

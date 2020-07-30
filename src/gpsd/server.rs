@@ -1,12 +1,9 @@
-use super::codec::Codec;
 use super::client::Client;
 use super::super::gps::GPS;
 use super::super::pps::PPS;
 
 use crate::JsonReceiver;
 use crate::JsonSender;
-
-use futures_util::sink::SinkExt;
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -16,9 +13,6 @@ use std::sync::Arc;
 
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
-use tokio::sync::mpsc;
-
-use tokio_util::codec::FramedWrite;
 
 use tracing::error;
 use tracing::info;
@@ -79,36 +73,13 @@ impl Server {
 
             let server = Arc::clone(&server);
 
-            let (read, write) = stream.into_split();
-            let (res_tx, mut res_rx) = mpsc::channel(5);
-
-            let client = Client::new(server, read, addr, res_tx).await?;
-
-            start_client(client).await;
-
-            let mut res = FramedWrite::new(write, Codec::new());
-
-            tokio::spawn(async move {
-                while let Some(value) = res_rx.recv().await {
-                    match res.send(value).await {
-                        Ok(_) => (),
-                        Err(e) => error!("Error responding to client: {:?}", e),
-                    }
-                }
-            });
+            match Client::start(server, addr, stream).await {
+                Ok(()) => (),
+                Err(e) => error!("failed to start client: {:?}", e),
+            }
         }
     }
 
-}
-
-#[tracing::instrument]
-async fn start_client(mut client: Client) {
-    tokio::spawn(async move {
-        match client.run().await {
-            Ok(_) => info!("Client {} disconnected", client.addr),
-            Err(e) => error!("Error handling client {}: {:?}", client.addr, e),
-        };
-    });
 }
 
 impl fmt::Debug for Server {
