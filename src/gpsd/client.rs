@@ -1,9 +1,8 @@
-use super::codec::Codec;
-use super::parser::Command;
-use super::server::Server;
-use super::watch::Watch;
-
 use crate::JsonReceiver;
+use crate::gpsd::codec::Codec;
+use crate::gpsd::parser::Command;
+use crate::gpsd::server::Server;
+use crate::gpsd::watch::Watch;
 
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;

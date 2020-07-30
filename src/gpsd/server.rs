@@ -1,9 +1,8 @@
-use super::client::Client;
-use super::super::gps::GPS;
-use super::super::pps::PPS;
-
 use crate::JsonReceiver;
 use crate::JsonSender;
+use crate::gps::GPS;
+use crate::gpsd::client::Client;
+use crate::pps::PPS;
 
 use std::collections::HashMap;
 use std::error::Error;
