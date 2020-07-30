@@ -99,7 +99,7 @@ impl GPS {
                 }
 
                 match parsed.unwrap() {
-                    ParseResult::RMC(rmc) => report_time(rmc, received, &tx),
+                    ParseResult::RMC(rmc) => report_time(rmc, name.clone(), received, &tx),
                     _ => (),
                 };
             }
@@ -114,7 +114,7 @@ impl GPS {
 }
 
 #[tracing::instrument]
-fn report_time(rmc: nmea::RmcData, received: Duration, tx: &JsonSender) {
+fn report_time(rmc: nmea::RmcData, name: String, received: Duration, tx: &JsonSender) {
     let time = rmc.fix_time;
     if time.is_none() {
         return;
@@ -133,7 +133,7 @@ fn report_time(rmc: nmea::RmcData, received: Duration, tx: &JsonSender) {
 
     let toff = json!({
         "class":      "TOFF".to_string(),
-        "device":     "".to_string(),
+        "device":     name,
         "real_sec":   sec,
         "real_nsec":  nsec,
         "clock_sec":  received.as_secs(),
