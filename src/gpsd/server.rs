@@ -37,8 +37,8 @@ impl Server {
         self.gps_tx.insert(gps.name.clone(), gps.tx.clone());
     }
 
-    pub fn add_pps(&mut self, pps: PPS) {
-        self.pps_tx.insert(pps.name.clone(), pps.tx.clone());
+    pub fn add_pps(&mut self, pps: PPS, name: String) {
+        self.pps_tx.insert(name, pps.tx.clone());
     }
 
     pub fn gps_rx_for(&self, device: String) -> Option<JsonReceiver> {
@@ -49,6 +49,7 @@ impl Server {
         None
     }
 
+    #[tracing::instrument]
     pub fn pps_rx_for(&self, device: String) -> Option<JsonReceiver> {
         if let Some(tx) = self.pps_tx.get(&device) {
             return Some(tx.subscribe());

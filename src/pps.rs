@@ -113,7 +113,7 @@ impl PPS {
                 };
 
                 if let Err(_e) = tx.send(pps_data) {
-                    // error!("send error: {:?}", _e),
+                    // error!("send error: {:?}", e);
                 }
             }
         });

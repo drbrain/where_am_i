@@ -16,6 +16,7 @@ use tokio::sync::broadcast;
 
 use tracing::Level;
 use tracing::error;
+use tracing::info;
 
 use tracing_subscriber;
 
@@ -46,9 +47,9 @@ async fn run() {
 
     let (gps_name, serial_port_settings, pps_name) = args::parse();
 
-    let gps = match gps_name {
+    let gps = match gps_name.clone() {
         Some(name) => {
-            let gps = GPS::new(name, serial_port_settings);
+            let gps = GPS::new(name.clone(), serial_port_settings);
 
             match gps.run().await {
                 Ok(()) => (),
@@ -84,10 +85,17 @@ async fn run() {
 
     if let Some(g) = gps {
         server.add_gps(g);
+        info!("registered GPS");
     }
 
     if let Some(p) = pps {
-        server.add_pps(p);
+        let pps_name = match gps_name {
+            Some(n) => n,
+            None => p.name.clone(),
+        };
+
+        server.add_pps(p, pps_name.clone());
+        info!("registered PPS");
     }
 
     server.run().await.unwrap();
