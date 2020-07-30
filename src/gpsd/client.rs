@@ -214,27 +214,36 @@ impl Client {
     }
 }
 
-#[tracing::instrument]
-async fn start_client_rx(mut client: Client) {
+async fn start_client_rx(client: Client) {
     tokio::spawn(async move {
-        match client.run().await {
-            Ok(_) => info!("Client {} disconnected", client.addr),
-            Err(e) => error!("Error handling client {}: {:?}", client.addr, e),
-        };
+        client_rx(client).await;
     });
 }
 
-async fn start_client_tx(write: OwnedWriteHalf, mut rx: mpsc::Receiver<Value>) {
-    let mut res = FramedWrite::new(write, Codec::new());
+#[tracing::instrument]
+async fn client_rx(mut client: Client) {
+    match client.run().await {
+        Ok(_) => info!("Client {} disconnected", client.addr),
+        Err(e) => error!("Error handling client {}: {:?}", client.addr, e),
+    };
+}
+
+async fn start_client_tx(write: OwnedWriteHalf, rx: mpsc::Receiver<Value>) {
+    let res = FramedWrite::new(write, Codec::new());
 
     tokio::spawn(async move {
-        while let Some(value) = rx.recv().await {
-            match res.send(value).await {
-                Ok(_) => (),
-                Err(e) => error!("Error responding to client: {:?}", e),
-            }
-        }
+        client_tx(res, rx).await;
     });
+}
+
+#[tracing::instrument]
+async fn client_tx(mut tx: FramedWrite<OwnedWriteHalf, Codec>, mut rx: mpsc::Receiver<Value>) {
+    while let Some(value) = rx.recv().await {
+        match tx.send(value).await {
+            Ok(_) => (),
+            Err(e) => error!("Error responding to client: {:?}", e),
+        }
+    }
 }
 
 impl fmt::Debug for Client {
