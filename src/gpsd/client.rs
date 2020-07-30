@@ -1,9 +1,7 @@
 use super::codec::Codec;
-use super::codec::CodecError;
 use super::parser::Command;
 use super::server::Server;
 
-use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 
 use serde_json::Value;
@@ -14,23 +12,26 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use tokio::net::TcpStream;
+use tokio::net::tcp::OwnedReadHalf;
 use tokio::sync::Mutex;
+use tokio::sync::mpsc;
 
-use tokio_util::codec::Framed;
+use tokio_util::codec::FramedRead;
 
 use tracing::debug;
+
+type Sender = mpsc::Sender<Value>;
 
 pub struct Client {
     server: Arc<Mutex<Server>>,
     pub addr: SocketAddr,
-    req: futures_util::stream::SplitStream<Framed<TcpStream, Codec>>,
-    res: futures_util::stream::SplitSink<Framed<TcpStream, Codec>, Value>,
+    req: FramedRead<OwnedReadHalf, Codec>,
+    res: Sender,
 }
 
 impl Client {
-    pub async fn new(server: Arc<Mutex<Server>>, stream: TcpStream, addr: SocketAddr) -> io::Result<Client> {
-        let (res, req) = Framed::new(stream, Codec::new()).split();
+    pub async fn new(server: Arc<Mutex<Server>>, read: OwnedReadHalf, addr: SocketAddr, res: Sender) -> io::Result<Client> {
+        let req = FramedRead::new(read, Codec::new());
 
         {
             let mut s = server.lock().await;
@@ -46,16 +47,8 @@ impl Client {
         })
     }
 
-    async fn next(&mut self) -> Option<Result<Command, CodecError>> {
-        self.req.next().await
-    }
-
-    async fn send(&mut self, response: Value) -> Result<(), CodecError> {
-        self.res.send(response).await
-    }
-
     pub async fn run(&mut self) -> Result<(), Box<dyn Error>> {
-        while let Some(result) = self.next().await {
+        while let Some(result) = self.req.next().await {
             let command = match result {
                 Ok(c) => c,
                 Err(_) => Command::Error("unrecognized command".to_string()),
@@ -92,7 +85,7 @@ impl Client {
             };
 
             debug!("{:?}", response);
-            self.send(response).await?;
+            self.res.send(response).await?;
         }
 
         {
