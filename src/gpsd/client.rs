@@ -3,12 +3,15 @@ use super::parser::Command;
 use super::server::Server;
 use super::watch::Watch;
 
+use crate::JsonReceiver;
+
 use futures_util::stream::StreamExt;
 
 use serde_json::Value;
 use serde_json::json;
 
 use std::error::Error;
+use std::fmt;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -20,6 +23,7 @@ use tokio::sync::mpsc;
 use tokio_util::codec::FramedRead;
 
 use tracing::debug;
+use tracing::error;
 
 type Sender = mpsc::Sender<Value>;
 
@@ -102,14 +106,31 @@ impl Client {
     }
 
     async fn command_watch(&self, updates: Option<Value>) -> Value {
-        let mut watch = self.watch.lock().await;
+        let original;
+        let updated;
 
-        match updates {
-            Some(j) => watch.update(j),
-            None => (),
-        };
+        {
+            let mut watch = self.watch.lock().await;
 
-        let updated = watch.clone();
+            original = watch.clone();
+
+            match updates {
+                Some(j) => watch.update(j),
+                None => (),
+            };
+
+            updated = watch.clone();
+        }
+
+        match (original.enable, updated.enable) {
+            // enable
+            (false, true) => self.enable_watch(updated.clone()).await,
+            // disable
+            (true, false) => self.disable_watch(),
+            // no change
+            (true, true) => (),
+            (false, false) => (),
+        }
 
         match serde_json::to_value(updated) {
             Ok(w) => w,
@@ -118,6 +139,68 @@ impl Client {
                 "message": "internal error",
             }),
         }
+    }
+
+    async fn enable_watch(&self, watch: Watch) {
+        debug!("enabling watch for {:?}", self.addr);
+        let mut gps_rx = None;
+        let mut pps_rx = None;
+        let device = match watch.device {
+            Some(d) => d,
+            None => return,
+        };
+
+        {
+            let server = self.server.lock().await;
+
+            if watch.enable {
+                gps_rx = server.gps_rx_for(device.clone());
+            }
+
+            if watch.pps {
+                pps_rx = server.pps_rx_for(device.clone())
+            }
+        }
+
+        match gps_rx {
+            Some(rx) => self.relay_messages(self.res.clone(), rx),
+            None => (),
+        }
+
+        match pps_rx {
+            Some(rx) => self.relay_messages(self.res.clone(), rx),
+            None => (),
+        }
+    }
+
+    #[tracing::instrument]
+    fn relay_messages(&self, mut tx: Sender, mut rx: JsonReceiver) {
+        tokio::spawn(async move {
+            loop {
+                let message = rx.recv().await;
+                match message {
+                    Ok(message) => {
+                        match tx.send(message).await {
+                            Ok(_) => (),
+                            Err(e) => error!("error relaying message: {:?}", e),
+                        }
+                    },
+                    Err(e) => error!("error receiving message to relay: {:?}", e),
+                }
+            }
+        });
+    }
+
+    fn disable_watch(&self) {
+        debug!("disabling watch for {:?}", self.addr);
+    }
+}
+
+impl fmt::Debug for Client {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Client")
+         .field("peer", &self.addr)
+         .finish()
     }
 }
 

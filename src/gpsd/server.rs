@@ -3,12 +3,14 @@ use super::client::Client;
 use super::super::gps::GPS;
 use super::super::pps::PPS;
 
+use crate::JsonReceiver;
 use crate::JsonSender;
 
 use futures_util::sink::SinkExt;
 
 use std::collections::HashMap;
 use std::error::Error;
+use std::fmt;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -21,7 +23,6 @@ use tokio_util::codec::FramedWrite;
 use tracing::error;
 use tracing::info;
 
-#[derive(Debug)]
 pub struct Server {
     port: u16,
     pub clients: HashMap<SocketAddr, ()>,
@@ -47,6 +48,22 @@ impl Server {
         self.pps_tx.insert(pps.name.clone(), pps.tx.clone());
     }
 
+    pub fn gps_rx_for(&self, device: String) -> Option<JsonReceiver> {
+        if let Some(tx) = self.gps_tx.get(&device) {
+            return Some(tx.subscribe());
+        }
+
+        None
+    }
+
+    pub fn pps_rx_for(&self, device: String) -> Option<JsonReceiver> {
+        if let Some(tx) = self.pps_tx.get(&device) {
+            return Some(tx.subscribe());
+        }
+
+        None
+    }
+
     #[tracing::instrument]
     pub async fn run(self) -> Result<(), Box<dyn Error>> {
         let port = self.port;
@@ -65,14 +82,9 @@ impl Server {
             let (read, write) = stream.into_split();
             let (res_tx, mut res_rx) = mpsc::channel(5);
 
-            let mut client = Client::new(server, read, addr, res_tx).await?;
+            let client = Client::new(server, read, addr, res_tx).await?;
 
-            tokio::spawn(async move {
-                match client.run().await {
-                    Ok(_) => info!("Client {} disconnected", client.addr),
-                    Err(e) => error!("Error handling client {}: {:?}", client.addr, e),
-                };
-            });
+            start_client(client).await;
 
             let mut res = FramedWrite::new(write, Codec::new());
 
@@ -85,6 +97,26 @@ impl Server {
                 }
             });
         }
+    }
+
+}
+
+#[tracing::instrument]
+async fn start_client(mut client: Client) {
+    tokio::spawn(async move {
+        match client.run().await {
+            Ok(_) => info!("Client {} disconnected", client.addr),
+            Err(e) => error!("Error handling client {}: {:?}", client.addr, e),
+        };
+    });
+}
+
+impl fmt::Debug for Server {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Server")
+            .field("port", &self.port)
+            .field("clients", &self.clients.len())
+            .finish()
     }
 }
 
