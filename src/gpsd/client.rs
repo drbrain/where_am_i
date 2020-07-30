@@ -181,37 +181,41 @@ impl Client {
         }
 
         match gps_rx {
-            Some(rx) => self.relay_messages(self.res.clone(), rx),
+            Some(rx) => relay_messages(self.res.clone(), rx),
             None => (),
         }
 
         match pps_rx {
-            Some(rx) => self.relay_messages(self.res.clone(), rx),
+            Some(rx) => relay_messages(self.res.clone(), rx),
             None => (),
         }
-    }
-
-    #[tracing::instrument]
-    fn relay_messages(&self, mut tx: Sender, mut rx: JsonReceiver) {
-        tokio::spawn(async move {
-            loop {
-                let message = rx.recv().await;
-                match message {
-                    Ok(message) => {
-                        match tx.send(message).await {
-                            Ok(_) => (),
-                            Err(e) => error!("error relaying message: {:?}", e),
-                        }
-                    },
-                    Err(e) => error!("error receiving message to relay: {:?}", e),
-                }
-            }
-        });
     }
 
     fn disable_watch(&self) {
         debug!("disabling watch for {:?}", self.addr);
     }
+}
+
+#[tracing::instrument]
+fn relay_messages(mut tx: Sender, mut rx: JsonReceiver) {
+    tokio::spawn(async move {
+        loop {
+            let message = rx.recv().await;
+
+            match message {
+                Ok(message) => {
+                    match tx.send(message).await {
+                        Ok(_) => (),
+                        Err(e) => {
+                            error!("error relaying message: {:?}", e);
+                            break;
+                        },
+                    }
+                },
+                Err(e) => error!("error receiving message to relay: {:?}", e),
+            }
+        }
+    });
 }
 
 async fn start_client_rx(client: Client) {
@@ -241,7 +245,10 @@ async fn client_tx(mut tx: FramedWrite<OwnedWriteHalf, Codec>, mut rx: mpsc::Rec
     while let Some(value) = rx.recv().await {
         match tx.send(value).await {
             Ok(_) => (),
-            Err(e) => error!("Error responding to client: {:?}", e),
+            Err(e) => {
+                error!("Error responding to client: {:?}", e);
+                break;
+            },
         }
     }
 }
