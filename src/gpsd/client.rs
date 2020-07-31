@@ -102,8 +102,8 @@ impl Client {
                 }),
                 Command::Version => json!({
                     "class": "VERSION",
-                    "release": "",
-                    "rev": "",
+                    "release": "release-3.10",
+                    "rev": "3.10",
                     "proto_major": 3,
                     "proto_minor": 10,
                 }),
