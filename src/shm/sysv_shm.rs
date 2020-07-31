@@ -2,6 +2,7 @@ use libc;
 
 use std::io;
 use std::mem;
+use std::mem::ManuallyDrop;
 use std::ptr;
 
 #[derive(Debug, Default)]
@@ -42,7 +43,7 @@ pub fn get_id(unit: i32, perms: i32) -> io::Result<i32> {
     }
 }
 
-pub fn map(id: i32) -> io::Result<Box<time>> {
+pub fn map(id: i32) -> io::Result<ManuallyDrop<Box<time>>> {
     let ptr;
 
     unsafe {
@@ -58,22 +59,22 @@ pub fn map(id: i32) -> io::Result<Box<time>> {
             box_time = Box::from_raw(ptr as *mut time);
         }
 
-        Ok(box_time)
+        Ok(ManuallyDrop::new(box_time))
     }
 }
 
-pub fn unmap(time: Box<time>) -> io::Result<()> {
-    let ptr = Box::into_raw(time) as *const libc::c_void;
+pub fn unmap(time: &time) {
     let ok;
 
     unsafe {
-        ok = libc::shmdt(ptr);
+        let ptr: *const time = time;
+
+        ok = libc::shmdt(ptr as *const libc::c_void);
     }
 
     if -1 == ok {
-        Err(io::Error::last_os_error())
-    } else {
-        Ok(())
+        let error = io::Error::last_os_error();
+        panic!("unable to unmap shared memory at {:?} ({:?})", time, error);
     }
 }
 
