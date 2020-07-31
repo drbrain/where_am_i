@@ -35,20 +35,14 @@ impl GPS {
     pub fn new(name: String, settings: SerialPortSettings) -> Self {
         let (tx, _) = broadcast::channel(5);
 
-        let gps = GPS {
-            name: name,
-            tx: tx,
-            settings: settings,
-        };
-
-        gps
+        GPS { name, tx, settings }
     }
 
     #[tracing::instrument]
     pub async fn run(&self) -> Result<(), io::Error> {
         let (mut result_tx, mut result_rx) = mpsc::channel(1);
         let name = self.name.clone();
-        let settings = self.settings.clone();
+        let settings = self.settings;
         let tx = self.tx.clone();
 
         tokio::spawn(async move {
@@ -98,10 +92,9 @@ impl GPS {
                     continue;
                 }
 
-                match parsed.unwrap() {
-                    ParseResult::RMC(rmc) => report_time(rmc, name.clone(), received, &tx),
-                    _ => (),
-                };
+                if let ParseResult::RMC(rmc) = parsed.unwrap() {
+                    report_time(rmc, name.clone(), received, &tx);
+                }
             }
         });
 
@@ -140,10 +133,7 @@ fn report_time(rmc: nmea::RmcData, name: String, received: Duration, tx: &JsonSe
         "clock_nsec": received.subsec_nanos(),
     });
 
-    match tx.send(toff) {
-        Ok(_) => (),
-        Err(_) => (), // error!("send error: {:?}", e),
-    }
+    if tx.send(toff).is_ok() { }
 }
 
 impl fmt::Debug for GPS {

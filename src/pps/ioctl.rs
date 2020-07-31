@@ -36,7 +36,7 @@ pub struct time {
     pub flags: u32, // flags
 }
 
-pub const TIME_INVALID: u32 = 1 << 0;
+pub const TIME_INVALID: u32 = 1;
 
 pub const CAPTUREASSERT: i32 = 0x01; // capture assert events
                                      // pub const CAPTURECLEAR:  i32 = 0x02;   // capture clear events

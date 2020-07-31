@@ -39,11 +39,7 @@ impl PPS {
     pub fn new(name: String, device_name: String) -> Self {
         let (tx, _) = broadcast::channel(5);
 
-        PPS {
-            name: name,
-            tx: tx,
-            device_name: device_name,
-        }
+        PPS { name, tx, device_name }
     }
 
     #[tracing::instrument]
@@ -65,7 +61,7 @@ impl PPS {
         unsafe {
             let mut mode = 0;
 
-            if let Err(_) = ioctl::getcap(pps_fd, &mut mode) {
+            if ioctl::getcap(pps_fd, &mut mode).is_err() {
                 return Err(Box::new(PPSError::CapabilitiesFailed(self.name.clone())));
             };
 
@@ -79,13 +75,13 @@ impl PPS {
 
             let mut params = ioctl::params::default();
 
-            if let Err(_) = ioctl::getparams(pps_fd, &mut params) {
+            if ioctl::getparams(pps_fd, &mut params).is_err() {
                 return Err(Box::new(PPSError::CannotGetParameters(self.name.clone())));
             };
 
             params.mode |= ioctl::CAPTUREASSERT;
 
-            if let Err(_) = ioctl::setparams(pps_fd, &mut params) {
+            if ioctl::setparams(pps_fd, &mut params).is_err() {
                 return Err(Box::new(PPSError::CannotSetParameters(self.name.clone())));
             };
         }
@@ -226,8 +222,8 @@ impl Future for FetchFuture {
         if guard.completed {
             let fetch_time = guard.result.as_ref().unwrap();
 
-            match guard.ok {
-                true => Poll::Ready(Ok(json!({
+            if guard.ok {
+                Poll::Ready(Ok(json!({
                     "class":      "PPS".to_string(),
                     "device":     "".to_string(),
                     "real_sec":   fetch_time.real_sec,
@@ -235,11 +231,13 @@ impl Future for FetchFuture {
                     "clock_sec":  fetch_time.clock_sec,
                     "clock_nsec": fetch_time.clock_nsec,
                     "precision":  -1,
-                }))),
-                false => Poll::Ready(Err("something went wrong".to_string())),
+                })))
+            } else {
+                Poll::Ready(Err("something went wrong".to_string()))
             }
         } else {
             guard.waker = Some(cx.waker().clone());
+
             Poll::Pending
         }
     }

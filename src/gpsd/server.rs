@@ -26,7 +26,7 @@ pub struct Server {
 impl Server {
     pub fn new(port: u16) -> Self {
         Server {
-            port: port,
+            port,
             clients: HashMap::new(),
             gps_tx: HashMap::new(),
             pps_tx: HashMap::new(),
@@ -34,11 +34,11 @@ impl Server {
     }
 
     pub fn add_gps(&mut self, gps: GPS) {
-        self.gps_tx.insert(gps.name.clone(), gps.tx.clone());
+        self.gps_tx.insert(gps.name.clone(), gps.tx);
     }
 
     pub fn add_pps(&mut self, pps: PPS, name: String) {
-        self.pps_tx.insert(name, pps.tx.clone());
+        self.pps_tx.insert(name, pps.tx);
     }
 
     pub fn gps_rx_for(&self, device: String) -> Option<JsonReceiver> {

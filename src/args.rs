@@ -108,5 +108,5 @@ pub fn parse() -> (Option<String>, SerialPortSettings, Option<String>) {
         timeout: Duration::from_millis(1),
     };
 
-    return (args.gps_device, s, args.pps_device);
+    (args.gps_device, s, args.pps_device)
 }

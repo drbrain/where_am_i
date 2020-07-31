@@ -6,7 +6,6 @@ use bytes::BufMut;
 use bytes::BytesMut;
 
 use serde::Serialize;
-use serde_json;
 use serde_json::json;
 
 use std::cmp;

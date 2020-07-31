@@ -77,10 +77,10 @@ impl Client {
         };
 
         Ok(Client {
-            server: server,
-            addr: addr,
-            req: req,
-            res: res,
+            server,
+            addr,
+            req,
+            res,
             watch: Arc::new(Mutex::new(watch)),
         })
     }
@@ -143,9 +143,8 @@ impl Client {
 
             original = watch.clone();
 
-            match updates {
-                Some(j) => watch.update(j),
-                None => (),
+            if let Some(j) = updates {
+                watch.update(j);
             };
 
             updated = watch.clone();
@@ -191,14 +190,12 @@ impl Client {
             }
         }
 
-        match gps_rx {
-            Some(rx) => relay_messages(self.res.clone(), rx),
-            None => (),
+        if let Some(rx) = gps_rx {
+            relay_messages(self.res.clone(), rx)
         }
 
-        match pps_rx {
-            Some(rx) => relay_messages(self.res.clone(), rx),
-            None => (),
+        if let Some(rx) = pps_rx {
+            relay_messages(self.res.clone(), rx)
         }
     }
 

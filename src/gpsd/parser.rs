@@ -1,4 +1,3 @@
-use serde_json;
 use serde_json::Value;
 
 use nom::branch::alt;
@@ -38,7 +37,7 @@ pub fn json_to_string(input: &Value) -> Option<String> {
     if input.is_null() {
         None
     } else {
-        input.as_str().map_or(None, |v| Some(v.to_string()))
+        input.as_str().map(|v| v.to_string())
     }
 }
 
@@ -55,7 +54,7 @@ fn json_blob<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Val
 
     let blob = recognize(delimited(char('{'), innards, char('}')));
 
-    map_res(blob, |j| serde_json::from_str(j))(input)
+    map_res(blob, serde_json::from_str)(input)
 }
 
 fn device<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {

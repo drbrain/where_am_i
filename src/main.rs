@@ -19,8 +19,6 @@ use tracing::error;
 use tracing::info;
 use tracing::Level;
 
-use tracing_subscriber;
-
 pub type JsonReceiver = broadcast::Receiver<Value>;
 pub type JsonSender = broadcast::Sender<Value>;
 
@@ -102,7 +100,7 @@ async fn run() {
             None => p.name.clone(),
         };
 
-        server.add_pps(p, device_name.clone());
+        server.add_pps(p, device_name);
         info!("registered PPS");
     }
 
