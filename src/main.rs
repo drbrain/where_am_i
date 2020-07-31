@@ -2,6 +2,7 @@ mod args;
 mod gps;
 mod gpsd;
 mod pps;
+mod shm;
 
 #[macro_use]
 extern crate nix;
