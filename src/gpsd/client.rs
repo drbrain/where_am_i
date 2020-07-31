@@ -1,14 +1,14 @@
-use crate::JsonReceiver;
 use crate::gpsd::codec::Codec;
 use crate::gpsd::parser::Command;
 use crate::gpsd::server::Server;
 use crate::gpsd::watch::Watch;
+use crate::JsonReceiver;
 
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 
-use serde_json::Value;
 use serde_json::json;
+use serde_json::Value;
 
 use std::error::Error;
 use std::fmt;
@@ -16,11 +16,11 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use tokio::net::TcpStream;
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::net::tcp::OwnedWriteHalf;
-use tokio::sync::Mutex;
+use tokio::net::TcpStream;
 use tokio::sync::mpsc;
+use tokio::sync::Mutex;
 
 use tokio_util::codec::FramedRead;
 use tokio_util::codec::FramedWrite;
@@ -40,7 +40,11 @@ pub struct Client {
 }
 
 impl Client {
-    pub async fn start(server: Arc<Mutex<Server>>, addr: SocketAddr, stream: TcpStream) -> io::Result<()> {
+    pub async fn start(
+        server: Arc<Mutex<Server>>,
+        addr: SocketAddr,
+        stream: TcpStream,
+    ) -> io::Result<()> {
         let (read, write) = stream.into_split();
         let (res_tx, res_rx) = mpsc::channel(5);
 
@@ -53,7 +57,12 @@ impl Client {
         Ok(())
     }
 
-    pub async fn new(server: Arc<Mutex<Server>>, read: OwnedReadHalf, addr: SocketAddr, res: Sender) -> io::Result<Client> {
+    pub async fn new(
+        server: Arc<Mutex<Server>>,
+        read: OwnedReadHalf,
+        addr: SocketAddr,
+        res: Sender,
+    ) -> io::Result<Client> {
         let req = FramedRead::new(read, Codec::new());
 
         {
@@ -62,7 +71,10 @@ impl Client {
             s.clients.insert(addr, ());
         }
 
-        let watch = Watch { class: "WATCH".to_string(), ..Default::default() };
+        let watch = Watch {
+            class: "WATCH".to_string(),
+            ..Default::default()
+        };
 
         Ok(Client {
             server: server,
@@ -202,7 +214,7 @@ fn relay_messages(tx: Sender, rx: JsonReceiver) {
 }
 
 #[tracing::instrument]
-async fn relay (mut tx: Sender, mut rx: JsonReceiver) {
+async fn relay(mut tx: Sender, mut rx: JsonReceiver) {
     loop {
         let message = rx.recv().await;
 
@@ -211,7 +223,7 @@ async fn relay (mut tx: Sender, mut rx: JsonReceiver) {
             Err(e) => {
                 error!("error receiving message to relay: {:?}", e);
                 break;
-            },
+            }
         };
 
         match tx.send(value).await {
@@ -219,7 +231,7 @@ async fn relay (mut tx: Sender, mut rx: JsonReceiver) {
             Err(e) => {
                 error!("error relaying message: {:?}", e);
                 break;
-            },
+            }
         }
     }
 }
@@ -254,16 +266,13 @@ async fn client_tx(mut tx: FramedWrite<OwnedWriteHalf, Codec>, mut rx: mpsc::Rec
             Err(e) => {
                 error!("Error responding to client: {:?}", e);
                 break;
-            },
+            }
         }
     }
 }
 
 impl fmt::Debug for Client {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Client")
-         .field("peer", &self.addr)
-         .finish()
+        f.debug_struct("Client").field("peer", &self.addr).finish()
     }
 }
-

@@ -1,7 +1,6 @@
 use serde_json;
 use serde_json::Value;
 
-use nom::IResult;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_while1;
@@ -14,6 +13,7 @@ use nom::error::VerboseError;
 use nom::sequence::delimited;
 use nom::sequence::preceded;
 use nom::sequence::terminated;
+use nom::IResult;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct DeviceData {
@@ -42,15 +42,15 @@ pub fn json_to_string(input: &Value) -> Option<String> {
     }
 }
 
-fn equal<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
+fn equal<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
     tag("=")(input)
 }
 
-fn eol<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, char, E> {
+fn eol<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, char, E> {
     preceded(char(';'), preceded(opt(char('\r')), char('\n')))(input)
 }
 
-fn json_blob<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Value, E> {
+fn json_blob<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Value, E> {
     let innards = take_while1(|c| c != '}');
 
     let blob = recognize(delimited(char('{'), innards, char('}')));
@@ -58,63 +58,55 @@ fn json_blob<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Valu
     map_res(blob, |j| serde_json::from_str(j))(input)
 }
 
-fn device<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
-    let (input, json) =
-        preceded(tag("?DEVICE"),
-            terminated(opt(preceded(equal, json_blob)),
-                eol))(input)?;
+fn device<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
+    let (input, json) = preceded(
+        tag("?DEVICE"),
+        terminated(opt(preceded(equal, json_blob)), eol),
+    )(input)?;
 
     let device_data = match json {
-        Some(j) =>
-            Some(DeviceData {
-                path: json_to_string(&j["path"]),
-                bps: j["bps"].as_u64(),
-                parity: json_to_string(&j["parity"]),
-                stopbits: j["stopbits"].as_u64(),
-                native: j["native"].as_u64(),
-            }),
+        Some(j) => Some(DeviceData {
+            path: json_to_string(&j["path"]),
+            bps: j["bps"].as_u64(),
+            parity: json_to_string(&j["parity"]),
+            stopbits: j["stopbits"].as_u64(),
+            native: j["native"].as_u64(),
+        }),
         None => None,
     };
 
     Ok((input, Command::Device(device_data)))
 }
 
-fn devices<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
-    let (input, _) =
-        preceded(tag("?DEVICES"), eol)(input)?;
+fn devices<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
+    let (input, _) = preceded(tag("?DEVICES"), eol)(input)?;
 
     Ok((input, Command::Devices))
 }
 
-fn poll<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
-    let (input, _) =
-        preceded(tag("?POLL"), eol)(input)?;
+fn poll<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
+    let (input, _) = preceded(tag("?POLL"), eol)(input)?;
 
     Ok((input, Command::Poll))
 }
 
-fn version<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
+fn version<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
     let (input, _) = preceded(tag("?VERSION"), eol)(input)?;
 
     Ok((input, Command::Version))
 }
 
-fn watch<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
-    let (input, json) =
-        preceded(tag("?WATCH"),
-            terminated(opt(preceded(equal, json_blob)),
-                eol))(input)?;
+fn watch<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
+    let (input, json) = preceded(
+        tag("?WATCH"),
+        terminated(opt(preceded(equal, json_blob)), eol),
+    )(input)?;
 
     Ok((input, Command::Watch(json)))
 }
 
-fn command<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
-    let (_, command) =
-        alt((devices,
-            device,
-            poll,
-            version,
-            watch))(input)?;
+fn command<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
+    let (_, command) = alt((devices, device, poll, version, watch))(input)?;
 
     Ok((input, command))
 }
@@ -122,7 +114,7 @@ fn command<'a, E:ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Comman
 pub fn parse(input: &str) -> Command {
     match command::<VerboseError<&str>>(input) {
         Ok((_, c)) => c,
-        Err(e)      => Command::Error(e.to_string()),
+        Err(e) => Command::Error(e.to_string()),
     }
 }
 
@@ -155,7 +147,12 @@ mod tests {
             native: None,
         };
 
-        assert_eq!(Command::Device(Some(device_data)), device::<()>("?DEVICE={\"path\":\"/dev/gps0\",\"bps\":38400};\n").unwrap().1);
+        assert_eq!(
+            Command::Device(Some(device_data)),
+            device::<()>("?DEVICE={\"path\":\"/dev/gps0\",\"bps\":38400};\n")
+                .unwrap()
+                .1
+        );
     }
 
     #[test]
@@ -182,12 +179,20 @@ mod tests {
             "enable": true,
         });
 
-        assert_eq!(Command::Watch(Some(watch_data)), watch::<()>("?WATCH={\"device\":\"/dev/gps0\",\"enable\":true};\n").unwrap().1);
+        assert_eq!(
+            Command::Watch(Some(watch_data)),
+            watch::<()>("?WATCH={\"device\":\"/dev/gps0\",\"enable\":true};\n")
+                .unwrap()
+                .1
+        );
     }
 
     #[test]
     fn test_command() {
-        assert_eq!(Command::Device(None), command::<()>("?DEVICE;\n").unwrap().1);
+        assert_eq!(
+            Command::Device(None),
+            command::<()>("?DEVICE;\n").unwrap().1
+        );
         assert_eq!(Command::Devices, command::<()>("?DEVICES;\n").unwrap().1);
         assert_eq!(Command::Poll, command::<()>("?POLL;\n").unwrap().1);
         assert_eq!(Command::Version, command::<()>("?VERSION;\n").unwrap().1);

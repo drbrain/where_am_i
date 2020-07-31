@@ -5,9 +5,9 @@ use bytes::Buf;
 use bytes::BufMut;
 use bytes::BytesMut;
 
+use serde::Serialize;
 use serde_json;
 use serde_json::json;
-use serde::Serialize;
 
 use std::cmp;
 use std::fmt;
@@ -108,7 +108,7 @@ where
                     Ok(s) => s,
                     Err(_) => return Err(CodecError::InternalError),
                 }
-            },
+            }
         };
 
         buf.reserve(out.len() + 1);

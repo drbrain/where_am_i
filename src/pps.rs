@@ -2,23 +2,23 @@ mod ioctl;
 
 use crate::JsonSender;
 
-use serde_json::Value;
 use serde_json::json;
+use serde_json::Value;
 
 use libc::c_int;
 
 use std::error::Error;
-use std::fs::OpenOptions;
 use std::fmt;
+use std::fs::OpenOptions;
 use std::future::Future;
+use std::os::unix::io::AsRawFd;
 use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
 use std::thread;
-use std::os::unix::io::AsRawFd;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::SystemTime;
 
 use tokio::fs::File;
@@ -130,18 +130,18 @@ impl PPS {
 
 #[derive(Debug)]
 struct FetchTime {
-    real_sec:   i64,
-    real_nsec:  i32,
-    clock_sec:  u64,
+    real_sec: i64,
+    real_nsec: i32,
+    clock_sec: u64,
     clock_nsec: u32,
 }
 
 #[derive(Debug)]
 struct FetchState {
-    result:    Option<FetchTime>,
-    ok:        bool,
+    result: Option<FetchTime>,
+    ok: bool,
     completed: bool,
-    waker:     Option<Waker>,
+    waker: Option<Waker>,
 }
 
 struct FetchFuture {
@@ -175,36 +175,35 @@ impl FetchFuture {
             }
 
             shared_state.result = match result {
-                Ok(_)  => {
+                Ok(_) => {
                     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
                     match now {
                         Ok(n) => {
                             let pps_obj = FetchTime {
-                                real_sec:   data.info.assert_tu.sec,
-                                real_nsec:  data.info.assert_tu.nsec,
-                                clock_sec:  n.as_secs(),
+                                real_sec: data.info.assert_tu.sec,
+                                real_nsec: data.info.assert_tu.nsec,
+                                clock_sec: n.as_secs(),
                                 clock_nsec: n.subsec_nanos(),
                             };
 
                             shared_state.ok = true;
 
                             Some(pps_obj)
-                        },
+                        }
                         Err(e) => {
                             shared_state.ok = false;
                             error!("unable to get timestamp for PPS event ({:?})", e);
 
                             None
-                        },
+                        }
                     }
-
-                },
+                }
                 Err(e) => {
                     shared_state.ok = false;
                     error!("unable to get PPS event ({:?})", e);
 
                     None
-                },
+                }
             };
 
             shared_state.completed = true;
@@ -228,15 +227,15 @@ impl Future for FetchFuture {
             let fetch_time = guard.result.as_ref().unwrap();
 
             match guard.ok {
-                true  => Poll::Ready(Ok(json!({
-                                "class":      "PPS".to_string(),
-                                "device":     "".to_string(),
-                                "real_sec":   fetch_time.real_sec,
-                                "real_nsec":  fetch_time.real_nsec,
-                                "clock_sec":  fetch_time.clock_sec,
-                                "clock_nsec": fetch_time.clock_nsec,
-                                "precision":  -1,
-                            }))),
+                true => Poll::Ready(Ok(json!({
+                    "class":      "PPS".to_string(),
+                    "device":     "".to_string(),
+                    "real_sec":   fetch_time.real_sec,
+                    "real_nsec":  fetch_time.real_nsec,
+                    "clock_sec":  fetch_time.clock_sec,
+                    "clock_nsec": fetch_time.clock_nsec,
+                    "precision":  -1,
+                }))),
                 false => Poll::Ready(Err("something went wrong".to_string())),
             }
         } else {
@@ -258,11 +257,19 @@ pub enum PPSError {
 impl fmt::Display for PPSError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PPSError::CannotCaptureAssert(n) => write!(f, "cannot capture assert events for PPS device {}", n),
-            PPSError::CannotGetParameters(n) => write!(f, "cannot get parameters for PPS device {}", n),
-            PPSError::CannotSetParameters(n) => write!(f, "cannot set parameters for PPS device {}", n),
+            PPSError::CannotCaptureAssert(n) => {
+                write!(f, "cannot capture assert events for PPS device {}", n)
+            }
+            PPSError::CannotGetParameters(n) => {
+                write!(f, "cannot get parameters for PPS device {}", n)
+            }
+            PPSError::CannotSetParameters(n) => {
+                write!(f, "cannot set parameters for PPS device {}", n)
+            }
             PPSError::CannotWait(n) => write!(f, "{} cannot wait for PPS events", n),
-            PPSError::CapabilitiesFailed(n) => write!(f, "unable to get capabilities of PPS device {}", n),
+            PPSError::CapabilitiesFailed(n) => {
+                write!(f, "unable to get capabilities of PPS device {}", n)
+            }
         }
     }
 }

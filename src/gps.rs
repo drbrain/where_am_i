@@ -56,7 +56,7 @@ impl GPS {
                 Ok(s) => {
                     result_tx.send(Ok(())).await.unwrap();
                     s
-                },
+                }
                 Err(e) => {
                     result_tx.send(Err(e)).await.unwrap();
                     return;
@@ -71,7 +71,7 @@ impl GPS {
 
             loop {
                 let line = match lines.next_line().await {
-                    Ok(l)  => l,
+                    Ok(l) => l,
                     Err(e) => {
                         error!("Failed to read from GPS ({:?})", e);
                         break;
@@ -128,7 +128,7 @@ fn report_time(rmc: nmea::RmcData, name: String, received: Duration, tx: &JsonSe
     let ts = NaiveDateTime::new(date.unwrap(), time.unwrap());
     let timestamp = DateTime::<Utc>::from_utc(ts, Utc);
 
-    let sec  = timestamp.timestamp();
+    let sec = timestamp.timestamp();
     let nsec = timestamp.timestamp_subsec_nanos();
 
     let toff = json!({
@@ -141,7 +141,7 @@ fn report_time(rmc: nmea::RmcData, name: String, received: Duration, tx: &JsonSe
     });
 
     match tx.send(toff) {
-        Ok(_)  => (),
+        Ok(_) => (),
         Err(_) => (), // error!("send error: {:?}", e),
     }
 }

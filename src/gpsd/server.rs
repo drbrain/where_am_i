@@ -1,8 +1,8 @@
-use crate::JsonReceiver;
-use crate::JsonSender;
 use crate::gps::GPS;
 use crate::gpsd::client::Client;
 use crate::pps::PPS;
+use crate::JsonReceiver;
+use crate::JsonSender;
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -79,7 +79,6 @@ impl Server {
             }
         }
     }
-
 }
 
 impl fmt::Debug for Server {
@@ -90,4 +89,3 @@ impl fmt::Debug for Server {
             .finish()
     }
 }
-
