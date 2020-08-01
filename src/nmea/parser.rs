@@ -46,7 +46,7 @@ fn any<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, String, E
 }
 
 fn checksum<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
-    let (input, checksum) = preceded(char('*'), hex_digit1)(input)?;
+    let (input, checksum) = preceded(star, hex_digit1)(input)?;
 
     Ok((input, checksum.parse().unwrap()))
 }
@@ -71,6 +71,10 @@ fn north_south<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, c
     alt((char('N'), char('S')))(input)
 }
 
+fn star<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
+    tag("*")(input)
+}
+
 fn talker<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Talker, E> {
     let (input, talker) =
         alt((tag("GA"), tag("GB"), tag("GL"), tag("GN"), tag("GP")))(input)?;
@@ -87,23 +91,43 @@ fn talker<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Talker
     Ok((input, talker))
 }
 
+fn verify_checksum(data: &str, checksum: &str) -> bool {
+    let checksum: u8 = checksum.parse().unwrap();
+
+    checksum == data.bytes().fold(0, |cs, b| cs ^ b)
+}
+
+fn line<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
+    let (input, line) =
+        preceded(dollar, terminated(take_while1(|c| c != '\r'), eol))(input)?;
+
+    let (_, (nmea_line, _, checksum)) =
+        tuple((take_while1(|c| c != '*'), star, hex_digit1))(line)?;
+
+    verify(rest, |_: &str| verify_checksum(nmea_line, checksum))("")?;
+
+    Ok((input, nmea_line))
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct DTMDatum {
     pub talker: Talker,
     pub datum: String,
-    pub subDatum: String,
+    pub sub_datum: String,
     pub lat: f32,
     pub lon: f32,
     pub alt: f32,
-    pub refDatum: String,
+    pub ref_datum: String,
 }
 
 fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMDatum, E> {
-    let (input, (talker, _, _, datum, _, subDatum, _, lat, _, north_south, _, lon, _, east_west, _,
-            alt, _, refDatum, checksum)) =
-    preceded(dollar, terminated(tuple((talker, tag("DTM"), comma, any, comma, any, comma,
+    let (input, nmea_line) = line(input)?;
+
+    let (_, (talker, _, _, datum, _, sub_datum, _, lat, _, north_south, _, lon, _, east_west, _,
+            alt, _, ref_datum, checksum)) =
+        tuple((talker, tag("DTM"), comma, any, comma, any, comma,
         recognize_float, comma, north_south, comma, recognize_float, comma, east_west, comma,
-        recognize_float, comma, any, checksum)), eol))(input)?;
+        recognize_float, comma, any, checksum))(nmea_line)?;
 
     let lat = lat.parse().unwrap();
     let lon = lon.parse().unwrap();
@@ -112,11 +136,11 @@ fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMDatum,
     let dtm_datum = DTMDatum {
         talker,
         datum,
-        subDatum,
+        sub_datum,
         lat,
         lon,
         alt,
-        refDatum,
+        ref_datum,
     };
 
     Ok((input, dtm_datum))
@@ -150,10 +174,10 @@ mod tests {
 
         assert_eq!(Talker::GPS, parsed.talker);
         assert_eq!("W84".to_string(), parsed.datum);
-        assert_eq!("".to_string(), parsed.subDatum);
+        assert_eq!("".to_string(), parsed.sub_datum);
         assert_approx_eq!(0.8, parsed.lat);
         assert_approx_eq!(0.07, parsed.lon);
         assert_approx_eq!(-47.7, parsed.alt);
-        assert_eq!("W84".to_string(), parsed.refDatum);
+        assert_eq!("W84".to_string(), parsed.ref_datum);
     }
 }
