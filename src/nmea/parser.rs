@@ -11,7 +11,7 @@ use nom::IResult;
 pub enum NMEA {
     DTM(DTMdata),
     GAQ(GAQdata),
-    GBQ,
+    GBQ(GBQdata),
     GBS,
     GGA,
     GLL,
@@ -220,13 +220,27 @@ fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMdata, 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GAQdata {
     pub talker: Talker,
-    pub message: String,
+    pub message_id: String,
 }
 
 fn gaq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GAQdata, E> {
-    let (_, (talker, _, _, message)) = tuple((talker, tag("GAQ"), comma, any))(input)?;
+    let (_, (talker, _, _, message_id)) = tuple((talker, tag("GAQ"), comma, any))(input)?;
 
-    let data = GAQdata { talker, message };
+    let data = GAQdata { talker, message_id };
+
+    Ok((input, data))
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GBQdata {
+    pub talker: Talker,
+    pub message_id: String,
+}
+
+fn gbq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GBQdata, E> {
+    let (_, (talker, _, _, message_id)) = tuple((talker, tag("GBQ"), comma, any))(input)?;
+
+    let data = GBQdata { talker, message_id };
 
     Ok((input, data))
 }
@@ -294,6 +308,14 @@ mod tests {
         let parsed = gaq::<VerboseError<&str>>("EIGAQ,RMC").unwrap().1;
 
         assert_eq!(Talker::ECDIS, parsed.talker);
-        assert_eq!("RMC".to_string(), parsed.message);
+        assert_eq!("RMC".to_string(), parsed.message_id);
+    }
+
+    #[test]
+    fn test_gbq() {
+        let parsed = gbq::<VerboseError<&str>>("EIGBQ,RMC").unwrap().1;
+
+        assert_eq!(Talker::ECDIS, parsed.talker);
+        assert_eq!("RMC".to_string(), parsed.message_id);
     }
 }
