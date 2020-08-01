@@ -8,6 +8,8 @@ allow tracking of GPS statistics.
 
 ## How do I use this?
 
+### Raspberry Pi configuration
+
 Presently this works on Linux using a serial-port GPS with the PPS signal
 provided through the PPS ioctls.
 
@@ -31,10 +33,26 @@ I attached that to GPIO pin 17 (pin 11).
 Note that "GPIO pins" and "pins" have different numbering, check `pinout` on
 your Raspberry Pi or the reference documentation.
 
+### NTP shared memory driver
+
+The [shared memory driver](http://doc.ntp.org/4.2.8/drivers/driver28.html) can
+be used with units 2 (GPS data) and 3 (PPS data) by adding the driver to
+`/etc/ntp.conf`:
+
+```
+server 127.127.28.2 mode 1
+fudge 127.127.28.2 refid GPS
+
+server 127.127.28.3 mode 1 prefer
+fudge 127.127.28.3 refid PPS
+```
+
+### NTP GPSD JSON driver
+
 The [GPSD_JSON
-refclock](https://www.eecis.udel.edu/~mills/ntp/html/drivers/driver46.html)
-requires `/dev/gps0` to be a symlink to the GPS UART, so I used `udev` to
-create it by adding a `/etc/udev/rules.d/50-gps.rules`:
+refclock](http://doc.ntp.org/4.2.8/drivers/driver46.html) requires `/dev/gps0`
+to be a symlink to the GPS UART, so I used `udev` to create it by adding a
+`/etc/udev/rules.d/50-gps.rules`:
 
 ```
 KERNEL=="ttyAMA0", SYMLINK+="gps0"
@@ -51,14 +69,19 @@ it requires `TPV` events, but it accepts either `PPS` or `TPV` events.)
 Add the driver to `/etc/ntp.conf` with:
 
 ```
-server 127.127.46.0 prefer
-fudge 127.127.46.0 time1 0.105 time2 0.0
+server 127.127.46.0
+fudge 127.127.46.0
 ```
 
-You will need to adjust the `time1` and `time2` parameters to get ntpd to accept
-the clock as a "good ticker".  See the [driver
-manual](https://www.eecis.udel.edu/~mills/ntp/html/drivers/driver46.html) for
-details on how to adjust these times.
+### NTP driver notes
+
+Both drivers are still unreliable with GPS offsets, so some work remains to do
+there.  Once they start working properly you'll need to adjust the `time1`
+offsets to get accurate timekeeping.
+
+See the respective driver manual pages for more info.
+
+### Running where_am_i
 
 To run the server:
 
