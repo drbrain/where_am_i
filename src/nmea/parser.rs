@@ -39,8 +39,20 @@ pub enum Talker {
     Combination,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum NorthSouth {
+    North,
+    South,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum EastWest {
+    East,
+    West,
+}
+
 fn any<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, String, E> {
-    let (input, matched) = take_while1(|c| c != ',')(input)?;
+    let (input, matched) = take_while(|c| c != ',')(input)?;
 
     Ok((input, matched.to_string()))
 }
@@ -63,12 +75,28 @@ fn eol<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, 
     tag("\r\n")(input)
 }
 
-fn east_west<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, char, E> {
-    alt((char('E'), char('W')))(input)
+fn east_west<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, EastWest, E> {
+    let (input, ew) = alt((char('E'), char('W')))(input)?;
+
+    let ew = match ew {
+        'E' => EastWest::East,
+        'W' => EastWest::West,
+        _ => panic!("Unhandled alternate {:?}", ew),
+    };
+
+    Ok((input, ew))
 }
 
-fn north_south<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, char, E> {
-    alt((char('N'), char('S')))(input)
+fn north_south<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NorthSouth, E> {
+    let (input, ns) = alt((char('N'), char('S')))(input)?;
+
+    let ns = match ns {
+        'N' => NorthSouth::North,
+        'S' => NorthSouth::South,
+        _ => panic!("Unhandled alternate {:?}", ns),
+    };
+
+    Ok((input, ns))
 }
 
 fn star<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
@@ -91,7 +119,7 @@ fn talker<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Talker
 }
 
 fn verify_checksum(data: &str, checksum: &str) -> bool {
-    let checksum: u8 = checksum.parse().unwrap();
+    let checksum = u8::from_str_radix(checksum, 16).unwrap();
 
     checksum == data.bytes().fold(0, |cs, b| cs ^ b)
 }
@@ -112,14 +140,14 @@ pub struct DTMDatum {
     pub datum: String,
     pub sub_datum: String,
     pub lat: f32,
+    pub north_south: NorthSouth,
     pub lon: f32,
+    pub east_west: EastWest,
     pub alt: f32,
     pub ref_datum: String,
 }
 
 fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMDatum, E> {
-    let (input, nmea_line) = line(input)?;
-
     let (
         _,
         (
@@ -141,7 +169,6 @@ fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMDatum,
             alt,
             _,
             ref_datum,
-            checksum,
         ),
     ) = tuple((
         talker,
@@ -162,8 +189,7 @@ fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMDatum,
         recognize_float,
         comma,
         any,
-        checksum,
-    ))(nmea_line)?;
+    ))(input)?;
 
     let lat = lat.parse().unwrap();
     let lon = lon.parse().unwrap();
@@ -174,7 +200,9 @@ fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMDatum,
         datum,
         sub_datum,
         lat,
+        north_south,
         lon,
+        east_west,
         alt,
         ref_datum,
     };
@@ -197,6 +225,13 @@ mod tests {
     }
 
     #[test]
+    fn test_line() {
+        let full_line = "$GPDTM,W84,,0.0,N,0.0,E,0.0,W84*6F\r\n";
+
+        assert_eq!("GPDTM,W84,,0.0,N,0.0,E,0.0,W84", line::<()>(full_line).unwrap().1);
+    }
+
+    #[test]
     fn test_talker() {
         assert_eq!(Talker::Galileo, talker::<()>("GA").unwrap().1);
         assert_eq!(Talker::BeiDuo, talker::<()>("GB").unwrap().1);
@@ -205,14 +240,29 @@ mod tests {
         assert_eq!(Talker::GPS, talker::<()>("GP").unwrap().1);
     }
 
-    fn test_DTM() {
-        let parsed = dtm::<()>("$GPDTM,W84,,0.0,N,0.0,E,0.0,W84*6F").unwrap().1;
+    #[test]
+    fn test_dtm() {
+        let parsed = dtm::<VerboseError<&str>>("GPDTM,W84,,0.0,N,0.0,E,0.0,W84").unwrap().1;
 
         assert_eq!(Talker::GPS, parsed.talker);
         assert_eq!("W84".to_string(), parsed.datum);
         assert_eq!("".to_string(), parsed.sub_datum);
-        assert_approx_eq!(0.8, parsed.lat);
+        assert_approx_eq!(0.0, parsed.lat);
+        assert_eq!(NorthSouth::North, parsed.north_south);
+        assert_approx_eq!(0.0, parsed.lon);
+        assert_eq!(EastWest::East, parsed.east_west);
+        assert_approx_eq!(0.0, parsed.alt);
+        assert_eq!("W84".to_string(), parsed.ref_datum);
+
+        let parsed = dtm::<VerboseError<&str>>("GPDTM,999,,0.08,N,0.07,E,-47.7,W84").unwrap().1;
+
+        assert_eq!(Talker::GPS, parsed.talker);
+        assert_eq!("999".to_string(), parsed.datum);
+        assert_eq!("".to_string(), parsed.sub_datum);
+        assert_approx_eq!(0.08, parsed.lat);
+        assert_eq!(NorthSouth::North, parsed.north_south);
         assert_approx_eq!(0.07, parsed.lon);
+        assert_eq!(EastWest::East, parsed.east_west);
         assert_approx_eq!(-47.7, parsed.alt);
         assert_eq!("W84".to_string(), parsed.ref_datum);
     }
