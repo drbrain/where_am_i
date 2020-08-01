@@ -1,11 +1,15 @@
 mod args;
 mod gps;
 mod gpsd;
+mod nmea;
 mod pps;
 mod shm;
 
 #[macro_use]
 extern crate nix;
+
+#[macro_use]
+extern crate assert_approx_eq;
 
 use gps::GPS;
 use gpsd::Server;
