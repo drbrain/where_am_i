@@ -5,11 +5,15 @@ use std::mem;
 use std::mem::ManuallyDrop;
 use std::ptr;
 
+use volatile::Volatile;
+
+pub type ShmTime = ManuallyDrop<Box<time>>;
+
 #[derive(Debug, Default)]
 #[repr(C)]
 pub struct time {
     pub mode: i32,
-    pub count: i32,
+    pub count: Volatile<i32>,
     pub clock_sec: i32,
     pub clock_usec: i32,
     pub receive_sec: i32,
@@ -17,16 +21,13 @@ pub struct time {
     pub leap: i32,
     pub precision: i32,
     pub nsamples: i32,
-    pub valid: i32,
+    pub valid: Volatile<i32>,
     pub clock_nsec: u32,
     pub receive_nsec: u32,
     _dummy: [u8; 8],
 }
 
-const NTPD_BASE: i32 = 0x4e545030;
-
-pub fn get_id(unit: i32, perms: i32) -> io::Result<i32> {
-    let key = NTPD_BASE + unit;
+pub fn get_id(key: i32, perms: i32) -> io::Result<i32> {
     let size = mem::size_of::<time>();
     let flags = libc::IPC_CREAT | perms;
 
@@ -43,7 +44,7 @@ pub fn get_id(unit: i32, perms: i32) -> io::Result<i32> {
     }
 }
 
-pub fn map(id: i32) -> io::Result<ManuallyDrop<Box<time>>> {
+pub fn map(id: i32) -> io::Result<ShmTime> {
     let ptr;
 
     unsafe {
@@ -63,18 +64,19 @@ pub fn map(id: i32) -> io::Result<ManuallyDrop<Box<time>>> {
     }
 }
 
-pub fn unmap(time: &time) {
+pub fn unmap(time: ShmTime) {
+    let time = ManuallyDrop::into_inner(time);
     let ok;
 
     unsafe {
-        let ptr: *const time = time;
+        let ptr: *mut time = Box::into_raw(time);
 
         ok = libc::shmdt(ptr as *const libc::c_void);
     }
 
     if -1 == ok {
         let error = io::Error::last_os_error();
-        panic!("unable to unmap shared memory at {:?} ({:?})", time, error);
+        panic!("unable to unmap shared memory ({:?})", error);
     }
 }
 
@@ -84,7 +86,7 @@ mod tests {
 
     #[test]
     fn test_get_id() {
-        assert_eq!(65538, get_id(2, 0o0600).unwrap());
+        assert_eq!(65538, get_id(0x4e545032, 0o0666).unwrap());
     }
 
     #[test]
@@ -94,6 +96,6 @@ mod tests {
 
         assert_eq!(0, time.mode);
 
-        assert_eq!((), unmap(time).unwrap());
+        assert_eq!((), unmap(time));
     }
 }
