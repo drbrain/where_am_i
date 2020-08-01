@@ -10,6 +10,7 @@ extern crate nix;
 use gps::GPS;
 use gpsd::Server;
 use pps::PPS;
+use shm::NtpShm;
 
 use serde_json::Value;
 
@@ -88,9 +89,11 @@ async fn run() {
         None => None,
     };
 
+    let mut ntp_shm = NtpShm::new(2);
     let mut server = Server::new(2947);
 
     if let Some(g) = gps {
+        ntp_shm.add_gps(g.tx.clone());
         server.add_gps(g);
         info!("registered GPS");
     }
@@ -101,9 +104,11 @@ async fn run() {
             None => p.name.clone(),
         };
 
+        ntp_shm.add_pps(p.tx.clone());
         server.add_pps(p, device_name);
         info!("registered PPS");
     }
 
+    ntp_shm.run().await;
     server.run().await.unwrap();
 }

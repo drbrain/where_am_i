@@ -5,43 +5,50 @@ use crate::shm::sysv_shm;
 use crate::shm::sysv_shm::ShmTime;
 
 use std::convert::TryInto;
-use std::error::Error;
 use std::io;
 use std::sync::atomic::compiler_fence;
 use std::sync::atomic::Ordering;
 
 #[derive(Debug)]
 pub struct NtpShm {
-    gps_tx: JsonSender,
-    pps_tx: JsonSender,
     unit: i32,
+    gps_tx: Option<JsonSender>,
+    pps_tx: Option<JsonSender>,
 }
 
 const NTPD_BASE: i32 = 0x4e545030;
 
 impl NtpShm {
-    pub fn new(
-        unit: i32,
-        gps_tx: JsonSender,
-        pps_tx: JsonSender,
-    ) -> Result<NtpShm, Box<dyn Error>> {
-        Ok(NtpShm {
-            gps_tx,
-            pps_tx,
-            unit,
-        })
+    pub fn new(unit: i32) -> NtpShm {
+        NtpShm {
+            unit: unit,
+            gps_tx: None,
+            pps_tx: None,
+        }
     }
 
-    pub async fn relay_timestamps(&self) {
-        let gps_rx = self.gps_tx.subscribe();
-        let gps_unit = self.unit;
+    pub fn add_gps(&mut self, tx: JsonSender) {
+        self.gps_tx = Some(tx);
+    }
 
-        tokio::spawn(relay_timestamps(gps_rx, gps_unit));
+    pub fn add_pps(&mut self, tx: JsonSender) {
+        self.pps_tx = Some(tx);
+    }
 
-        let pps_rx = self.pps_tx.subscribe();
-        let pps_unit = self.unit + 1;
+    pub async fn run(&self) {
+        if let Some(tx) = &self.gps_tx {
+            let rx = tx.subscribe();
+            let unit = self.unit;
 
-        tokio::spawn(relay_timestamps(pps_rx, pps_unit));
+            tokio::spawn(relay_timestamps(rx, unit));
+        }
+
+        if let Some(tx) = &self.pps_tx {
+            let rx = tx.subscribe();
+            let unit = self.unit + 1;
+
+            tokio::spawn(relay_timestamps(rx, unit));
+        }
     }
 }
 
