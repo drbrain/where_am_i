@@ -76,8 +76,7 @@ fn star<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str,
 }
 
 fn talker<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Talker, E> {
-    let (input, talker) =
-        alt((tag("GA"), tag("GB"), tag("GL"), tag("GN"), tag("GP")))(input)?;
+    let (input, talker) = alt((tag("GA"), tag("GB"), tag("GL"), tag("GN"), tag("GP")))(input)?;
 
     let talker = match talker {
         "GA" => Talker::Galileo,
@@ -98,11 +97,9 @@ fn verify_checksum(data: &str, checksum: &str) -> bool {
 }
 
 fn line<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
-    let (input, line) =
-        preceded(dollar, terminated(take_while1(|c| c != '\r'), eol))(input)?;
+    let (input, line) = preceded(dollar, terminated(take_while1(|c| c != '\r'), eol))(input)?;
 
-    let (_, (nmea_line, _, checksum)) =
-        tuple((take_while1(|c| c != '*'), star, hex_digit1))(line)?;
+    let (_, (nmea_line, _, checksum)) = tuple((take_while1(|c| c != '*'), star, hex_digit1))(line)?;
 
     verify(rest, |_: &str| verify_checksum(nmea_line, checksum))("")?;
 
@@ -123,11 +120,50 @@ pub struct DTMDatum {
 fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMDatum, E> {
     let (input, nmea_line) = line(input)?;
 
-    let (_, (talker, _, _, datum, _, sub_datum, _, lat, _, north_south, _, lon, _, east_west, _,
-            alt, _, ref_datum, checksum)) =
-        tuple((talker, tag("DTM"), comma, any, comma, any, comma,
-        recognize_float, comma, north_south, comma, recognize_float, comma, east_west, comma,
-        recognize_float, comma, any, checksum))(nmea_line)?;
+    let (
+        _,
+        (
+            talker,
+            _,
+            _,
+            datum,
+            _,
+            sub_datum,
+            _,
+            lat,
+            _,
+            north_south,
+            _,
+            lon,
+            _,
+            east_west,
+            _,
+            alt,
+            _,
+            ref_datum,
+            checksum,
+        ),
+    ) = tuple((
+        talker,
+        tag("DTM"),
+        comma,
+        any,
+        comma,
+        any,
+        comma,
+        recognize_float,
+        comma,
+        north_south,
+        comma,
+        recognize_float,
+        comma,
+        east_west,
+        comma,
+        recognize_float,
+        comma,
+        any,
+        checksum,
+    ))(nmea_line)?;
 
     let lat = lat.parse().unwrap();
     let lon = lon.parse().unwrap();

@@ -133,7 +133,7 @@ fn report_time(rmc: nmea::RmcData, name: String, received: Duration, tx: &JsonSe
         "clock_nsec": received.subsec_nanos(),
     });
 
-    if tx.send(toff).is_ok() { }
+    if tx.send(toff).is_ok() {}
 }
 
 impl fmt::Debug for GPS {

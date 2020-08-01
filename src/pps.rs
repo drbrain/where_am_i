@@ -39,7 +39,11 @@ impl PPS {
     pub fn new(name: String, device_name: String) -> Self {
         let (tx, _) = broadcast::channel(5);
 
-        PPS { name, tx, device_name }
+        PPS {
+            name,
+            tx,
+            device_name,
+        }
     }
 
     #[tracing::instrument]
