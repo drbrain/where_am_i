@@ -30,18 +30,6 @@ pub enum NMEA {
     ZDA,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum NorthSouth {
-    North,
-    South,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum EastWest {
-    East,
-    West,
-}
-
 fn any<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, String, E> {
     let (input, matched) = take_while(|c| c != ',')(input)?;
 
@@ -66,6 +54,12 @@ fn eol<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, 
     tag("\r\n")(input)
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum EastWest {
+    East,
+    West,
+}
+
 fn east_west<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, EastWest, E> {
     let (input, ew) = alt((char('E'), char('W')))(input)?;
 
@@ -80,6 +74,12 @@ fn east_west<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Eas
 
 fn is_upper_alphanum(chr: char) -> bool {
     chr.is_ascii_uppercase() || chr.is_ascii_digit()
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum NorthSouth {
+    North,
+    South,
 }
 
 fn north_south<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NorthSouth, E> {
