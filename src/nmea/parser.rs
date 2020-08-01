@@ -9,8 +9,8 @@ use nom::IResult;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum NMEA {
-    DTM(DTMDatum),
-    GAQ,
+    DTM(DTMdata),
+    GAQ(GAQdata),
     GBQ,
     GBS,
     GGA,
@@ -28,15 +28,6 @@ pub enum NMEA {
     VLW,
     VTG,
     ZDA,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Talker {
-    GPS,
-    GLONASS,
-    Galileo,
-    BeiDuo,
-    Combination,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -87,6 +78,10 @@ fn east_west<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Eas
     Ok((input, ew))
 }
 
+fn is_upper_alphanum(chr: char) -> bool {
+    chr.is_ascii_uppercase() || chr.is_ascii_digit()
+}
+
 fn north_south<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NorthSouth, E> {
     let (input, ns) = alt((char('N'), char('S')))(input)?;
 
@@ -103,16 +98,28 @@ fn star<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str,
     tag("*")(input)
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum Talker {
+    BeiDuo,
+    Combination,
+    ECDIS,
+    GLONASS,
+    GPS,
+    Galileo,
+    Unknown(String),
+}
+
 fn talker<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Talker, E> {
-    let (input, talker) = alt((tag("GA"), tag("GB"), tag("GL"), tag("GN"), tag("GP")))(input)?;
+    let (input, talker) = take_while_m_n(2, 2, is_upper_alphanum)(input)?;
 
     let talker = match talker {
+        "EI" => Talker::ECDIS,
         "GA" => Talker::Galileo,
         "GB" => Talker::BeiDuo,
         "GL" => Talker::GLONASS,
         "GN" => Talker::Combination,
         "GP" => Talker::GPS,
-        _ => panic!("Unhandled alternate {:?}", talker),
+        _ => Talker::Unknown(talker.to_string()),
     };
 
     Ok((input, talker))
@@ -135,7 +142,7 @@ fn line<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct DTMDatum {
+pub struct DTMdata {
     pub talker: Talker,
     pub datum: String,
     pub sub_datum: String,
@@ -147,7 +154,7 @@ pub struct DTMDatum {
     pub ref_datum: String,
 }
 
-fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMDatum, E> {
+fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMdata, E> {
     let (
         _,
         (
@@ -195,7 +202,7 @@ fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMDatum,
     let lon = lon.parse().unwrap();
     let alt = alt.parse().unwrap();
 
-    let dtm_datum = DTMDatum {
+    let data = DTMdata {
         talker,
         datum,
         sub_datum,
@@ -207,7 +214,21 @@ fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMDatum,
         ref_datum,
     };
 
-    Ok((input, dtm_datum))
+    Ok((input, data))
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GAQdata {
+    pub talker: Talker,
+    pub message: String,
+}
+
+fn gaq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GAQdata, E> {
+    let (_, (talker, _, _, message)) = tuple((talker, tag("GAQ"), comma, any))(input)?;
+
+    let data = GAQdata { talker, message };
+
+    Ok((input, data))
 }
 
 #[cfg(test)]
@@ -238,6 +259,7 @@ mod tests {
         assert_eq!(Talker::GLONASS, talker::<()>("GL").unwrap().1);
         assert_eq!(Talker::Combination, talker::<()>("GN").unwrap().1);
         assert_eq!(Talker::GPS, talker::<()>("GP").unwrap().1);
+        assert_eq!(Talker::Unknown("AA".to_string()), talker::<()>("AA").unwrap().1);
     }
 
     #[test]
@@ -265,5 +287,13 @@ mod tests {
         assert_eq!(EastWest::East, parsed.east_west);
         assert_approx_eq!(-47.7, parsed.alt);
         assert_eq!("W84".to_string(), parsed.ref_datum);
+    }
+
+    #[test]
+    fn test_gaq() {
+        let parsed = gaq::<VerboseError<&str>>("EIGAQ,RMC").unwrap().1;
+
+        assert_eq!(Talker::ECDIS, parsed.talker);
+        assert_eq!("RMC".to_string(), parsed.message);
     }
 }
