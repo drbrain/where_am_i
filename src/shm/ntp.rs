@@ -9,6 +9,8 @@ use std::io;
 use std::sync::atomic::compiler_fence;
 use std::sync::atomic::Ordering;
 
+use tracing::info;
+
 #[derive(Debug)]
 pub struct NtpShm {
     unit: i32,
@@ -62,6 +64,8 @@ fn map_ntp_unit(unit: i32) -> io::Result<ShmTime> {
 
 async fn relay_timestamps(mut rx: JsonReceiver, unit: i32) {
     let mut time = map_ntp_unit(unit).unwrap();
+
+    info!("Feeding NTP SHM timestamps on unit {}", unit);
 
     loop {
         let gps_ts = match rx.recv().await {
