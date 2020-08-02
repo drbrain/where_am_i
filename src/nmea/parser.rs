@@ -15,7 +15,7 @@ pub enum NMEA {
     GAQ(GAQdata),
     GBQ(GBQdata),
     GBS(GBSdata),
-    GGA,
+    GGA(GGAdata),
     GLL,
     GLQ,
     GNQ,
@@ -419,6 +419,72 @@ fn gbs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GBSdata, 
     Ok((input, data))
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct GGAdata {
+    pub talker: Talker,
+    pub time: NaiveTime,
+    pub lat_lon: LatLon,
+    pub quality: Quality,
+    pub num_satellites: u32,
+    pub hdop: f32,
+    pub alt: f32,
+    pub alt_unit: String,
+    pub sep: f32,
+    pub sep_unit: String,
+    pub diff_age: Option<u32>,
+    pub diff_station: Option<u32>,
+}
+
+fn gga<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GGAdata, E> {
+    let (
+        input,
+        (
+            talker,
+            time,
+            lat_lon,
+            quality,
+            num_satellites,
+            hdop,
+            alt,
+            alt_unit,
+            sep,
+            sep_unit,
+            diff_age,
+            diff_station,
+        ),
+    ) = tuple((
+        terminated(talker, terminated(tag("GGA"), comma)),
+        terminated(time, comma),
+        terminated(latlon, comma),
+        terminated(quality, comma),
+        terminated(uint32, comma),
+        terminated(flt32, comma),
+        terminated(flt32, comma),
+        terminated(any, comma),
+        terminated(flt32, comma),
+        terminated(any, comma),
+        terminated(opt(uint32), comma),
+        opt(uint32),
+    ))(input)?;
+
+    let data = GGAdata {
+        talker,
+        time,
+        lat_lon,
+        quality,
+        num_satellites,
+        hdop,
+        alt,
+        alt_unit,
+        sep,
+        sep_unit,
+        diff_age,
+        diff_station,
+    };
+
+    Ok((input, data))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -557,5 +623,26 @@ mod tests {
         assert_eq!(Some(3.8), parsed.stddev);
         assert_eq!(Some(Signal::GPSL1CA), parsed.system);
         assert_eq!(Some(Signal::Unknown), parsed.signal);
+    }
+
+    #[test]
+    fn test_gga() {
+        let parsed =
+            gga::<VE>("GPGGA,092725.00,4717.11399,N,00833.91590,E,1,08,1.01,499.6,M,48.0,M,,")
+                .unwrap()
+                .1;
+
+        assert_eq!(Talker::GPS, parsed.talker);
+        assert_eq!(NaiveTime::from_hms_milli(09, 27, 25, 0), parsed.time);
+        assert_approx_eq!(47.285233, parsed.lat_lon.latitude);
+        assert_approx_eq!(8.565265, parsed.lat_lon.longitude);
+        assert_eq!(Quality::AutonomousGNSSFix, parsed.quality);
+        assert_eq!(8, parsed.num_satellites);
+        assert_approx_eq!(1.01, parsed.hdop);
+        assert_approx_eq!(499.6, parsed.alt);
+        assert_eq!("M".to_string(), parsed.alt_unit);
+        assert_approx_eq!(48.0, parsed.sep);
+        assert_eq!(None, parsed.diff_age);
+        assert_eq!(None, parsed.diff_station);
     }
 }
