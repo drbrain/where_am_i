@@ -19,7 +19,7 @@ pub enum NMEA {
     GLL(GLLdata),
     GLQ(GLQdata),
     GNQ(GNQdata),
-    GNS,
+    GNS(GNSdata),
     GPQ,
     GRS,
     GSA,
@@ -576,6 +576,80 @@ fn gnq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GNQdata, 
         tuple((talker, preceded(tag("GNQ"), preceded(comma, any))))(input)?;
 
     let data = GNQdata { talker, message_id };
+
+    Ok((input, data))
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GNSdata {
+    pub talker: Talker,
+    pub time: NaiveTime,
+    pub lat_lon: LatLon,
+    pub gps_position_mode: PositionMode,
+    pub glonass_position_mode: PositionMode,
+    pub galileo_position_mode: PositionMode,
+    pub beiduo_position_mode: PositionMode,
+    pub num_satellites: u32,
+    pub hdop: f32,
+    pub alt: f32,
+    pub sep: f32,
+    pub diff_age: Option<u32>,
+    pub diff_station: Option<u32>,
+    pub nav_status: Status,
+}
+
+fn gns<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GNSdata, E> {
+    let (
+        input,
+        (
+            talker,
+            time,
+            lat_lon,
+            gps_position_mode,
+            glonass_position_mode,
+            galileo_position_mode,
+            beiduo_position_mode,
+            num_satellites,
+            hdop,
+            alt,
+            sep,
+            diff_age,
+            diff_station,
+            nav_status,
+        ),
+    ) = tuple((
+        terminated(talker, terminated(tag("GNS"), comma)),
+        terminated(time, comma),
+        terminated(latlon, comma),
+        pos_mode,
+        pos_mode,
+        pos_mode,
+        terminated(pos_mode, comma),
+        terminated(uint32, comma),
+        terminated(flt32, comma),
+        terminated(flt32, comma),
+        terminated(flt32, comma),
+        terminated(opt(uint32), comma),
+        terminated(opt(uint32), comma),
+        status,
+    ))(input)?;
+
+    let data = GNSdata {
+        talker,
+        time,
+        lat_lon,
+        gps_position_mode,
+        glonass_position_mode,
+        galileo_position_mode,
+        beiduo_position_mode,
+        num_satellites,
+        hdop,
+        alt,
+        sep,
+        diff_age,
+        diff_station,
+        nav_status,
+    };
 
     Ok((input, data))
 }
