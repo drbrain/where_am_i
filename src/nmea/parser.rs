@@ -16,7 +16,7 @@ pub enum NMEA {
     GBQ(GBQdata),
     GBS(GBSdata),
     GGA(GGAdata),
-    GLL,
+    GLL(GLLdata),
     GLQ,
     GNQ,
     GNS,
@@ -521,6 +521,35 @@ fn gga<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GGAdata, 
     Ok((input, data))
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct GLLdata {
+    pub talker: Talker,
+    pub lat_lon: LatLon,
+    pub time: NaiveTime,
+    pub status: Status,
+    pub position_mode: PositionMode,
+}
+
+fn gll<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GLLdata, E> {
+    let (input, (talker, lat_lon, time, status, position_mode)) = tuple((
+        terminated(talker, terminated(tag("GLL"), comma)),
+        terminated(latlon, comma),
+        terminated(time, comma),
+        terminated(status, comma),
+        pos_mode,
+    ))(input)?;
+
+    let data = GLLdata {
+        talker,
+        lat_lon,
+        time,
+        status,
+        position_mode,
+    };
+
+    Ok((input, data))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -568,7 +597,10 @@ mod tests {
     #[test]
     fn test_pos_mode() {
         assert_eq!(PositionMode::NoFix, pos_mode::<VE>("N").unwrap().1);
-        assert_eq!(PositionMode::AutonomousGNSSFix, pos_mode::<VE>("A").unwrap().1);
+        assert_eq!(
+            PositionMode::AutonomousGNSSFix,
+            pos_mode::<VE>("A").unwrap().1
+        );
     }
 
     #[test]
@@ -692,5 +724,19 @@ mod tests {
         assert_approx_eq!(48.0, parsed.sep);
         assert_eq!(None, parsed.diff_age);
         assert_eq!(None, parsed.diff_station);
+    }
+
+    #[test]
+    fn test_gll() {
+        let parsed = gll::<VE>("GPGLL,4717.11364,N,00833.91565,E,092321.00,A,A")
+            .unwrap()
+            .1;
+
+        assert_eq!(Talker::GPS, parsed.talker);
+        assert_approx_eq!(47.28523, parsed.lat_lon.latitude);
+        assert_approx_eq!(8.565261, parsed.lat_lon.longitude);
+        assert_eq!(NaiveTime::from_hms_milli(09, 23, 21, 0), parsed.time);
+        assert_eq!(Status::Valid, parsed.status);
+        assert_eq!(PositionMode::AutonomousGNSSFix, parsed.position_mode);
     }
 }
