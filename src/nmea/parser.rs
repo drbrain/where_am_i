@@ -311,48 +311,18 @@ pub struct DTMdata {
 }
 
 fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMdata, E> {
-    let (
-        _,
-        (
-            talker,
-            _,
-            _,
-            datum,
-            _,
-            sub_datum,
-            _,
-            lat,
-            _,
-            north_south,
-            _,
-            lon,
-            _,
-            east_west,
-            _,
-            alt,
-            _,
-            ref_datum,
-        ),
-    ) = tuple((
-        talker,
-        tag("DTM"),
-        comma,
-        any,
-        comma,
-        any,
-        comma,
-        flt32,
-        comma,
-        north_south,
-        comma,
-        flt32,
-        comma,
-        east_west,
-        comma,
-        flt32,
-        comma,
-        any,
-    ))(input)?;
+    let (_, (talker, datum, sub_datum, lat, north_south, lon, east_west, alt, ref_datum)) =
+        tuple((
+            terminated(talker, terminated(tag("DTM"), comma)),
+            terminated(any, comma),
+            terminated(any, comma),
+            terminated(flt32, comma),
+            terminated(north_south, comma),
+            terminated(flt32, comma),
+            terminated(east_west, comma),
+            terminated(flt32, comma),
+            any,
+        ))(input)?;
 
     let data = DTMdata {
         talker,
@@ -376,7 +346,8 @@ pub struct GAQdata {
 }
 
 fn gaq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GAQdata, E> {
-    let (_, (talker, _, _, message_id)) = tuple((talker, tag("GAQ"), comma, any))(input)?;
+    let (_, (talker, message_id)) =
+        tuple((talker, preceded(tag("GAQ"), preceded(comma, any))))(input)?;
 
     let data = GAQdata { talker, message_id };
 
@@ -390,7 +361,8 @@ pub struct GBQdata {
 }
 
 fn gbq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GBQdata, E> {
-    let (_, (talker, _, _, message_id)) = tuple((talker, tag("GBQ"), comma, any))(input)?;
+    let (_, (talker, message_id)) =
+        tuple((talker, preceded(tag("GBQ"), preceded(comma, any))))(input)?;
 
     let data = GBQdata { talker, message_id };
 
@@ -415,54 +387,20 @@ pub struct GBSdata {
 fn gbs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GBSdata, E> {
     let (
         input,
-        (
-            talker,
-            _,
-            _,
-            time,
-            _,
-            err_lat,
-            _,
-            err_lon,
-            _,
-            err_alt,
-            _,
-            svid,
-            _,
-            prob,
-            _,
-            bias,
-            _,
-            stddev,
-            _,
-            system,
-            _,
-        ),
+        (talker, time, err_lat, err_lon, err_alt, svid, prob, bias, stddev, system, signal),
     ) = tuple((
-        talker,
-        tag("GBS"),
-        comma,
-        time,
-        comma,
-        flt32,
-        comma,
-        flt32,
-        comma,
-        flt32,
-        comma,
-        opt(uint32),
-        comma,
-        opt(flt32),
-        comma,
-        opt(flt32),
-        comma,
-        opt(flt32),
-        comma,
-        opt(system),
-        comma,
+        terminated(talker, terminated(tag("GBS"), comma)),
+        terminated(time, comma),
+        terminated(flt32, comma),
+        terminated(flt32, comma),
+        terminated(flt32, comma),
+        terminated(opt(uint32), comma),
+        terminated(opt(flt32), comma),
+        terminated(opt(flt32), comma),
+        terminated(opt(flt32), comma),
+        terminated(opt(system), comma),
+        opt(signal),
     ))(input)?;
-
-    let (_, signal) = opt(signal)(input)?;
 
     let data = GBSdata {
         talker,
