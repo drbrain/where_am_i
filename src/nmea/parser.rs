@@ -149,13 +149,35 @@ fn north_south<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, N
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Quality {
-    NoFix,
+pub enum PositionMode {
     AutonomousGNSSFix,
     DifferentialGNSSFix,
+    EstimatedDeadReckoningFix,
+    NoFix,
     RTKFixed,
     RTKFloat,
-    EstimatedDeadReconingFix,
+}
+
+fn pos_mode<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, PositionMode, E> {
+    map(one_of("ADEFNR"), |c| match c {
+        'A' => PositionMode::AutonomousGNSSFix,
+        'D' => PositionMode::DifferentialGNSSFix,
+        'E' => PositionMode::EstimatedDeadReckoningFix,
+        'F' => PositionMode::RTKFloat,
+        'N' => PositionMode::NoFix,
+        'R' => PositionMode::RTKFixed,
+        _ => panic!("Unhandled position mode {:?}", c),
+    })(input)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Quality {
+    AutonomousGNSSFix,
+    DifferentialGNSSFix,
+    EstimatedDeadReckoningFix,
+    NoFix,
+    RTKFixed,
+    RTKFloat,
 }
 
 fn quality<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Quality, E> {
@@ -165,7 +187,7 @@ fn quality<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Quali
         '2' => Quality::DifferentialGNSSFix,
         '4' => Quality::RTKFixed,
         '5' => Quality::RTKFloat,
-        '6' => Quality::EstimatedDeadReconingFix,
+        '6' => Quality::EstimatedDeadReckoningFix,
         _ => panic!("Unhandled quality {:?}", c),
     })(input)
 }
@@ -203,6 +225,20 @@ fn signal<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Signal
     };
 
     Ok((input, signal))
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Status {
+    Valid,
+    Invalid,
+}
+
+fn status<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Status, E> {
+    map(one_of("AV"), |c| match c {
+        'A' => Status::Valid,
+        'V' => Status::Invalid,
+        _ => panic!("Unhandled quality {:?}", c),
+    })(input)
 }
 
 fn system<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Signal, E> {
@@ -530,9 +566,21 @@ mod tests {
     }
 
     #[test]
+    fn test_pos_mode() {
+        assert_eq!(PositionMode::NoFix, pos_mode::<VE>("N").unwrap().1);
+        assert_eq!(PositionMode::AutonomousGNSSFix, pos_mode::<VE>("A").unwrap().1);
+    }
+
+    #[test]
     fn test_quality() {
         assert_eq!(Quality::NoFix, quality::<VE>("0").unwrap().1);
         assert_eq!(Quality::AutonomousGNSSFix, quality::<VE>("1").unwrap().1);
+    }
+
+    #[test]
+    fn test_status() {
+        assert_eq!(Status::Valid, status::<VE>("A").unwrap().1);
+        assert_eq!(Status::Invalid, status::<VE>("V").unwrap().1);
     }
 
     #[test]
