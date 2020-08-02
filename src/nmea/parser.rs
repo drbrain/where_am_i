@@ -1,3 +1,5 @@
+use chrono::naive::NaiveTime;
+
 use nom::branch::*;
 use nom::bytes::complete::*;
 use nom::character::complete::*;
@@ -12,7 +14,7 @@ pub enum NMEA {
     DTM(DTMdata),
     GAQ(GAQdata),
     GBQ(GBQdata),
-    GBS,
+    GBS(GBSdata),
     GGA,
     GLL,
     GLQ,
@@ -50,6 +52,10 @@ fn dollar<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a st
     tag("$")(input)
 }
 
+fn dot<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
+    tag(".")(input)
+}
+
 fn eol<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
     tag("\r\n")(input)
 }
@@ -72,6 +78,21 @@ fn east_west<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Eas
     Ok((input, ew))
 }
 
+fn flt32<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, f32, E> {
+    map_res(recognize_float, |s: &str| s.parse())(input)
+}
+
+fn int32<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, i32, E> {
+    map_res(
+        recognize(preceded(opt(char('-')), take_while(is_digit))),
+        |s: &str| s.parse(),
+    )(input)
+}
+
+fn is_digit(chr: char) -> bool {
+    chr.is_ascii_digit()
+}
+
 fn is_upper_alphanum(chr: char) -> bool {
     chr.is_ascii_uppercase() || chr.is_ascii_digit()
 }
@@ -92,6 +113,57 @@ fn north_south<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, N
     };
 
     Ok((input, ns))
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Signal {
+    GPSL1CA,
+    GPSL2CL,
+    GPSL2CM,
+    GalileoE1C,
+    GalileoE1B,
+    GalileoE5bI,
+    GalileoE5bQ,
+    BeiDuoB1ID1,
+    BeiDuoB1ID2,
+    BeiDuoB2ID1,
+    BeiDuoB2ID2,
+    QZSSL1CA,
+    QZSSL2CM,
+    QZSSL2CL,
+    GLONASSL1OF,
+    GLONASSL2OF,
+    Unknown,
+}
+
+fn signal<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Signal, E> {
+    let (input, signal_id) = uint32(input)?;
+
+    let signal = match signal_id {
+        1 => Signal::GPSL1CA,
+        2 => Signal::GLONASSL1OF,
+        3 => Signal::GalileoE1C,
+        4 => Signal::BeiDuoB1ID1,
+        _ => Signal::Unknown,
+    };
+
+    Ok((input, signal))
+}
+
+fn system<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Signal, E> {
+    let (input, system_id) = uint32(input)?;
+
+    let system = match system_id {
+        1 => Signal::GPSL1CA,
+        2 => Signal::GalileoE5bI,
+        3 => Signal::BeiDuoB1ID1,
+        5 => Signal::GPSL2CM,
+        6 => Signal::GPSL2CL,
+        7 => Signal::GalileoE1C,
+        _ => Signal::Unknown,
+    };
+
+    Ok((input, system))
 }
 
 fn star<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
@@ -123,6 +195,27 @@ fn talker<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Talker
     };
 
     Ok((input, talker))
+}
+
+fn time<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NaiveTime, E> {
+    let (input, (hour, minute, second, subsec)) =
+        tuple((two_digit, two_digit, two_digit, preceded(dot, two_digit)))(input)?;
+
+    let time = NaiveTime::from_hms_milli(hour, minute, second, subsec * 100);
+
+    Ok((input, time))
+}
+
+fn two_digit<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
+    let (input, integer) = take_while_m_n(2, 2, is_digit)(input)?;
+
+    let integer = integer.parse().unwrap();
+
+    Ok((input, integer))
+}
+
+fn uint32<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
+    map_res(take_while(is_digit), |s: &str| s.parse())(input)
 }
 
 fn verify_checksum(data: &str, checksum: &str) -> bool {
@@ -185,22 +278,18 @@ fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMdata, 
         comma,
         any,
         comma,
-        recognize_float,
+        flt32,
         comma,
         north_south,
         comma,
-        recognize_float,
+        flt32,
         comma,
         east_west,
         comma,
-        recognize_float,
+        flt32,
         comma,
         any,
     ))(input)?;
-
-    let lat = lat.parse().unwrap();
-    let lon = lon.parse().unwrap();
-    let alt = alt.parse().unwrap();
 
     let data = DTMdata {
         talker,
@@ -245,6 +334,90 @@ fn gbq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GBQdata, 
     Ok((input, data))
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct GBSdata {
+    pub talker: Talker,
+    pub time: NaiveTime,
+    pub err_lat: f32,
+    pub err_lon: f32,
+    pub err_alt: f32,
+    pub svid: Option<u32>,
+    pub prob: Option<f32>,
+    pub bias: Option<f32>,
+    pub stddev: Option<f32>,
+    pub system: Option<Signal>,
+    pub signal: Option<Signal>,
+}
+
+fn gbs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GBSdata, E> {
+    let (
+        input,
+        (
+            talker,
+            _,
+            _,
+            time,
+            _,
+            err_lat,
+            _,
+            err_lon,
+            _,
+            err_alt,
+            _,
+            svid,
+            _,
+            prob,
+            _,
+            bias,
+            _,
+            stddev,
+            _,
+            system,
+            _,
+        ),
+    ) = tuple((
+        talker,
+        tag("GBS"),
+        comma,
+        time,
+        comma,
+        flt32,
+        comma,
+        flt32,
+        comma,
+        flt32,
+        comma,
+        opt(uint32),
+        comma,
+        opt(flt32),
+        comma,
+        opt(flt32),
+        comma,
+        opt(flt32),
+        comma,
+        opt(system),
+        comma,
+    ))(input)?;
+
+    let (_, signal) = opt(signal)(input)?;
+
+    let data = GBSdata {
+        talker,
+        time,
+        err_lat,
+        err_lon,
+        err_alt,
+        svid,
+        prob,
+        bias,
+        stddev,
+        system,
+        signal,
+    };
+
+    Ok((input, data))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,7 +436,10 @@ mod tests {
     fn test_line() {
         let full_line = "$GPDTM,W84,,0.0,N,0.0,E,0.0,W84*6F\r\n";
 
-        assert_eq!("GPDTM,W84,,0.0,N,0.0,E,0.0,W84", line::<()>(full_line).unwrap().1);
+        assert_eq!(
+            "GPDTM,W84,,0.0,N,0.0,E,0.0,W84",
+            line::<()>(full_line).unwrap().1
+        );
     }
 
     #[test]
@@ -273,12 +449,17 @@ mod tests {
         assert_eq!(Talker::GLONASS, talker::<()>("GL").unwrap().1);
         assert_eq!(Talker::Combination, talker::<()>("GN").unwrap().1);
         assert_eq!(Talker::GPS, talker::<()>("GP").unwrap().1);
-        assert_eq!(Talker::Unknown("AA".to_string()), talker::<()>("AA").unwrap().1);
+        assert_eq!(
+            Talker::Unknown("AA".to_string()),
+            talker::<()>("AA").unwrap().1
+        );
     }
 
     #[test]
     fn test_dtm() {
-        let parsed = dtm::<VerboseError<&str>>("GPDTM,W84,,0.0,N,0.0,E,0.0,W84").unwrap().1;
+        let parsed = dtm::<VerboseError<&str>>("GPDTM,W84,,0.0,N,0.0,E,0.0,W84")
+            .unwrap()
+            .1;
 
         assert_eq!(Talker::GPS, parsed.talker);
         assert_eq!("W84".to_string(), parsed.datum);
@@ -290,7 +471,9 @@ mod tests {
         assert_approx_eq!(0.0, parsed.alt);
         assert_eq!("W84".to_string(), parsed.ref_datum);
 
-        let parsed = dtm::<VerboseError<&str>>("GPDTM,999,,0.08,N,0.07,E,-47.7,W84").unwrap().1;
+        let parsed = dtm::<VerboseError<&str>>("GPDTM,999,,0.08,N,0.07,E,-47.7,W84")
+            .unwrap()
+            .1;
 
         assert_eq!(Talker::GPS, parsed.talker);
         assert_eq!("999".to_string(), parsed.datum);
@@ -317,5 +500,41 @@ mod tests {
 
         assert_eq!(Talker::ECDIS, parsed.talker);
         assert_eq!("RMC".to_string(), parsed.message_id);
+    }
+
+    #[test]
+    fn test_gbs() {
+        let parsed = gbs::<VerboseError<&str>>("GPGBS,235503.00,1.6,1.4,3.2,,,,,,")
+            .unwrap()
+            .1;
+
+        assert_eq!(Talker::GPS, parsed.talker);
+        assert_eq!(NaiveTime::from_hms_milli(23, 55, 3, 0), parsed.time);
+        assert_approx_eq!(1.6, parsed.err_lat);
+        assert_approx_eq!(1.4, parsed.err_lon);
+        assert_approx_eq!(3.2, parsed.err_alt);
+        assert_eq!(None, parsed.svid);
+        assert_eq!(None, parsed.prob);
+        assert_eq!(None, parsed.bias);
+        assert_eq!(None, parsed.stddev);
+        assert_eq!(None, parsed.stddev);
+        assert_eq!(None, parsed.system);
+        assert_eq!(None, parsed.signal);
+
+        let parsed = gbs::<VerboseError<&str>>("GPGBS,235458.00,1.4,1.3,3.1,03,,-21.4,3.8,1,0")
+            .unwrap()
+            .1;
+
+        assert_eq!(Talker::GPS, parsed.talker);
+        assert_eq!(NaiveTime::from_hms_milli(23, 54, 58, 0), parsed.time);
+        assert_approx_eq!(1.4, parsed.err_lat);
+        assert_approx_eq!(1.3, parsed.err_lon);
+        assert_approx_eq!(3.1, parsed.err_alt);
+        assert_eq!(Some(3), parsed.svid);
+        assert_eq!(None, parsed.prob);
+        assert_eq!(Some(-21.4), parsed.bias);
+        assert_eq!(Some(3.8), parsed.stddev);
+        assert_eq!(Some(Signal::GPSL1CA), parsed.system);
+        assert_eq!(Some(Signal::Unknown), parsed.signal);
     }
 }
