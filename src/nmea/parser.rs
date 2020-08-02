@@ -18,7 +18,7 @@ pub enum NMEA {
     GGA(GGAdata),
     GLL(GLLdata),
     GLQ(GLQdata),
-    GNQ,
+    GNQ(GNQdata),
     GNS,
     GPQ,
     GRS,
@@ -565,6 +565,21 @@ fn glq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GLQdata, 
     Ok((input, data))
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct GNQdata {
+    pub talker: Talker,
+    pub message_id: String,
+}
+
+fn gnq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GNQdata, E> {
+    let (_, (talker, message_id)) =
+        tuple((talker, preceded(tag("GNQ"), preceded(comma, any))))(input)?;
+
+    let data = GNQdata { talker, message_id };
+
+    Ok((input, data))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -758,6 +773,14 @@ mod tests {
     #[test]
     fn test_glq() {
         let parsed = glq::<VE>("EIGLQ,RMC").unwrap().1;
+
+        assert_eq!(Talker::ECDIS, parsed.talker);
+        assert_eq!("RMC".to_string(), parsed.message_id);
+    }
+
+    #[test]
+    fn test_gnq() {
+        let parsed = gnq::<VE>("EIGNQ,RMC").unwrap().1;
 
         assert_eq!(Talker::ECDIS, parsed.talker);
         assert_eq!("RMC".to_string(), parsed.message_id);
