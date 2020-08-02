@@ -149,6 +149,28 @@ fn north_south<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, N
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum Quality {
+    NoFix,
+    AutonomousGNSSFix,
+    DifferentialGNSSFix,
+    RTKFixed,
+    RTKFloat,
+    EstimatedDeadReconingFix,
+}
+
+fn quality<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Quality, E> {
+    map(one_of("012456"), |c| match c {
+        '0' => Quality::NoFix,
+        '1' => Quality::AutonomousGNSSFix,
+        '2' => Quality::DifferentialGNSSFix,
+        '4' => Quality::RTKFixed,
+        '5' => Quality::RTKFloat,
+        '6' => Quality::EstimatedDeadReconingFix,
+        _ => panic!("Unhandled quality {:?}", c),
+    })(input)
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Signal {
     GPSL1CA,
     GPSL2CL,
@@ -501,6 +523,12 @@ mod tests {
             "GPDTM,W84,,0.0,N,0.0,E,0.0,W84",
             line::<VE>(full_line).unwrap().1
         );
+    }
+
+    #[test]
+    fn test_quality() {
+        assert_eq!(Quality::NoFix, quality::<VE>("0").unwrap().1);
+        assert_eq!(Quality::AutonomousGNSSFix, quality::<VE>("1").unwrap().1);
     }
 
     #[test]
