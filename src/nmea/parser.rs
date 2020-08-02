@@ -103,6 +103,39 @@ pub enum NorthSouth {
     South,
 }
 
+fn lat<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, f32, E> {
+    map(tuple((two_digit, flt32)), |(d, m)| d as f32 + m / 60.0)(input)
+}
+
+fn lon<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, f32, E> {
+    map(tuple((three_digit, flt32)), |(d, m)| d as f32 + m / 60.0)(input)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct LatLon {
+    pub latitude: f32,
+    pub longitude: f32,
+}
+
+fn latlon<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, LatLon, E> {
+    let (input, latitude) = map(
+        tuple((terminated(lat, comma), terminated(north_south, comma))),
+        |(l, d)| l * if d == NorthSouth::North { 1.0 } else { -1.0 },
+    )(input)?;
+
+    let (input, longitude) = map(tuple((terminated(lon, comma), east_west)), |(l, d)| {
+        l * if d == EastWest::East { 1.0 } else { -1.0 }
+    })(input)?;
+
+    Ok((
+        input,
+        LatLon {
+            latitude,
+            longitude,
+        },
+    ))
+}
+
 fn north_south<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NorthSouth, E> {
     let (input, ns) = alt((char('N'), char('S')))(input)?;
 
@@ -195,6 +228,14 @@ fn talker<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Talker
     };
 
     Ok((input, talker))
+}
+
+fn three_digit<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
+    let (input, integer) = take_while_m_n(3, 3, is_digit)(input)?;
+
+    let integer = integer.parse().unwrap();
+
+    Ok((input, integer))
 }
 
 fn time<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NaiveTime, E> {
@@ -422,14 +463,34 @@ fn gbs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GBSdata, 
 mod tests {
     use super::*;
 
+    type VE<'a> = VerboseError<&'a str>;
+
     #[test]
     fn test_comma() {
-        assert_eq!(",", comma::<()>(",").unwrap().1);
+        assert_eq!(",", comma::<VE>(",").unwrap().1);
     }
 
     #[test]
     fn test_dollar() {
-        assert_eq!("$", dollar::<()>("$").unwrap().1);
+        assert_eq!("$", dollar::<VE>("$").unwrap().1);
+    }
+
+    #[test]
+    fn test_lat() {
+        assert_eq!(47.28521118, lat::<VE>("4717.112671").unwrap().1);
+    }
+
+    #[test]
+    fn test_latlon() {
+        let lat_lon = latlon::<VE>("4717.11399,N,00833.91590,W").unwrap().1;
+
+        assert_eq!(47.285233, lat_lon.latitude);
+        assert_eq!(-8.565265, lat_lon.longitude);
+    }
+
+    #[test]
+    fn test_lon() {
+        assert_eq!(8.56524738, lon::<VE>("00833.914843").unwrap().1);
     }
 
     #[test]
@@ -438,28 +499,26 @@ mod tests {
 
         assert_eq!(
             "GPDTM,W84,,0.0,N,0.0,E,0.0,W84",
-            line::<()>(full_line).unwrap().1
+            line::<VE>(full_line).unwrap().1
         );
     }
 
     #[test]
     fn test_talker() {
-        assert_eq!(Talker::Galileo, talker::<()>("GA").unwrap().1);
-        assert_eq!(Talker::BeiDuo, talker::<()>("GB").unwrap().1);
-        assert_eq!(Talker::GLONASS, talker::<()>("GL").unwrap().1);
-        assert_eq!(Talker::Combination, talker::<()>("GN").unwrap().1);
-        assert_eq!(Talker::GPS, talker::<()>("GP").unwrap().1);
+        assert_eq!(Talker::Galileo, talker::<VE>("GA").unwrap().1);
+        assert_eq!(Talker::BeiDuo, talker::<VE>("GB").unwrap().1);
+        assert_eq!(Talker::GLONASS, talker::<VE>("GL").unwrap().1);
+        assert_eq!(Talker::Combination, talker::<VE>("GN").unwrap().1);
+        assert_eq!(Talker::GPS, talker::<VE>("GP").unwrap().1);
         assert_eq!(
             Talker::Unknown("AA".to_string()),
-            talker::<()>("AA").unwrap().1
+            talker::<VE>("AA").unwrap().1
         );
     }
 
     #[test]
     fn test_dtm() {
-        let parsed = dtm::<VerboseError<&str>>("GPDTM,W84,,0.0,N,0.0,E,0.0,W84")
-            .unwrap()
-            .1;
+        let parsed = dtm::<VE>("GPDTM,W84,,0.0,N,0.0,E,0.0,W84").unwrap().1;
 
         assert_eq!(Talker::GPS, parsed.talker);
         assert_eq!("W84".to_string(), parsed.datum);
@@ -471,9 +530,7 @@ mod tests {
         assert_approx_eq!(0.0, parsed.alt);
         assert_eq!("W84".to_string(), parsed.ref_datum);
 
-        let parsed = dtm::<VerboseError<&str>>("GPDTM,999,,0.08,N,0.07,E,-47.7,W84")
-            .unwrap()
-            .1;
+        let parsed = dtm::<VE>("GPDTM,999,,0.08,N,0.07,E,-47.7,W84").unwrap().1;
 
         assert_eq!(Talker::GPS, parsed.talker);
         assert_eq!("999".to_string(), parsed.datum);
@@ -488,7 +545,7 @@ mod tests {
 
     #[test]
     fn test_gaq() {
-        let parsed = gaq::<VerboseError<&str>>("EIGAQ,RMC").unwrap().1;
+        let parsed = gaq::<VE>("EIGAQ,RMC").unwrap().1;
 
         assert_eq!(Talker::ECDIS, parsed.talker);
         assert_eq!("RMC".to_string(), parsed.message_id);
@@ -496,7 +553,7 @@ mod tests {
 
     #[test]
     fn test_gbq() {
-        let parsed = gbq::<VerboseError<&str>>("EIGBQ,RMC").unwrap().1;
+        let parsed = gbq::<VE>("EIGBQ,RMC").unwrap().1;
 
         assert_eq!(Talker::ECDIS, parsed.talker);
         assert_eq!("RMC".to_string(), parsed.message_id);
@@ -504,9 +561,7 @@ mod tests {
 
     #[test]
     fn test_gbs() {
-        let parsed = gbs::<VerboseError<&str>>("GPGBS,235503.00,1.6,1.4,3.2,,,,,,")
-            .unwrap()
-            .1;
+        let parsed = gbs::<VE>("GPGBS,235503.00,1.6,1.4,3.2,,,,,,").unwrap().1;
 
         assert_eq!(Talker::GPS, parsed.talker);
         assert_eq!(NaiveTime::from_hms_milli(23, 55, 3, 0), parsed.time);
@@ -521,7 +576,7 @@ mod tests {
         assert_eq!(None, parsed.system);
         assert_eq!(None, parsed.signal);
 
-        let parsed = gbs::<VerboseError<&str>>("GPGBS,235458.00,1.4,1.3,3.1,03,,-21.4,3.8,1,0")
+        let parsed = gbs::<VE>("GPGBS,235458.00,1.4,1.3,3.1,03,,-21.4,3.8,1,0")
             .unwrap()
             .1;
 
