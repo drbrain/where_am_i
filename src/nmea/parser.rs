@@ -137,6 +137,22 @@ fn latlon<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, LatLon
     ))
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum NavigationMode {
+    FixNone,
+    Fix2D,
+    Fix3D,
+}
+
+fn nav_mode<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NavigationMode, E> {
+    map(one_of("123"), |c| match c {
+        '1' => NavigationMode::FixNone,
+        '2' => NavigationMode::Fix2D,
+        '3' => NavigationMode::Fix3D,
+        _ => panic!("Unhandled navigation mode {:?}", c),
+    })(input)
+}
+
 fn north_south<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NorthSouth, E> {
     let (input, ns) = alt((char('N'), char('S')))(input)?;
 
@@ -147,6 +163,20 @@ fn north_south<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, N
     };
 
     Ok((input, ns))
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum OperationMode {
+    Automatic,
+    Manual,
+}
+
+fn op_mode<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, OperationMode, E> {
+    map(one_of("AM"), |c| match c {
+        'A' => OperationMode::Automatic,
+        'M' => OperationMode::Manual,
+        _ => panic!("Unhandled operation mode {:?}", c),
+    })(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -746,6 +776,12 @@ mod tests {
             "GPDTM,W84,,0.0,N,0.0,E,0.0,W84",
             line::<VE>(full_line).unwrap().1
         );
+    }
+
+    #[test]
+    fn test_nav_mode() {
+        assert_eq!(NavigationMode::FixNone, nav_mode::<VE>("1").unwrap().1);
+        assert_eq!(NavigationMode::Fix2D, nav_mode::<VE>("2").unwrap().1);
     }
 
     #[test]
