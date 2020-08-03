@@ -51,7 +51,10 @@ fn comma<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str
 }
 
 fn date<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NaiveDate, E> {
-    map(tuple((two_digit, two_digit, two_digit_i)), |(day, month, year)| NaiveDate::from_ymd(year, month, day))(input)
+    map(
+        tuple((two_digit, two_digit, two_digit_i)),
+        |(day, month, year)| NaiveDate::from_ymd(year, month, day),
+    )(input)
 }
 
 fn dollar<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
@@ -344,9 +347,12 @@ fn three_digit<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u
 }
 
 fn time<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NaiveTime, E> {
-    map(tuple((two_digit, two_digit, two_digit, preceded(dot, two_digit))),
-    |(hour, minute, second, subsec)|
-    NaiveTime::from_hms_milli(hour, minute, second, subsec * 100))(input)
+    map(
+        tuple((two_digit, two_digit, two_digit, preceded(dot, two_digit))),
+        |(hour, minute, second, subsec)| {
+            NaiveTime::from_hms_milli(hour, minute, second, subsec * 100)
+        },
+    )(input)
 }
 
 fn two_digit<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
@@ -913,19 +919,34 @@ pub struct RMCdata {
 }
 
 fn rmc<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, RMCdata, E> {
-    let (input, (talker, time, status, lat_lon, speed, course_over_ground, date, magnetic_variation, magnetic_variation_east_west, position_mode, nav_status)) =
-        tuple((
-                terminated(talker, terminated(tag("RMC"), comma)),
-                terminated(time, comma),
-                terminated(status, comma),
-                terminated(latlon, comma),
-                terminated(flt32, comma),
-                terminated(flt32, comma),
-                terminated(date, comma),
-                terminated(opt(flt32), comma),
-                terminated(opt(east_west), comma),
-                terminated(pos_mode, comma),
-                status))(input)?;
+    let (
+        input,
+        (
+            talker,
+            time,
+            status,
+            lat_lon,
+            speed,
+            course_over_ground,
+            date,
+            magnetic_variation,
+            magnetic_variation_east_west,
+            position_mode,
+            nav_status,
+        ),
+    ) = tuple((
+        terminated(talker, terminated(tag("RMC"), comma)),
+        terminated(time, comma),
+        terminated(status, comma),
+        terminated(latlon, comma),
+        terminated(flt32, comma),
+        terminated(flt32, comma),
+        terminated(date, comma),
+        terminated(opt(flt32), comma),
+        terminated(opt(east_west), comma),
+        terminated(pos_mode, comma),
+        status,
+    ))(input)?;
 
     let data = RMCdata {
         talker,
@@ -1429,9 +1450,10 @@ mod tests {
 
     #[test]
     fn test_rmc() {
-        let parsed = rmc::<VE>("GPRMC,083559.00,A,4717.11437,N,00833.91522,E,0.004,77.52,091202,,,A,V")
-            .unwrap()
-            .1;
+        let parsed =
+            rmc::<VE>("GPRMC,083559.00,A,4717.11437,N,00833.91522,E,0.004,77.52,091202,,,A,V")
+                .unwrap()
+                .1;
 
         assert_eq!(Talker::GPS, parsed.talker);
         assert_eq!(NaiveTime::from_hms_milli(08, 35, 59, 0), parsed.time);
@@ -1449,7 +1471,9 @@ mod tests {
 
     #[test]
     fn test_txt() {
-        let parsed = txt::<VE>("GPTXT,01,01,02,u-blox ag - www.u-blox.com").unwrap().1;
+        let parsed = txt::<VE>("GPTXT,01,01,02,u-blox ag - www.u-blox.com")
+            .unwrap()
+            .1;
 
         assert_eq!(Talker::GPS, parsed.talker);
         assert_eq!(1, parsed.num_msgs);
