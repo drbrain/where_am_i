@@ -5,6 +5,7 @@ use nom::bytes::complete::*;
 use nom::character::complete::*;
 use nom::combinator::*;
 use nom::error::*;
+use nom::multi::*;
 use nom::number::complete::*;
 use nom::sequence::*;
 use nom::IResult;
@@ -21,7 +22,7 @@ pub enum NMEA {
     GNQ(GNQdata),
     GNS(GNSdata),
     GPQ(GPQdata),
-    GRS,
+    GRS(GRSdata),
     GSA,
     GST,
     GSV,
@@ -669,6 +670,40 @@ fn gpq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GPQdata, 
     Ok((input, data))
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct GRSdata {
+    pub talker: Talker,
+    pub time: NaiveTime,
+    pub gga_includes_residuals: bool,
+    pub residuals: Vec<Option<f32>>,
+    pub system: Signal,
+    pub signal: Signal,
+}
+
+fn grs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GRSdata, E> {
+    let (input, (talker, time, gga_includes_residuals, residuals, system, signal)) = tuple((
+        terminated(talker, terminated(tag("GRS"), comma)),
+        terminated(time, comma),
+        terminated(map(one_of("10"), |c| c == '1'), comma),
+        many_m_n(12, 12, terminated(opt(flt32), comma)),
+        terminated(system, comma),
+        signal,
+    ))(input)?;
+
+    let residuals = Vec::from(residuals);
+
+    let data = GRSdata {
+        talker,
+        time,
+        gga_includes_residuals,
+        residuals,
+        system,
+        signal,
+    };
+
+    Ok((input, data))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -881,5 +916,82 @@ mod tests {
 
         assert_eq!(Talker::ECDIS, parsed.talker);
         assert_eq!("RMC".to_string(), parsed.message_id);
+    }
+
+    #[test]
+    fn test_grs() {
+        let parsed = grs::<VE>("GNGRS,104148.00,1,2.6,2.2,-1.6,-1.1,-1.7,-1.5,5.8,1.7,,,,,1,1")
+            .unwrap()
+            .1;
+
+        let residuals = vec![
+            Some(2.6),
+            Some(2.2),
+            Some(-1.6),
+            Some(-1.1),
+            Some(-1.7),
+            Some(-1.5),
+            Some(5.8),
+            Some(1.7),
+            None,
+            None,
+            None,
+            None,
+        ];
+
+        assert_eq!(Talker::Combination, parsed.talker);
+        assert_eq!(NaiveTime::from_hms_milli(10, 41, 48, 0), parsed.time);
+        assert_eq!(true, parsed.gga_includes_residuals);
+        assert_eq!(residuals[0], parsed.residuals[0]);
+        assert_eq!(residuals[1], parsed.residuals[1]);
+        assert_eq!(residuals[2], parsed.residuals[2]);
+        assert_eq!(residuals[3], parsed.residuals[3]);
+        assert_eq!(residuals[4], parsed.residuals[4]);
+        assert_eq!(residuals[5], parsed.residuals[5]);
+        assert_eq!(residuals[6], parsed.residuals[6]);
+        assert_eq!(residuals[7], parsed.residuals[7]);
+        assert_eq!(residuals[8], parsed.residuals[8]);
+        assert_eq!(residuals[9], parsed.residuals[9]);
+        assert_eq!(residuals[10], parsed.residuals[10]);
+        assert_eq!(residuals[11], parsed.residuals[11]);
+        assert_eq!(Signal::GPSL1CA, parsed.system);
+        assert_eq!(Signal::GPSL1CA, parsed.system);
+
+        let parsed = grs::<VE>("GNGRS,104148.00,1,,0.0,2.5,0.0,,2.8,,,,,,,1,5")
+            .unwrap()
+            .1;
+
+        let residuals = vec![
+            None,
+            Some(0.0),
+            Some(2.5),
+            Some(0.0),
+            None,
+            Some(2.8),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ];
+
+        assert_eq!(Talker::Combination, parsed.talker);
+        assert_eq!(NaiveTime::from_hms_milli(10, 41, 48, 0), parsed.time);
+        assert_eq!(true, parsed.gga_includes_residuals);
+        assert_eq!(residuals[0], parsed.residuals[0]);
+        assert_eq!(residuals[1], parsed.residuals[1]);
+        assert_eq!(residuals[2], parsed.residuals[2]);
+        assert_eq!(residuals[3], parsed.residuals[3]);
+        assert_eq!(residuals[4], parsed.residuals[4]);
+        assert_eq!(residuals[5], parsed.residuals[5]);
+        assert_eq!(residuals[6], parsed.residuals[6]);
+        assert_eq!(residuals[7], parsed.residuals[7]);
+        assert_eq!(residuals[8], parsed.residuals[8]);
+        assert_eq!(residuals[9], parsed.residuals[9]);
+        assert_eq!(residuals[10], parsed.residuals[10]);
+        assert_eq!(residuals[11], parsed.residuals[11]);
+        assert_eq!(Signal::GPSL1CA, parsed.system);
+        assert_eq!(Signal::GPSL1CA, parsed.system);
     }
 }
