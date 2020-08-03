@@ -27,7 +27,7 @@ pub enum NMEA {
     GSA(GSAdata),
     GST(GSTdata),
     GSV(GSVdata),
-    RMC,
+    RMC(RMCdata),
     TXT,
     VLW,
     VTG,
@@ -878,6 +878,53 @@ fn gsv<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSVdata, 
     Ok((input, data))
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct RMCdata {
+    pub talker: Talker,
+    pub time: NaiveTime,
+    pub status: Status,
+    pub lat_lon: LatLon,
+    pub speed: f32,
+    pub course_over_ground: f32,
+    pub date: NaiveDate,
+    pub magnetic_variation: Option<f32>,
+    pub magnetic_variation_east_west: Option<EastWest>,
+    pub position_mode: PositionMode,
+    pub nav_status: Status,
+}
+
+fn rmc<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, RMCdata, E> {
+    let (input, (talker, time, status, lat_lon, speed, course_over_ground, date, magnetic_variation, magnetic_variation_east_west, position_mode, nav_status)) =
+        tuple((
+                terminated(talker, terminated(tag("RMC"), comma)),
+                terminated(time, comma),
+                terminated(status, comma),
+                terminated(latlon, comma),
+                terminated(flt32, comma),
+                terminated(flt32, comma),
+                terminated(date, comma),
+                terminated(opt(flt32), comma),
+                terminated(opt(east_west), comma),
+                terminated(pos_mode, comma),
+                status))(input)?;
+
+    let data = RMCdata {
+        talker,
+        time,
+        status,
+        lat_lon,
+        speed,
+        course_over_ground,
+        date,
+        magnetic_variation,
+        magnetic_variation_east_west,
+        position_mode,
+        nav_status,
+    };
+
+    Ok((input, data))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1330,5 +1377,25 @@ mod tests {
         assert_eq!(0, parsed.num_satellites);
         assert_eq!(satellites, parsed.satellites);
         assert_eq!(Signal::GLONASSL1OF, parsed.signal);
+    }
+
+    #[test]
+    fn test_rmc() {
+        let parsed = rmc::<VE>("GPRMC,083559.00,A,4717.11437,N,00833.91522,E,0.004,77.52,091202,,,A,V")
+            .unwrap()
+            .1;
+
+        assert_eq!(Talker::GPS, parsed.talker);
+        assert_eq!(NaiveTime::from_hms_milli(08, 35, 59, 0), parsed.time);
+        assert_eq!(Status::Valid, parsed.status);
+        assert_approx_eq!(47.28524, parsed.lat_lon.latitude);
+        assert_approx_eq!(8.565253, parsed.lat_lon.longitude);
+        assert_approx_eq!(0.004, parsed.speed);
+        assert_approx_eq!(77.52, parsed.course_over_ground);
+        assert_eq!(NaiveDate::from_ymd(02, 12, 9), parsed.date);
+        assert_eq!(None, parsed.magnetic_variation);
+        assert_eq!(None, parsed.magnetic_variation_east_west);
+        assert_eq!(PositionMode::AutonomousGNSSFix, parsed.position_mode);
+        assert_eq!(Status::Invalid, parsed.nav_status);
     }
 }
