@@ -143,6 +143,25 @@ fn latlon<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, LatLon
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum MessageType {
+    Error,
+    Notice,
+    User,
+    Warning,
+    Unknown(u32),
+}
+
+fn msg_type<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, MessageType, E> {
+    map(two_digit, |t| match t {
+        0 => MessageType::Error,
+        1 => MessageType::Warning,
+        2 => MessageType::Notice,
+        7 => MessageType::User,
+        _ => MessageType::Unknown(t),
+    })(input)
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum NavigationMode {
     FixNone,
     Fix2D,
@@ -925,6 +944,35 @@ fn rmc<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, RMCdata, 
     Ok((input, data))
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct TXTdata {
+    pub talker: Talker,
+    pub num_msgs: u32,
+    pub msg: u32,
+    pub msg_type: MessageType,
+    pub text: String,
+}
+
+fn txt<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, TXTdata, E> {
+    let (input, (talker, num_msgs, msg, msg_type, text)) = tuple((
+        terminated(talker, terminated(tag("TXT"), comma)),
+        terminated(uint32, comma),
+        terminated(uint32, comma),
+        terminated(msg_type, comma),
+        any,
+    ))(input)?;
+
+    let data = TXTdata {
+        talker,
+        num_msgs,
+        msg,
+        msg_type,
+        text,
+    };
+
+    Ok((input, data))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1397,5 +1445,16 @@ mod tests {
         assert_eq!(None, parsed.magnetic_variation_east_west);
         assert_eq!(PositionMode::AutonomousGNSSFix, parsed.position_mode);
         assert_eq!(Status::Invalid, parsed.nav_status);
+    }
+
+    #[test]
+    fn test_txt() {
+        let parsed = txt::<VE>("GPTXT,01,01,02,u-blox ag - www.u-blox.com").unwrap().1;
+
+        assert_eq!(Talker::GPS, parsed.talker);
+        assert_eq!(1, parsed.num_msgs);
+        assert_eq!(1, parsed.msg);
+        assert_eq!(MessageType::Notice, parsed.msg_type);
+        assert_eq!("u-blox ag - www.u-blox.com".to_string(), parsed.text);
     }
 }
