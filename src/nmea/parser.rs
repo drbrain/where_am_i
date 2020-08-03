@@ -25,7 +25,7 @@ pub enum NMEA {
     GRS(GRSdata),
     GSA(GSAdata),
     GST(GSTdata),
-    GSV,
+    GSV(GSVdata),
     RMC,
     TXT,
     VLW,
@@ -731,7 +731,7 @@ pub struct GSAdata {
     pub talker: Talker,
     pub operation_mode: OperationMode,
     pub navigation_mode: NavigationMode,
-    pub sattelite_ids: Vec<Option<u32>>,
+    pub satellite_ids: Vec<Option<u32>>,
     pub pdop: f32,
     pub hdop: f32,
     pub vdop: f32,
@@ -739,7 +739,7 @@ pub struct GSAdata {
 }
 
 fn gsa<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSAdata, E> {
-    let (input, (talker, operation_mode, navigation_mode, sattelite_ids, pdop, hdop, vdop, system)) =
+    let (input, (talker, operation_mode, navigation_mode, satellite_ids, pdop, hdop, vdop, system)) =
         tuple((
             terminated(talker, terminated(tag("GSA"), comma)),
             terminated(op_mode, comma),
@@ -751,13 +751,13 @@ fn gsa<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSAdata, 
             system,
         ))(input)?;
 
-    let sattelite_ids = Vec::from(sattelite_ids);
+    let satellite_ids = Vec::from(satellite_ids);
 
     let data = GSAdata {
         talker,
         operation_mode,
         navigation_mode,
-        sattelite_ids,
+        satellite_ids,
         pdop,
         hdop,
         vdop,
@@ -781,18 +781,20 @@ pub struct GSTdata {
 }
 
 fn gst<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSTdata, E> {
-    let (input, (talker, time, range_rms, std_major, std_minor, orientation, std_lat, std_lon, std_alt)) =
-        tuple((
-            terminated(talker, terminated(tag("GST"), comma)),
-            terminated(time, comma),
-            terminated(opt(flt32), comma),
-            terminated(opt(flt32), comma),
-            terminated(opt(flt32), comma),
-            terminated(opt(flt32), comma),
-            terminated(opt(flt32), comma),
-            terminated(opt(flt32), comma),
-            opt(flt32),
-        ))(input)?;
+    let (
+        input,
+        (talker, time, range_rms, std_major, std_minor, orientation, std_lat, std_lon, std_alt),
+    ) = tuple((
+        terminated(talker, terminated(tag("GST"), comma)),
+        terminated(time, comma),
+        terminated(opt(flt32), comma),
+        terminated(opt(flt32), comma),
+        terminated(opt(flt32), comma),
+        terminated(opt(flt32), comma),
+        terminated(opt(flt32), comma),
+        terminated(opt(flt32), comma),
+        opt(flt32),
+    ))(input)?;
 
     let data = GSTdata {
         talker,
@@ -804,6 +806,63 @@ fn gst<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSTdata, 
         std_lat,
         std_lon,
         std_alt,
+    };
+
+    Ok((input, data))
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GSVsatellite {
+    pub id: u32,
+    pub elevation: Option<u32>,
+    pub azimuth: Option<u32>,
+    pub cno: Option<u32>,
+}
+
+fn gsv_sat<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSVsatellite, E> {
+    map(
+        tuple((
+            terminated(uint32, comma),
+            terminated(opt(uint32), comma),
+            terminated(opt(uint32), comma),
+            opt(uint32),
+        )),
+        |(id, elevation, azimuth, cno)| GSVsatellite {
+            id,
+            elevation,
+            azimuth,
+            cno,
+        },
+    )(input)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GSVdata {
+    pub talker: Talker,
+    pub num_msgs: u32,
+    pub msg: u32,
+    pub num_satellites: u32,
+    pub satellites: Vec<GSVsatellite>,
+    pub signal: Signal,
+}
+
+fn gsv<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSVdata, E> {
+    let (input, (talker, num_msgs, msg, num_satellites, satellites, signal)) = tuple((
+        terminated(talker, terminated(tag("GSV"), comma)),
+        terminated(uint32, comma),
+        terminated(uint32, comma),
+        terminated(uint32, comma),
+        many_m_n(0, 4, terminated(gsv_sat, comma)),
+        signal,
+    ))(input)?;
+
+    let data = GSVdata {
+        talker,
+        num_msgs,
+        msg,
+        num_satellites,
+        satellites,
+        signal,
     };
 
     Ok((input, data))
@@ -1112,7 +1171,7 @@ mod tests {
             .unwrap()
             .1;
 
-        let sattelite_ids = vec![
+        let satellite_ids = vec![
             Some(23),
             Some(29),
             Some(7),
@@ -1130,18 +1189,18 @@ mod tests {
         assert_eq!(Talker::GPS, parsed.talker);
         assert_eq!(OperationMode::Automatic, parsed.operation_mode);
         assert_eq!(NavigationMode::Fix3D, parsed.navigation_mode);
-        assert_eq!(sattelite_ids[0], parsed.sattelite_ids[0]);
-        assert_eq!(sattelite_ids[1], parsed.sattelite_ids[1]);
-        assert_eq!(sattelite_ids[2], parsed.sattelite_ids[2]);
-        assert_eq!(sattelite_ids[3], parsed.sattelite_ids[3]);
-        assert_eq!(sattelite_ids[4], parsed.sattelite_ids[4]);
-        assert_eq!(sattelite_ids[5], parsed.sattelite_ids[5]);
-        assert_eq!(sattelite_ids[6], parsed.sattelite_ids[6]);
-        assert_eq!(sattelite_ids[7], parsed.sattelite_ids[7]);
-        assert_eq!(sattelite_ids[8], parsed.sattelite_ids[8]);
-        assert_eq!(sattelite_ids[9], parsed.sattelite_ids[9]);
-        assert_eq!(sattelite_ids[10], parsed.sattelite_ids[10]);
-        assert_eq!(sattelite_ids[11], parsed.sattelite_ids[11]);
+        assert_eq!(satellite_ids[0], parsed.satellite_ids[0]);
+        assert_eq!(satellite_ids[1], parsed.satellite_ids[1]);
+        assert_eq!(satellite_ids[2], parsed.satellite_ids[2]);
+        assert_eq!(satellite_ids[3], parsed.satellite_ids[3]);
+        assert_eq!(satellite_ids[4], parsed.satellite_ids[4]);
+        assert_eq!(satellite_ids[5], parsed.satellite_ids[5]);
+        assert_eq!(satellite_ids[6], parsed.satellite_ids[6]);
+        assert_eq!(satellite_ids[7], parsed.satellite_ids[7]);
+        assert_eq!(satellite_ids[8], parsed.satellite_ids[8]);
+        assert_eq!(satellite_ids[9], parsed.satellite_ids[9]);
+        assert_eq!(satellite_ids[10], parsed.satellite_ids[10]);
+        assert_eq!(satellite_ids[11], parsed.satellite_ids[11]);
         assert_approx_eq!(1.94, parsed.pdop);
         assert_approx_eq!(1.18, parsed.hdop);
         assert_approx_eq!(1.54, parsed.vdop);
@@ -1161,5 +1220,105 @@ mod tests {
         assert_approx_eq!(1.7, parsed.std_lat.unwrap());
         assert_approx_eq!(1.3, parsed.std_lon.unwrap());
         assert_approx_eq!(2.2, parsed.std_alt.unwrap());
+    }
+
+    #[test]
+    fn test_gsv() {
+        let parsed = gsv::<VE>("GPGSV,3,1,09,09,,,17,10,,,40,12,,,49,13,,,35,1")
+            .unwrap()
+            .1;
+
+        let satellites = vec![
+            GSVsatellite {
+                id: 9,
+                elevation: None,
+                azimuth: None,
+                cno: Some(17),
+            },
+            GSVsatellite {
+                id: 10,
+                elevation: None,
+                azimuth: None,
+                cno: Some(40),
+            },
+            GSVsatellite {
+                id: 12,
+                elevation: None,
+                azimuth: None,
+                cno: Some(49),
+            },
+            GSVsatellite {
+                id: 13,
+                elevation: None,
+                azimuth: None,
+                cno: Some(35),
+            },
+        ];
+
+        assert_eq!(Talker::GPS, parsed.talker);
+        assert_eq!(3, parsed.num_msgs);
+        assert_eq!(1, parsed.msg);
+        assert_eq!(9, parsed.num_satellites);
+        assert_eq!(satellites, parsed.satellites);
+        assert_eq!(Signal::GPSL1CA, parsed.signal);
+
+        let parsed = gsv::<VE>("GPGSV,3,3,09,25,,,40,1").unwrap().1;
+
+        let satellites = vec![GSVsatellite {
+            id: 25,
+            elevation: None,
+            azimuth: None,
+            cno: Some(40),
+        }];
+
+        assert_eq!(Talker::GPS, parsed.talker);
+        assert_eq!(3, parsed.num_msgs);
+        assert_eq!(3, parsed.msg);
+        assert_eq!(9, parsed.num_satellites);
+        assert_eq!(satellites, parsed.satellites);
+        assert_eq!(Signal::GPSL1CA, parsed.signal);
+
+        let parsed = gsv::<VE>("GPGSV,1,1,03,12,,,42,24,,,47,32,,,37,5")
+            .unwrap()
+            .1;
+
+        let satellites = vec![
+            GSVsatellite {
+                id: 12,
+                elevation: None,
+                azimuth: None,
+                cno: Some(42),
+            },
+            GSVsatellite {
+                id: 24,
+                elevation: None,
+                azimuth: None,
+                cno: Some(47),
+            },
+            GSVsatellite {
+                id: 32,
+                elevation: None,
+                azimuth: None,
+                cno: Some(37),
+            },
+        ];
+
+        assert_eq!(Talker::GPS, parsed.talker);
+        assert_eq!(1, parsed.num_msgs);
+        assert_eq!(1, parsed.msg);
+        assert_eq!(3, parsed.num_satellites);
+        assert_eq!(satellites, parsed.satellites);
+        assert_eq!(Signal::Unknown, parsed.signal);
+
+        let parsed = gsv::<VE>("GAGSV,1,1,00,2").unwrap().1;
+
+        let satellites: Vec<GSVsatellite> = vec![];
+
+        assert_eq!(Talker::Galileo, parsed.talker);
+        assert_eq!(1, parsed.num_msgs);
+        assert_eq!(1, parsed.msg);
+        assert_eq!(0, parsed.num_satellites);
+        assert_eq!(satellites, parsed.satellites);
+        assert_eq!(Signal::GLONASSL1OF, parsed.signal);
     }
 }
