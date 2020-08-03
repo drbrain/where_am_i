@@ -23,7 +23,7 @@ pub enum NMEA {
     GNS(GNSdata),
     GPQ(GPQdata),
     GRS(GRSdata),
-    GSA,
+    GSA(GSAdata),
     GST,
     GSV,
     RMC,
@@ -245,17 +245,13 @@ pub enum Signal {
 }
 
 fn signal<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Signal, E> {
-    let (input, signal_id) = uint32(input)?;
-
-    let signal = match signal_id {
+    map(uint32, |c| match c {
         1 => Signal::GPSL1CA,
         2 => Signal::GLONASSL1OF,
         3 => Signal::GalileoE1C,
         4 => Signal::BeiDuoB1ID1,
         _ => Signal::Unknown,
-    };
-
-    Ok((input, signal))
+    })(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -273,19 +269,15 @@ fn status<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Status
 }
 
 fn system<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Signal, E> {
-    let (input, system_id) = uint32(input)?;
-
-    let system = match system_id {
-        1 => Signal::GPSL1CA,
-        2 => Signal::GalileoE5bI,
-        3 => Signal::BeiDuoB1ID1,
-        5 => Signal::GPSL2CM,
-        6 => Signal::GPSL2CL,
-        7 => Signal::GalileoE1C,
+    map(one_of("123567"), |c| match c {
+        '1' => Signal::GPSL1CA,
+        '2' => Signal::GalileoE5bI,
+        '3' => Signal::BeiDuoB1ID1,
+        '5' => Signal::GPSL2CM,
+        '6' => Signal::GPSL2CL,
+        '7' => Signal::GalileoE1C,
         _ => Signal::Unknown,
-    };
-
-    Ok((input, system))
+    })(input)
 }
 
 fn star<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
@@ -734,6 +726,47 @@ fn grs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GRSdata, 
     Ok((input, data))
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct GSAdata {
+    pub talker: Talker,
+    pub operation_mode: OperationMode,
+    pub navigation_mode: NavigationMode,
+    pub sattelite_ids: Vec<Option<u32>>,
+    pub pdop: f32,
+    pub hdop: f32,
+    pub vdop: f32,
+    pub system: Signal,
+}
+
+fn gsa<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSAdata, E> {
+    let (input, (talker, operation_mode, navigation_mode, sattelite_ids, pdop, hdop, vdop, system)) =
+        tuple((
+            terminated(talker, terminated(tag("GSA"), comma)),
+            terminated(op_mode, comma),
+            terminated(nav_mode, comma),
+            many_m_n(12, 12, terminated(opt(uint32), comma)),
+            terminated(flt32, comma),
+            terminated(flt32, comma),
+            terminated(flt32, comma),
+            system,
+        ))(input)?;
+
+    let sattelite_ids = Vec::from(sattelite_ids);
+
+    let data = GSAdata {
+        talker,
+        operation_mode,
+        navigation_mode,
+        sattelite_ids,
+        pdop,
+        hdop,
+        vdop,
+        system,
+    };
+
+    Ok((input, data))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -991,7 +1024,7 @@ mod tests {
         assert_eq!(residuals[10], parsed.residuals[10]);
         assert_eq!(residuals[11], parsed.residuals[11]);
         assert_eq!(Signal::GPSL1CA, parsed.system);
-        assert_eq!(Signal::GPSL1CA, parsed.system);
+        assert_eq!(Signal::GPSL1CA, parsed.signal);
 
         let parsed = grs::<VE>("GNGRS,104148.00,1,,0.0,2.5,0.0,,2.8,,,,,,,1,5")
             .unwrap()
@@ -1028,6 +1061,48 @@ mod tests {
         assert_eq!(residuals[10], parsed.residuals[10]);
         assert_eq!(residuals[11], parsed.residuals[11]);
         assert_eq!(Signal::GPSL1CA, parsed.system);
+        assert_eq!(Signal::Unknown, parsed.signal);
+    }
+
+    #[test]
+    fn test_gsa() {
+        let parsed = gsa::<VE>("GPGSA,A,3,23,29,07,08,09,18,26,28,,,,,1.94,1.18,1.54,1")
+            .unwrap()
+            .1;
+
+        let sattelite_ids = vec![
+            Some(23),
+            Some(29),
+            Some(7),
+            Some(8),
+            Some(9),
+            Some(18),
+            Some(26),
+            Some(28),
+            None,
+            None,
+            None,
+            None,
+        ];
+
+        assert_eq!(Talker::GPS, parsed.talker);
+        assert_eq!(OperationMode::Automatic, parsed.operation_mode);
+        assert_eq!(NavigationMode::Fix3D, parsed.navigation_mode);
+        assert_eq!(sattelite_ids[0], parsed.sattelite_ids[0]);
+        assert_eq!(sattelite_ids[1], parsed.sattelite_ids[1]);
+        assert_eq!(sattelite_ids[2], parsed.sattelite_ids[2]);
+        assert_eq!(sattelite_ids[3], parsed.sattelite_ids[3]);
+        assert_eq!(sattelite_ids[4], parsed.sattelite_ids[4]);
+        assert_eq!(sattelite_ids[5], parsed.sattelite_ids[5]);
+        assert_eq!(sattelite_ids[6], parsed.sattelite_ids[6]);
+        assert_eq!(sattelite_ids[7], parsed.sattelite_ids[7]);
+        assert_eq!(sattelite_ids[8], parsed.sattelite_ids[8]);
+        assert_eq!(sattelite_ids[9], parsed.sattelite_ids[9]);
+        assert_eq!(sattelite_ids[10], parsed.sattelite_ids[10]);
+        assert_eq!(sattelite_ids[11], parsed.sattelite_ids[11]);
+        assert_approx_eq!(1.94, parsed.pdop);
+        assert_approx_eq!(1.18, parsed.hdop);
+        assert_approx_eq!(1.54, parsed.vdop);
         assert_eq!(Signal::GPSL1CA, parsed.system);
     }
 }
