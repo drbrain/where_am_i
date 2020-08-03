@@ -24,7 +24,7 @@ pub enum NMEA {
     GPQ(GPQdata),
     GRS(GRSdata),
     GSA(GSAdata),
-    GST,
+    GST(GSTdata),
     GSV,
     RMC,
     TXT,
@@ -767,6 +767,48 @@ fn gsa<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSAdata, 
     Ok((input, data))
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct GSTdata {
+    pub talker: Talker,
+    pub time: NaiveTime,
+    pub range_rms: Option<f32>,
+    pub std_major: Option<f32>,
+    pub std_minor: Option<f32>,
+    pub orientation: Option<f32>,
+    pub std_lat: Option<f32>,
+    pub std_lon: Option<f32>,
+    pub std_alt: Option<f32>,
+}
+
+fn gst<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSTdata, E> {
+    let (input, (talker, time, range_rms, std_major, std_minor, orientation, std_lat, std_lon, std_alt)) =
+        tuple((
+            terminated(talker, terminated(tag("GST"), comma)),
+            terminated(time, comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            opt(flt32),
+        ))(input)?;
+
+    let data = GSTdata {
+        talker,
+        time,
+        range_rms,
+        std_major,
+        std_minor,
+        orientation,
+        std_lat,
+        std_lon,
+        std_alt,
+    };
+
+    Ok((input, data))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1104,5 +1146,20 @@ mod tests {
         assert_approx_eq!(1.18, parsed.hdop);
         assert_approx_eq!(1.54, parsed.vdop);
         assert_eq!(Signal::GPSL1CA, parsed.system);
+    }
+
+    #[test]
+    fn test_gst() {
+        let parsed = gst::<VE>("GPGST,082356.00,1.8,,,,1.7,1.3,2.2").unwrap().1;
+
+        assert_eq!(Talker::GPS, parsed.talker);
+        assert_eq!(NaiveTime::from_hms_milli(8, 23, 56, 0), parsed.time);
+        assert_approx_eq!(1.8, parsed.range_rms.unwrap());
+        assert_eq!(None, parsed.std_major);
+        assert_eq!(None, parsed.std_minor);
+        assert_eq!(None, parsed.orientation);
+        assert_approx_eq!(1.7, parsed.std_lat.unwrap());
+        assert_approx_eq!(1.3, parsed.std_lon.unwrap());
+        assert_approx_eq!(2.2, parsed.std_alt.unwrap());
     }
 }
