@@ -1,3 +1,4 @@
+use chrono::naive::NaiveDate;
 use chrono::naive::NaiveTime;
 
 use nom::branch::*;
@@ -47,6 +48,10 @@ fn checksum<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32,
 
 fn comma<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
     tag(",")(input)
+}
+
+fn date<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NaiveDate, E> {
+    map(tuple((two_digit, two_digit, two_digit_i)), |(day, month, year)| NaiveDate::from_ymd(year, month, day))(input)
 }
 
 fn dollar<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
@@ -320,15 +325,20 @@ fn three_digit<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u
 }
 
 fn time<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NaiveTime, E> {
-    let (input, (hour, minute, second, subsec)) =
-        tuple((two_digit, two_digit, two_digit, preceded(dot, two_digit)))(input)?;
-
-    let time = NaiveTime::from_hms_milli(hour, minute, second, subsec * 100);
-
-    Ok((input, time))
+    map(tuple((two_digit, two_digit, two_digit, preceded(dot, two_digit))),
+    |(hour, minute, second, subsec)|
+    NaiveTime::from_hms_milli(hour, minute, second, subsec * 100))(input)
 }
 
 fn two_digit<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
+    let (input, integer) = take_while_m_n(2, 2, is_digit)(input)?;
+
+    let integer = integer.parse().unwrap();
+
+    Ok((input, integer))
+}
+
+fn two_digit_i<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, i32, E> {
     let (input, integer) = take_while_m_n(2, 2, is_digit)(input)?;
 
     let integer = integer.parse().unwrap();
