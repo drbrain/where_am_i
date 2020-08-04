@@ -34,6 +34,49 @@ pub enum NMEA {
     ZDA(ZDAdata),
 }
 
+pub fn parse<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NMEA, E> {
+    terminated(
+        preceded(
+            dollar,
+            map(
+                map_res(
+                    verify(
+                        tuple((terminated(take_while1(|c| c != '*'), star), hex_digit1)),
+                        |(message, checksum)| verify_checksum(message, checksum),
+                    ),
+                    |tuple| message::<E>(tuple.0),
+                ),
+                |tuple| tuple.1,
+            ),
+        ),
+        eol,
+    )(input)
+}
+
+fn message<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NMEA, E> {
+    alt((
+        map(dtm, |m| NMEA::DTM(m)),
+        map(gaq, |m| NMEA::GAQ(m)),
+        map(gbq, |m| NMEA::GBQ(m)),
+        map(gbs, |m| NMEA::GBS(m)),
+        map(gga, |m| NMEA::GGA(m)),
+        map(gll, |m| NMEA::GLL(m)),
+        map(glq, |m| NMEA::GLQ(m)),
+        map(gnq, |m| NMEA::GNQ(m)),
+        map(gns, |m| NMEA::GNS(m)),
+        map(gpq, |m| NMEA::GPQ(m)),
+        map(grs, |m| NMEA::GRS(m)),
+        map(gsa, |m| NMEA::GSA(m)),
+        map(gst, |m| NMEA::GST(m)),
+        map(gsv, |m| NMEA::GSV(m)),
+        map(rmc, |m| NMEA::RMC(m)),
+        map(txt, |m| NMEA::TXT(m)),
+        map(vlw, |m| NMEA::VLW(m)),
+        map(vtg, |m| NMEA::VTG(m)),
+        map(zda, |m| NMEA::ZDA(m)),
+    ))(input)
+}
+
 fn any<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, String, E> {
     map(take_while(|c| c != ','), |m: &str| m.to_string())(input)
 }
@@ -350,22 +393,6 @@ fn verify_checksum(data: &str, checksum: &str) -> bool {
     let checksum = u8::from_str_radix(checksum, 16).unwrap();
 
     checksum == data.bytes().fold(0, |cs, b| cs ^ b)
-}
-
-fn line<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
-    terminated(
-        preceded(
-            dollar,
-            map(
-                verify(
-                    tuple((terminated(take_while1(|c| c != '*'), star), hex_digit1)),
-                    |(message, checksum)| verify_checksum(message, checksum),
-                ),
-                |tuple| tuple.0,
-            ),
-        ),
-        eol,
-    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1092,6 +1119,14 @@ mod tests {
     type VE<'a> = VerboseError<&'a str>;
 
     #[test]
+    fn test_parse() {
+        let parsed = parse::<VE>("$EIGAQ,RMC*2B\r\n").unwrap().1;
+        let data = gaq::<VE>("EIGAQ,RMC").unwrap().1;
+
+        assert_eq!(NMEA::GAQ(data), parsed);
+    }
+
+    #[test]
     fn test_comma() {
         assert_eq!(",", comma::<VE>(",").unwrap().1);
     }
@@ -1120,13 +1155,16 @@ mod tests {
     }
 
     #[test]
-    fn test_line() {
-        let full_line = "$GPDTM,W84,,0.0,N,0.0,E,0.0,W84*6F\r\n";
+    fn test_message() {
+        let parsed = message::<VE>("EIGAQ,RMC").unwrap().1;
+        let data = gaq::<VE>("EIGAQ,RMC").unwrap().1;
 
-        assert_eq!(
-            "GPDTM,W84,,0.0,N,0.0,E,0.0,W84",
-            line::<VE>(full_line).unwrap().1
-        );
+        assert_eq!(NMEA::GAQ(data), parsed);
+
+        let parsed = message::<VE>("EIGNQ,RMC").unwrap().1;
+        let data = gnq::<VE>("EIGNQ,RMC").unwrap().1;
+
+        assert_eq!(NMEA::GNQ(data), parsed);
     }
 
     #[test]
