@@ -1047,6 +1047,100 @@ fn vlw<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, VLWdata, 
 
     Ok((input, data))
 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct VTGdata {
+    pub talker: Talker,
+    pub course_over_ground_true: f32,
+    pub course_over_ground_true_unit: String,
+    pub course_over_ground_magnetic: Option<f32>,
+    pub course_over_ground_magnetic_unit: String,
+    pub speed_over_ground_knots: f32,
+    pub speed_over_ground_knots_unit: String,
+    pub speed_over_ground_km: f32,
+    pub speed_over_ground_km_unit: String,
+    pub position_mode: PositionMode,
+}
+
+fn vtg<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, VTGdata, E> {
+    let (
+        input,
+        (
+            talker,
+            course_over_ground_true,
+            course_over_ground_true_unit,
+            course_over_ground_magnetic,
+            course_over_ground_magnetic_unit,
+            speed_over_ground_knots,
+            speed_over_ground_knots_unit,
+            speed_over_ground_km,
+            speed_over_ground_km_unit,
+            position_mode,
+        ),
+    ) = tuple((
+        terminated(talker, terminated(tag("VTG"), comma)),
+        terminated(flt32, comma),
+        terminated(any, comma),
+        terminated(opt(flt32), comma),
+        terminated(any, comma),
+        terminated(flt32, comma),
+        terminated(any, comma),
+        terminated(flt32, comma),
+        terminated(any, comma),
+        pos_mode,
+    ))(input)?;
+
+    let data = VTGdata {
+        talker,
+        course_over_ground_true,
+        course_over_ground_true_unit,
+        course_over_ground_magnetic,
+        course_over_ground_magnetic_unit,
+        speed_over_ground_knots,
+        speed_over_ground_knots_unit,
+        speed_over_ground_km,
+        speed_over_ground_km_unit,
+        position_mode,
+    };
+
+    Ok((input, data))
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ZDAdata {
+    pub talker: Talker,
+    pub time: NaiveTime,
+    pub day: u32,
+    pub month: u32,
+    pub year: i32,
+    pub local_tz_hour: i32,
+    pub local_tz_minute: u32,
+}
+
+fn zda<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, ZDAdata, E> {
+    let (input, (talker, time, day, month, year, local_tz_hour, local_tz_minute)) = tuple((
+        terminated(talker, terminated(tag("ZDA"), comma)),
+        terminated(time, comma),
+        terminated(uint32, comma),
+        terminated(uint32, comma),
+        terminated(int32, comma),
+        terminated(int32, comma),
+        uint32,
+    ))(input)?;
+
+    let data = ZDAdata {
+        talker,
+        time,
+        day,
+        month,
+        year,
+        local_tz_hour,
+        local_tz_minute,
+    };
+
+    Ok((input, data))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1548,5 +1642,33 @@ mod tests {
         assert_eq!("N", parsed.total_ground_distance_unit);
         assert_approx_eq!(1.2, parsed.ground_distance);
         assert_eq!("N", parsed.ground_distance_unit);
+    }
+
+    #[test]
+    fn test_vtg() {
+        let parsed = vtg::<VE>("GPVTG,77.52,T,,M,0.004,N,0.008,K,A").unwrap().1;
+
+        assert_eq!(Talker::GPS, parsed.talker);
+        assert_approx_eq!(77.52, parsed.course_over_ground_true);
+        assert_eq!("T", parsed.course_over_ground_true_unit);
+        assert_eq!(None, parsed.course_over_ground_magnetic);
+        assert_eq!("M", parsed.course_over_ground_magnetic_unit);
+        assert_approx_eq!(0.004, parsed.speed_over_ground_knots);
+        assert_eq!("N", parsed.speed_over_ground_knots_unit);
+        assert_approx_eq!(0.008, parsed.speed_over_ground_km);
+        assert_eq!("K", parsed.speed_over_ground_km_unit);
+        assert_eq!(PositionMode::AutonomousGNSSFix, parsed.position_mode);
+    }
+
+    #[test]
+    fn test_zda() {
+        let parsed = zda::<VE>("GPZDA,082710.00,16,09,2002,00,00").unwrap().1;
+
+        assert_eq!(NaiveTime::from_hms_milli(8, 27, 10, 0), parsed.time);
+        assert_eq!(16, parsed.day);
+        assert_eq!(9, parsed.month);
+        assert_eq!(2002, parsed.year);
+        assert_eq!(0, parsed.local_tz_hour);
+        assert_eq!(0, parsed.local_tz_minute);
     }
 }
