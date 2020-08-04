@@ -35,15 +35,11 @@ pub enum NMEA {
 }
 
 fn any<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, String, E> {
-    let (input, matched) = take_while(|c| c != ',')(input)?;
-
-    Ok((input, matched.to_string()))
+    map(take_while(|c| c != ','), |m: &str| m.to_string())(input)
 }
 
 fn checksum<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
-    let (input, checksum) = preceded(star, hex_digit1)(input)?;
-
-    Ok((input, checksum.parse().unwrap()))
+    map_res(preceded(star, hex_digit1), |c| c.parse())(input)
 }
 
 fn comma<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
@@ -76,15 +72,11 @@ pub enum EastWest {
 }
 
 fn east_west<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, EastWest, E> {
-    let (input, ew) = alt((char('E'), char('W')))(input)?;
-
-    let ew = match ew {
+    map(one_of("EW"), |ew| match ew {
         'E' => EastWest::East,
         'W' => EastWest::West,
-        _ => panic!("Unhandled alternate {:?}", ew),
-    };
-
-    Ok((input, ew))
+        _ => panic!("Unknown direction {:?}", ew),
+    })(input)
 }
 
 fn flt32<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, f32, E> {
@@ -127,22 +119,21 @@ pub struct LatLon {
 }
 
 fn latlon<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, LatLon, E> {
-    let (input, latitude) = map(
-        tuple((terminated(lat, comma), terminated(north_south, comma))),
-        |(l, d)| l * if d == NorthSouth::North { 1.0 } else { -1.0 },
-    )(input)?;
-
-    let (input, longitude) = map(tuple((terminated(lon, comma), east_west)), |(l, d)| {
-        l * if d == EastWest::East { 1.0 } else { -1.0 }
-    })(input)?;
-
-    Ok((
-        input,
-        LatLon {
+    map(
+        tuple((
+            map(
+                tuple((terminated(lat, comma), terminated(north_south, comma))),
+                |(l, d)| l * if d == NorthSouth::North { 1.0 } else { -1.0 },
+            ),
+            map(tuple((terminated(lon, comma), east_west)), |(l, d)| {
+                l * if d == EastWest::East { 1.0 } else { -1.0 }
+            }),
+        )),
+        |(latitude, longitude)| LatLon {
             latitude,
             longitude,
         },
-    ))
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -181,15 +172,11 @@ fn nav_mode<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Navi
 }
 
 fn north_south<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NorthSouth, E> {
-    let (input, ns) = alt((char('N'), char('S')))(input)?;
-
-    let ns = match ns {
+    map(one_of("NS"), |ns| match ns {
         'N' => NorthSouth::North,
         'S' => NorthSouth::South,
-        _ => panic!("Unhandled alternate {:?}", ns),
-    };
-
-    Ok((input, ns))
+        _ => panic!("Unhandled direction {:?}", ns),
+    })(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -323,27 +310,19 @@ pub enum Talker {
 }
 
 fn talker<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Talker, E> {
-    let (input, talker) = take_while_m_n(2, 2, is_upper_alphanum)(input)?;
-
-    let talker = match talker {
+    map(take_while_m_n(2, 2, is_upper_alphanum), |t| match t {
         "EI" => Talker::ECDIS,
         "GA" => Talker::Galileo,
         "GB" => Talker::BeiDuo,
         "GL" => Talker::GLONASS,
         "GN" => Talker::Combination,
         "GP" => Talker::GPS,
-        _ => Talker::Unknown(talker.to_string()),
-    };
-
-    Ok((input, talker))
+        _ => Talker::Unknown(t.to_string()),
+    })(input)
 }
 
 fn three_digit<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
-    let (input, integer) = take_while_m_n(3, 3, is_digit)(input)?;
-
-    let integer = integer.parse().unwrap();
-
-    Ok((input, integer))
+    map_res(take_while_m_n(3, 3, is_digit), |i: &str| i.parse())(input)
 }
 
 fn time<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NaiveTime, E> {
@@ -356,19 +335,11 @@ fn time<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NaiveTim
 }
 
 fn two_digit<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
-    let (input, integer) = take_while_m_n(2, 2, is_digit)(input)?;
-
-    let integer = integer.parse().unwrap();
-
-    Ok((input, integer))
+    map_res(take_while_m_n(2, 2, is_digit), |i: &str| i.parse())(input)
 }
 
 fn two_digit_i<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, i32, E> {
-    let (input, integer) = take_while_m_n(2, 2, is_digit)(input)?;
-
-    let integer = integer.parse().unwrap();
-
-    Ok((input, integer))
+    map_res(take_while_m_n(2, 2, is_digit), |i: &str| i.parse())(input)
 }
 
 fn uint32<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
@@ -405,7 +376,7 @@ pub struct DTMdata {
 }
 
 fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMdata, E> {
-    let (_, (talker, datum, sub_datum, lat, north_south, lon, east_west, alt, ref_datum)) =
+    map(
         tuple((
             terminated(talker, terminated(tag("DTM"), comma)),
             terminated(any, comma),
@@ -416,21 +387,19 @@ fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMdata, 
             terminated(east_west, comma),
             terminated(flt32, comma),
             any,
-        ))(input)?;
-
-    let data = DTMdata {
-        talker,
-        datum,
-        sub_datum,
-        lat,
-        north_south,
-        lon,
-        east_west,
-        alt,
-        ref_datum,
-    };
-
-    Ok((input, data))
+        )),
+        |(talker, datum, sub_datum, lat, north_south, lon, east_west, alt, ref_datum)| DTMdata {
+            talker,
+            datum,
+            sub_datum,
+            lat,
+            north_south,
+            lon,
+            east_west,
+            alt,
+            ref_datum,
+        },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -440,12 +409,10 @@ pub struct GAQdata {
 }
 
 fn gaq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GAQdata, E> {
-    let (_, (talker, message_id)) =
-        tuple((talker, preceded(tag("GAQ"), preceded(comma, any))))(input)?;
-
-    let data = GAQdata { talker, message_id };
-
-    Ok((input, data))
+    map(
+        tuple((talker, preceded(tag("GAQ"), preceded(comma, any)))),
+        |(talker, message_id)| GAQdata { talker, message_id },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -455,12 +422,10 @@ pub struct GBQdata {
 }
 
 fn gbq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GBQdata, E> {
-    let (_, (talker, message_id)) =
-        tuple((talker, preceded(tag("GBQ"), preceded(comma, any))))(input)?;
-
-    let data = GBQdata { talker, message_id };
-
-    Ok((input, data))
+    map(
+        tuple((talker, preceded(tag("GBQ"), preceded(comma, any)))),
+        |(talker, message_id)| GBQdata { talker, message_id },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -479,38 +444,36 @@ pub struct GBSdata {
 }
 
 fn gbs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GBSdata, E> {
-    let (
-        input,
-        (talker, time, err_lat, err_lon, err_alt, svid, prob, bias, stddev, system, signal),
-    ) = tuple((
-        terminated(talker, terminated(tag("GBS"), comma)),
-        terminated(time, comma),
-        terminated(flt32, comma),
-        terminated(flt32, comma),
-        terminated(flt32, comma),
-        terminated(opt(uint32), comma),
-        terminated(opt(flt32), comma),
-        terminated(opt(flt32), comma),
-        terminated(opt(flt32), comma),
-        terminated(opt(system), comma),
-        opt(signal),
-    ))(input)?;
-
-    let data = GBSdata {
-        talker,
-        time,
-        err_lat,
-        err_lon,
-        err_alt,
-        svid,
-        prob,
-        bias,
-        stddev,
-        system,
-        signal,
-    };
-
-    Ok((input, data))
+    map(
+        tuple((
+            terminated(talker, terminated(tag("GBS"), comma)),
+            terminated(time, comma),
+            terminated(flt32, comma),
+            terminated(flt32, comma),
+            terminated(flt32, comma),
+            terminated(opt(uint32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(system), comma),
+            opt(signal),
+        )),
+        |(talker, time, err_lat, err_lon, err_alt, svid, prob, bias, stddev, system, signal)| {
+            GBSdata {
+                talker,
+                time,
+                err_lat,
+                err_lon,
+                err_alt,
+                svid,
+                prob,
+                bias,
+                stddev,
+                system,
+                signal,
+            }
+        },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -530,9 +493,22 @@ pub struct GGAdata {
 }
 
 fn gga<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GGAdata, E> {
-    let (
-        input,
-        (
+    map(
+        tuple((
+            terminated(talker, terminated(tag("GGA"), comma)),
+            terminated(time, comma),
+            terminated(latlon, comma),
+            terminated(quality, comma),
+            terminated(uint32, comma),
+            terminated(flt32, comma),
+            terminated(flt32, comma),
+            terminated(any, comma),
+            terminated(flt32, comma),
+            terminated(any, comma),
+            terminated(opt(uint32), comma),
+            opt(uint32),
+        )),
+        |(
             talker,
             time,
             lat_lon,
@@ -545,38 +521,21 @@ fn gga<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GGAdata, 
             sep_unit,
             diff_age,
             diff_station,
-        ),
-    ) = tuple((
-        terminated(talker, terminated(tag("GGA"), comma)),
-        terminated(time, comma),
-        terminated(latlon, comma),
-        terminated(quality, comma),
-        terminated(uint32, comma),
-        terminated(flt32, comma),
-        terminated(flt32, comma),
-        terminated(any, comma),
-        terminated(flt32, comma),
-        terminated(any, comma),
-        terminated(opt(uint32), comma),
-        opt(uint32),
-    ))(input)?;
-
-    let data = GGAdata {
-        talker,
-        time,
-        lat_lon,
-        quality,
-        num_satellites,
-        hdop,
-        alt,
-        alt_unit,
-        sep,
-        sep_unit,
-        diff_age,
-        diff_station,
-    };
-
-    Ok((input, data))
+        )| GGAdata {
+            talker,
+            time,
+            lat_lon,
+            quality,
+            num_satellites,
+            hdop,
+            alt,
+            alt_unit,
+            sep,
+            sep_unit,
+            diff_age,
+            diff_station,
+        },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -589,23 +548,22 @@ pub struct GLLdata {
 }
 
 fn gll<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GLLdata, E> {
-    let (input, (talker, lat_lon, time, status, position_mode)) = tuple((
-        terminated(talker, terminated(tag("GLL"), comma)),
-        terminated(latlon, comma),
-        terminated(time, comma),
-        terminated(status, comma),
-        pos_mode,
-    ))(input)?;
-
-    let data = GLLdata {
-        talker,
-        lat_lon,
-        time,
-        status,
-        position_mode,
-    };
-
-    Ok((input, data))
+    map(
+        tuple((
+            terminated(talker, terminated(tag("GLL"), comma)),
+            terminated(latlon, comma),
+            terminated(time, comma),
+            terminated(status, comma),
+            pos_mode,
+        )),
+        |(talker, lat_lon, time, status, position_mode)| GLLdata {
+            talker,
+            lat_lon,
+            time,
+            status,
+            position_mode,
+        },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -615,12 +573,10 @@ pub struct GLQdata {
 }
 
 fn glq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GLQdata, E> {
-    let (_, (talker, message_id)) =
-        tuple((talker, preceded(tag("GLQ"), preceded(comma, any))))(input)?;
-
-    let data = GLQdata { talker, message_id };
-
-    Ok((input, data))
+    map(
+        tuple((talker, preceded(tag("GLQ"), preceded(comma, any)))),
+        |(talker, message_id)| GLQdata { talker, message_id },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -630,12 +586,10 @@ pub struct GNQdata {
 }
 
 fn gnq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GNQdata, E> {
-    let (_, (talker, message_id)) =
-        tuple((talker, preceded(tag("GNQ"), preceded(comma, any))))(input)?;
-
-    let data = GNQdata { talker, message_id };
-
-    Ok((input, data))
+    map(
+        tuple((talker, preceded(tag("GNQ"), preceded(comma, any)))),
+        |(talker, message_id)| GNQdata { talker, message_id },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -657,9 +611,24 @@ pub struct GNSdata {
 }
 
 fn gns<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GNSdata, E> {
-    let (
-        input,
-        (
+    map(
+        tuple((
+            terminated(talker, terminated(tag("GNS"), comma)),
+            terminated(time, comma),
+            terminated(latlon, comma),
+            pos_mode,
+            pos_mode,
+            pos_mode,
+            terminated(pos_mode, comma),
+            terminated(uint32, comma),
+            terminated(flt32, comma),
+            terminated(flt32, comma),
+            terminated(flt32, comma),
+            terminated(opt(uint32), comma),
+            terminated(opt(uint32), comma),
+            status,
+        )),
+        |(
             talker,
             time,
             lat_lon,
@@ -674,42 +643,23 @@ fn gns<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GNSdata, 
             diff_age,
             diff_station,
             nav_status,
-        ),
-    ) = tuple((
-        terminated(talker, terminated(tag("GNS"), comma)),
-        terminated(time, comma),
-        terminated(latlon, comma),
-        pos_mode,
-        pos_mode,
-        pos_mode,
-        terminated(pos_mode, comma),
-        terminated(uint32, comma),
-        terminated(flt32, comma),
-        terminated(flt32, comma),
-        terminated(flt32, comma),
-        terminated(opt(uint32), comma),
-        terminated(opt(uint32), comma),
-        status,
-    ))(input)?;
-
-    let data = GNSdata {
-        talker,
-        time,
-        lat_lon,
-        gps_position_mode,
-        glonass_position_mode,
-        galileo_position_mode,
-        beiduo_position_mode,
-        num_satellites,
-        hdop,
-        alt,
-        sep,
-        diff_age,
-        diff_station,
-        nav_status,
-    };
-
-    Ok((input, data))
+        )| GNSdata {
+            talker,
+            time,
+            lat_lon,
+            gps_position_mode,
+            glonass_position_mode,
+            galileo_position_mode,
+            beiduo_position_mode,
+            num_satellites,
+            hdop,
+            alt,
+            sep,
+            diff_age,
+            diff_station,
+            nav_status,
+        },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -719,12 +669,10 @@ pub struct GPQdata {
 }
 
 fn gpq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GPQdata, E> {
-    let (_, (talker, message_id)) =
-        tuple((talker, preceded(tag("GPQ"), preceded(comma, any))))(input)?;
-
-    let data = GPQdata { talker, message_id };
-
-    Ok((input, data))
+    map(
+        tuple((talker, preceded(tag("GPQ"), preceded(comma, any)))),
+        |(talker, message_id)| GPQdata { talker, message_id },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -738,27 +686,26 @@ pub struct GRSdata {
 }
 
 fn grs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GRSdata, E> {
-    let (input, (talker, time, gga_includes_residuals, residuals, system, signal)) = tuple((
-        terminated(talker, terminated(tag("GRS"), comma)),
-        terminated(time, comma),
-        terminated(map(one_of("10"), |c| c == '1'), comma),
-        many_m_n(12, 12, terminated(opt(flt32), comma)),
-        terminated(system, comma),
-        signal,
-    ))(input)?;
-
-    let residuals = Vec::from(residuals);
-
-    let data = GRSdata {
-        talker,
-        time,
-        gga_includes_residuals,
-        residuals,
-        system,
-        signal,
-    };
-
-    Ok((input, data))
+    map(
+        tuple((
+            terminated(talker, terminated(tag("GRS"), comma)),
+            terminated(time, comma),
+            terminated(map(one_of("10"), |c| c == '1'), comma),
+            map(many_m_n(12, 12, terminated(opt(flt32), comma)), |rs| {
+                Vec::from(rs)
+            }),
+            terminated(system, comma),
+            signal,
+        )),
+        |(talker, time, gga_includes_residuals, residuals, system, signal)| GRSdata {
+            talker,
+            time,
+            gga_includes_residuals,
+            residuals,
+            system,
+            signal,
+        },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -774,32 +721,32 @@ pub struct GSAdata {
 }
 
 fn gsa<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSAdata, E> {
-    let (input, (talker, operation_mode, navigation_mode, satellite_ids, pdop, hdop, vdop, system)) =
+    map(
         tuple((
             terminated(talker, terminated(tag("GSA"), comma)),
             terminated(op_mode, comma),
             terminated(nav_mode, comma),
-            many_m_n(12, 12, terminated(opt(uint32), comma)),
+            map(many_m_n(12, 12, terminated(opt(uint32), comma)), |sids| {
+                Vec::from(sids)
+            }),
             terminated(flt32, comma),
             terminated(flt32, comma),
             terminated(flt32, comma),
             system,
-        ))(input)?;
-
-    let satellite_ids = Vec::from(satellite_ids);
-
-    let data = GSAdata {
-        talker,
-        operation_mode,
-        navigation_mode,
-        satellite_ids,
-        pdop,
-        hdop,
-        vdop,
-        system,
-    };
-
-    Ok((input, data))
+        )),
+        |(talker, operation_mode, navigation_mode, satellite_ids, pdop, hdop, vdop, system)| {
+            GSAdata {
+                talker,
+                operation_mode,
+                navigation_mode,
+                satellite_ids,
+                pdop,
+                hdop,
+                vdop,
+                system,
+            }
+        },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -816,34 +763,40 @@ pub struct GSTdata {
 }
 
 fn gst<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSTdata, E> {
-    let (
-        input,
-        (talker, time, range_rms, std_major, std_minor, orientation, std_lat, std_lon, std_alt),
-    ) = tuple((
-        terminated(talker, terminated(tag("GST"), comma)),
-        terminated(time, comma),
-        terminated(opt(flt32), comma),
-        terminated(opt(flt32), comma),
-        terminated(opt(flt32), comma),
-        terminated(opt(flt32), comma),
-        terminated(opt(flt32), comma),
-        terminated(opt(flt32), comma),
-        opt(flt32),
-    ))(input)?;
-
-    let data = GSTdata {
-        talker,
-        time,
-        range_rms,
-        std_major,
-        std_minor,
-        orientation,
-        std_lat,
-        std_lon,
-        std_alt,
-    };
-
-    Ok((input, data))
+    map(
+        tuple((
+            terminated(talker, terminated(tag("GST"), comma)),
+            terminated(time, comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            opt(flt32),
+        )),
+        |(
+            talker,
+            time,
+            range_rms,
+            std_major,
+            std_minor,
+            orientation,
+            std_lat,
+            std_lon,
+            std_alt,
+        )| GSTdata {
+            talker,
+            time,
+            range_rms,
+            std_major,
+            std_minor,
+            orientation,
+            std_lat,
+            std_lon,
+            std_alt,
+        },
+    )(input)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -882,25 +835,24 @@ pub struct GSVdata {
 }
 
 fn gsv<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSVdata, E> {
-    let (input, (talker, num_msgs, msg, num_satellites, satellites, signal)) = tuple((
-        terminated(talker, terminated(tag("GSV"), comma)),
-        terminated(uint32, comma),
-        terminated(uint32, comma),
-        terminated(uint32, comma),
-        many_m_n(0, 4, terminated(gsv_sat, comma)),
-        signal,
-    ))(input)?;
-
-    let data = GSVdata {
-        talker,
-        num_msgs,
-        msg,
-        num_satellites,
-        satellites,
-        signal,
-    };
-
-    Ok((input, data))
+    map(
+        tuple((
+            terminated(talker, terminated(tag("GSV"), comma)),
+            terminated(uint32, comma),
+            terminated(uint32, comma),
+            terminated(uint32, comma),
+            many_m_n(0, 4, terminated(gsv_sat, comma)),
+            signal,
+        )),
+        |(talker, num_msgs, msg, num_satellites, satellites, signal)| GSVdata {
+            talker,
+            num_msgs,
+            msg,
+            num_satellites,
+            satellites,
+            signal,
+        },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -919,9 +871,21 @@ pub struct RMCdata {
 }
 
 fn rmc<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, RMCdata, E> {
-    let (
-        input,
-        (
+    map(
+        tuple((
+            terminated(talker, terminated(tag("RMC"), comma)),
+            terminated(time, comma),
+            terminated(status, comma),
+            terminated(latlon, comma),
+            terminated(flt32, comma),
+            terminated(flt32, comma),
+            terminated(date, comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(east_west), comma),
+            terminated(pos_mode, comma),
+            status,
+        )),
+        |(
             talker,
             time,
             status,
@@ -933,36 +897,20 @@ fn rmc<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, RMCdata, 
             magnetic_variation_east_west,
             position_mode,
             nav_status,
-        ),
-    ) = tuple((
-        terminated(talker, terminated(tag("RMC"), comma)),
-        terminated(time, comma),
-        terminated(status, comma),
-        terminated(latlon, comma),
-        terminated(flt32, comma),
-        terminated(flt32, comma),
-        terminated(date, comma),
-        terminated(opt(flt32), comma),
-        terminated(opt(east_west), comma),
-        terminated(pos_mode, comma),
-        status,
-    ))(input)?;
-
-    let data = RMCdata {
-        talker,
-        time,
-        status,
-        lat_lon,
-        speed,
-        course_over_ground,
-        date,
-        magnetic_variation,
-        magnetic_variation_east_west,
-        position_mode,
-        nav_status,
-    };
-
-    Ok((input, data))
+        )| RMCdata {
+            talker,
+            time,
+            status,
+            lat_lon,
+            speed,
+            course_over_ground,
+            date,
+            magnetic_variation,
+            magnetic_variation_east_west,
+            position_mode,
+            nav_status,
+        },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -975,23 +923,22 @@ pub struct TXTdata {
 }
 
 fn txt<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, TXTdata, E> {
-    let (input, (talker, num_msgs, msg, msg_type, text)) = tuple((
-        terminated(talker, terminated(tag("TXT"), comma)),
-        terminated(uint32, comma),
-        terminated(uint32, comma),
-        terminated(msg_type, comma),
-        any,
-    ))(input)?;
-
-    let data = TXTdata {
-        talker,
-        num_msgs,
-        msg,
-        msg_type,
-        text,
-    };
-
-    Ok((input, data))
+    map(
+        tuple((
+            terminated(talker, terminated(tag("TXT"), comma)),
+            terminated(uint32, comma),
+            terminated(uint32, comma),
+            terminated(msg_type, comma),
+            any,
+        )),
+        |(talker, num_msgs, msg, msg_type, text)| TXTdata {
+            talker,
+            num_msgs,
+            msg,
+            msg_type,
+            text,
+        },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1008,9 +955,19 @@ pub struct VLWdata {
 }
 
 fn vlw<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, VLWdata, E> {
-    let (
-        input,
-        (
+    map(
+        tuple((
+            terminated(talker, terminated(tag("VLW"), comma)),
+            terminated(opt(flt32), comma),
+            terminated(any, comma),
+            terminated(opt(flt32), comma),
+            terminated(any, comma),
+            terminated(flt32, comma),
+            terminated(any, comma),
+            terminated(flt32, comma),
+            any,
+        )),
+        |(
             talker,
             total_water_distance,
             total_water_distance_unit,
@@ -1020,32 +977,18 @@ fn vlw<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, VLWdata, 
             total_ground_distance_unit,
             ground_distance,
             ground_distance_unit,
-        ),
-    ) = tuple((
-        terminated(talker, terminated(tag("VLW"), comma)),
-        terminated(opt(flt32), comma),
-        terminated(any, comma),
-        terminated(opt(flt32), comma),
-        terminated(any, comma),
-        terminated(flt32, comma),
-        terminated(any, comma),
-        terminated(flt32, comma),
-        any,
-    ))(input)?;
-
-    let data = VLWdata {
-        talker,
-        total_water_distance,
-        total_water_distance_unit,
-        water_distance,
-        water_distance_unit,
-        total_ground_distance,
-        total_ground_distance_unit,
-        ground_distance,
-        ground_distance_unit,
-    };
-
-    Ok((input, data))
+        )| VLWdata {
+            talker,
+            total_water_distance,
+            total_water_distance_unit,
+            water_distance,
+            water_distance_unit,
+            total_ground_distance,
+            total_ground_distance_unit,
+            ground_distance,
+            ground_distance_unit,
+        },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1063,9 +1006,20 @@ pub struct VTGdata {
 }
 
 fn vtg<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, VTGdata, E> {
-    let (
-        input,
-        (
+    map(
+        tuple((
+            terminated(talker, terminated(tag("VTG"), comma)),
+            terminated(flt32, comma),
+            terminated(any, comma),
+            terminated(opt(flt32), comma),
+            terminated(any, comma),
+            terminated(flt32, comma),
+            terminated(any, comma),
+            terminated(flt32, comma),
+            terminated(any, comma),
+            pos_mode,
+        )),
+        |(
             talker,
             course_over_ground_true,
             course_over_ground_true_unit,
@@ -1076,34 +1030,19 @@ fn vtg<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, VTGdata, 
             speed_over_ground_km,
             speed_over_ground_km_unit,
             position_mode,
-        ),
-    ) = tuple((
-        terminated(talker, terminated(tag("VTG"), comma)),
-        terminated(flt32, comma),
-        terminated(any, comma),
-        terminated(opt(flt32), comma),
-        terminated(any, comma),
-        terminated(flt32, comma),
-        terminated(any, comma),
-        terminated(flt32, comma),
-        terminated(any, comma),
-        pos_mode,
-    ))(input)?;
-
-    let data = VTGdata {
-        talker,
-        course_over_ground_true,
-        course_over_ground_true_unit,
-        course_over_ground_magnetic,
-        course_over_ground_magnetic_unit,
-        speed_over_ground_knots,
-        speed_over_ground_knots_unit,
-        speed_over_ground_km,
-        speed_over_ground_km_unit,
-        position_mode,
-    };
-
-    Ok((input, data))
+        )| VTGdata {
+            talker,
+            course_over_ground_true,
+            course_over_ground_true_unit,
+            course_over_ground_magnetic,
+            course_over_ground_magnetic_unit,
+            speed_over_ground_knots,
+            speed_over_ground_knots_unit,
+            speed_over_ground_km,
+            speed_over_ground_km_unit,
+            position_mode,
+        },
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1118,27 +1057,26 @@ pub struct ZDAdata {
 }
 
 fn zda<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, ZDAdata, E> {
-    let (input, (talker, time, day, month, year, local_tz_hour, local_tz_minute)) = tuple((
-        terminated(talker, terminated(tag("ZDA"), comma)),
-        terminated(time, comma),
-        terminated(uint32, comma),
-        terminated(uint32, comma),
-        terminated(int32, comma),
-        terminated(int32, comma),
-        uint32,
-    ))(input)?;
-
-    let data = ZDAdata {
-        talker,
-        time,
-        day,
-        month,
-        year,
-        local_tz_hour,
-        local_tz_minute,
-    };
-
-    Ok((input, data))
+    map(
+        tuple((
+            terminated(talker, terminated(tag("ZDA"), comma)),
+            terminated(time, comma),
+            terminated(uint32, comma),
+            terminated(uint32, comma),
+            terminated(int32, comma),
+            terminated(int32, comma),
+            uint32,
+        )),
+        |(talker, time, day, month, year, local_tz_hour, local_tz_minute)| ZDAdata {
+            talker,
+            time,
+            day,
+            month,
+            year,
+            local_tz_hour,
+            local_tz_minute,
+        },
+    )(input)
 }
 
 #[cfg(test)]
