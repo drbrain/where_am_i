@@ -355,7 +355,7 @@ fn verify_checksum(data: &str, checksum: &str) -> bool {
 fn line<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
     let (input, line) = preceded(dollar, terminated(take_while1(|c| c != '\r'), eol))(input)?;
 
-    let (_, (nmea_line, _, checksum)) = tuple((take_while1(|c| c != '*'), star, hex_digit1))(line)?;
+    let (_, (nmea_line, checksum)) = tuple((terminated(take_while1(|c| c != '*'), star), hex_digit1))(line)?;
 
     verify(rest, |_: &str| verify_checksum(nmea_line, checksum))("")?;
 
