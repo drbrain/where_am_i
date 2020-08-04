@@ -30,8 +30,8 @@ pub enum NMEA {
     RMC(RMCdata),
     TXT(TXTdata),
     VLW(VLWdata),
-    VTG,
-    ZDA,
+    VTG(VTGdata),
+    ZDA(ZDAdata),
 }
 
 fn any<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, String, E> {
