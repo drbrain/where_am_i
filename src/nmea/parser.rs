@@ -9,6 +9,7 @@ use nom::error::*;
 use nom::multi::*;
 use nom::number::complete::*;
 use nom::sequence::*;
+use nom::Err;
 use nom::IResult;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -38,16 +39,9 @@ pub fn parse<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NME
     terminated(
         preceded(
             dollar,
-            map(
-                map_res(
-                    verify(
-                        tuple((terminated(take_while1(|c| c != '*'), star), hex_digit1)),
-                        |(message, checksum)| verify_checksum(message, checksum),
-                    ),
-                    |tuple| message::<E>(tuple.0),
-                ),
-                |tuple| tuple.1,
-            ),
+            map(map_res(checksum_verify, |m| message::<E>(m)), |tuple| {
+                tuple.1
+            }),
         ),
         eol,
     )(input)
@@ -83,6 +77,25 @@ fn any<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, String, E
 
 fn checksum<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
     map_res(preceded(star, hex_digit1), |c| c.parse())(input)
+}
+
+fn checksum_check(data: &str, expected: &str) -> bool {
+    let expected = u8::from_str_radix(expected, 16).unwrap();
+
+    expected == data.bytes().fold(0, |cs, b| cs ^ b)
+}
+
+fn checksum_verify<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
+    map(
+        context(
+            "checksum verification",
+            cut(verify(
+                tuple((terminated(take_while1(|c| c != '*'), star), hex_digit1)),
+                |(message, expected)| checksum_check(message, expected),
+            )),
+        ),
+        |tuple| tuple.0,
+    )(input)
 }
 
 fn comma<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
@@ -387,12 +400,6 @@ fn two_digit_i<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, i
 
 fn uint32<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
     map_res(take_while(is_digit), |s: &str| s.parse())(input)
-}
-
-fn verify_checksum(data: &str, checksum: &str) -> bool {
-    let checksum = u8::from_str_radix(checksum, 16).unwrap();
-
-    checksum == data.bytes().fold(0, |cs, b| cs ^ b)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1115,6 +1122,7 @@ fn zda<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, ZDAdata, 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nom::error::VerboseErrorKind::Context;
 
     type VE<'a> = VerboseError<&'a str>;
 
@@ -1124,6 +1132,18 @@ mod tests {
         let data = gaq::<VE>("EIGAQ,RMC").unwrap().1;
 
         assert_eq!(NMEA::GAQ(data), parsed);
+    }
+
+    #[test]
+    fn test_error_checksum() {
+        let input = "$EIGAQ,RMC*2C\r\n";
+        let result = parse::<VE>(input);
+
+        if let Err(Err::Failure(mut f)) = result {
+            assert_eq!(Context("checksum verification"), f.errors.pop().unwrap().1);
+        } else {
+            assert!(false, "Did not experience failure")
+        }
     }
 
     #[test]
@@ -1480,8 +1500,6 @@ mod tests {
     #[test]
     fn test_gsv() {
         let (rest, parsed) = gsv::<VE>("GPGSV,3,1,09,09,,,17,10,,,40,12,,,49,13,,,35,1").unwrap();
-
-        eprintln!("{:?}", rest);
 
         let satellites = vec![
             GSVsatellite {
