@@ -353,14 +353,19 @@ fn verify_checksum(data: &str, checksum: &str) -> bool {
 }
 
 fn line<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
-    let (input, line) = preceded(dollar, terminated(take_while1(|c| c != '\r'), eol))(input)?;
-
-    let (_, (nmea_line, checksum)) =
-        tuple((terminated(take_while1(|c| c != '*'), star), hex_digit1))(line)?;
-
-    verify(rest, |_: &str| verify_checksum(nmea_line, checksum))("")?;
-
-    Ok((input, nmea_line))
+    terminated(
+        preceded(
+            dollar,
+            map(
+                verify(
+                    tuple((terminated(take_while1(|c| c != '*'), star), hex_digit1)),
+                    |(message, checksum)| verify_checksum(message, checksum),
+                ),
+                |tuple| tuple.0,
+            ),
+        ),
+        eol,
+    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
