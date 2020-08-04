@@ -28,8 +28,8 @@ pub enum NMEA {
     GST(GSTdata),
     GSV(GSVdata),
     RMC(RMCdata),
-    TXT,
-    VLW,
+    TXT(TXTdata),
+    VLW(VLWdata),
     VTG,
     ZDA,
 }
@@ -994,6 +994,59 @@ fn txt<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, TXTdata, 
     Ok((input, data))
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct VLWdata {
+    pub talker: Talker,
+    pub total_water_distance: Option<f32>,
+    pub total_water_distance_unit: String,
+    pub water_distance: Option<f32>,
+    pub water_distance_unit: String,
+    pub total_ground_distance: f32,
+    pub total_ground_distance_unit: String,
+    pub ground_distance: f32,
+    pub ground_distance_unit: String,
+}
+
+fn vlw<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, VLWdata, E> {
+    let (
+        input,
+        (
+            talker,
+            total_water_distance,
+            total_water_distance_unit,
+            water_distance,
+            water_distance_unit,
+            total_ground_distance,
+            total_ground_distance_unit,
+            ground_distance,
+            ground_distance_unit,
+        ),
+    ) = tuple((
+        terminated(talker, terminated(tag("VLW"), comma)),
+        terminated(opt(flt32), comma),
+        terminated(any, comma),
+        terminated(opt(flt32), comma),
+        terminated(any, comma),
+        terminated(flt32, comma),
+        terminated(any, comma),
+        terminated(flt32, comma),
+        any,
+    ))(input)?;
+
+    let data = VLWdata {
+        talker,
+        total_water_distance,
+        total_water_distance_unit,
+        water_distance,
+        water_distance_unit,
+        total_ground_distance,
+        total_ground_distance_unit,
+        ground_distance,
+        ground_distance_unit,
+    };
+
+    Ok((input, data))
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1480,5 +1533,20 @@ mod tests {
         assert_eq!(1, parsed.msg);
         assert_eq!(MessageType::Notice, parsed.msg_type);
         assert_eq!("u-blox ag - www.u-blox.com".to_string(), parsed.text);
+    }
+
+    #[test]
+    fn test_vlw() {
+        let parsed = vlw::<VE>("GPVLW,,N,,N,15.8,N,1.2,N").unwrap().1;
+
+        assert_eq!(Talker::GPS, parsed.talker);
+        assert_eq!(None, parsed.total_water_distance);
+        assert_eq!("N", parsed.total_water_distance_unit);
+        assert_eq!(None, parsed.water_distance);
+        assert_eq!("N", parsed.water_distance_unit);
+        assert_approx_eq!(15.8, parsed.total_ground_distance);
+        assert_eq!("N", parsed.total_ground_distance_unit);
+        assert_approx_eq!(1.2, parsed.ground_distance);
+        assert_eq!("N", parsed.ground_distance_unit);
     }
 }
