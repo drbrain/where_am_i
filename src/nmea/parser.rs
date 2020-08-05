@@ -33,6 +33,7 @@ pub enum NMEA {
     VLW(VLWdata),
     VTG(VTGdata),
     ZDA(ZDAdata),
+    Unsupported(String),
 }
 
 pub fn parse<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NMEA, E> {
@@ -68,6 +69,7 @@ fn message<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NMEA,
         map(vlw, |m| NMEA::VLW(m)),
         map(vtg, |m| NMEA::VTG(m)),
         map(zda, |m| NMEA::ZDA(m)),
+        map(rest, |m: &str| NMEA::Unsupported(m.to_string())),
     ))(input)
 }
 
@@ -1203,6 +1205,14 @@ mod tests {
         let data = gaq::<VE>("EIGAQ,RMC").unwrap().1;
 
         assert_eq!(NMEA::GAQ(data), parsed);
+    }
+
+    #[test]
+    fn test_unknown() {
+        let parsed = parse::<VE>("$GPROT,35.6,A*01\r\n").unwrap().1;
+        let data = "GPROT,35.6,A".to_string();
+
+        assert_eq!(NMEA::Unsupported(data), parsed);
     }
 
     #[test]
