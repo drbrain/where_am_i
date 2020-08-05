@@ -77,10 +77,6 @@ fn any<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, String, E
     map(take_while(|c| c != ','), |m: &str| m.to_string())(input)
 }
 
-fn checksum<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
-    map_res(preceded(star, hex_digit1), |c| c.parse())(input)
-}
-
 fn checksum_check(data: &str, expected: &str) -> bool {
     let expected = u8::from_str_radix(expected, 16).unwrap();
 
