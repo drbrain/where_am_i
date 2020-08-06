@@ -36,14 +36,15 @@ pub enum NMEA {
 }
 
 pub fn parse<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NMEA, E> {
-    terminated(
-        preceded(
-            dollar,
-            map(map_res(checksum_verify, |m| message::<E>(m)), |tuple| {
-                tuple.1
-            }),
-        ),
-        eol,
+    use nom::character::streaming::char;
+    use nom::character::streaming::line_ending;
+
+    delimited(
+        char('$'),
+        map(map_res(checksum_verify, |m| message::<E>(m)), |tuple| {
+            tuple.1
+        }),
+        line_ending,
     )(input)
 }
 
@@ -82,12 +83,32 @@ pub(crate) fn checksum_check(data: &str, expected: &str) -> bool {
     expected == data.bytes().fold(0, |cs, b| cs ^ b)
 }
 
-pub(crate) fn checksum_verify<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
+pub(crate) fn star<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, char, E> {
+    use nom::character::streaming::one_of;
+
+    one_of("*")(input)
+}
+
+pub(crate) fn non_star<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
+    use nom::character::streaming::none_of;
+
+    recognize(many1(none_of("*")))(input)
+}
+
+pub(crate) fn checksum<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
+    use nom::character::streaming::one_of;
+
+    recognize(count(one_of("0123456789ABCDEFabcdef"), 2))(input)
+}
+
+pub(crate) fn checksum_verify<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, &'a str, E> {
     map(
         context(
             "checksum verification",
             cut(verify(
-                tuple((terminated(take_while1(|c| c != '*'), star), hex_digit1)),
+                tuple((terminated(non_star, star), checksum)),
                 |(message, expected)| checksum_check(message, expected),
             )),
         ),
@@ -114,17 +135,15 @@ pub(crate) fn dot<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
     tag(".")(input)
 }
 
-pub(crate) fn eol<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
-    tag("\r\n")(input)
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum EastWest {
     East,
     West,
 }
 
-pub(crate) fn east_west<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, EastWest, E> {
+pub(crate) fn east_west<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, EastWest, E> {
     map(one_of("EW"), |ew| match ew {
         'E' => EastWest::East,
         'W' => EastWest::West,
@@ -198,7 +217,9 @@ pub enum MessageType {
     Unknown(u32),
 }
 
-pub(crate) fn msg_type<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, MessageType, E> {
+pub(crate) fn msg_type<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, MessageType, E> {
     map(two_digit, |t| match t {
         0 => MessageType::Error,
         1 => MessageType::Warning,
@@ -215,7 +236,9 @@ pub enum NavigationMode {
     Fix3D,
 }
 
-pub(crate) fn nav_mode<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NavigationMode, E> {
+pub(crate) fn nav_mode<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, NavigationMode, E> {
     map(one_of("123"), |c| match c {
         '1' => NavigationMode::FixNone,
         '2' => NavigationMode::Fix2D,
@@ -224,7 +247,9 @@ pub(crate) fn nav_mode<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'
     })(input)
 }
 
-pub(crate) fn north_south<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NorthSouth, E> {
+pub(crate) fn north_south<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, NorthSouth, E> {
     map(one_of("NS"), |ns| match ns {
         'N' => NorthSouth::North,
         'S' => NorthSouth::South,
@@ -238,7 +263,9 @@ pub enum OperationMode {
     Manual,
 }
 
-pub(crate) fn op_mode<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, OperationMode, E> {
+pub(crate) fn op_mode<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, OperationMode, E> {
     map(one_of("AM"), |c| match c {
         'A' => OperationMode::Automatic,
         'M' => OperationMode::Manual,
@@ -256,7 +283,9 @@ pub enum PositionMode {
     RTKFloat,
 }
 
-pub(crate) fn pos_mode<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, PositionMode, E> {
+pub(crate) fn pos_mode<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, PositionMode, E> {
     map(one_of("ADEFNR"), |c| match c {
         'A' => PositionMode::AutonomousGNSSFix,
         'D' => PositionMode::DifferentialGNSSFix,
@@ -326,7 +355,7 @@ pub enum Signal {
     // BeiDou B2I D1
     B2I,
 
-    Unknown
+    Unknown,
 }
 
 pub(crate) fn signal<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Signal, E> {
@@ -376,10 +405,6 @@ pub(crate) fn system<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a 
         5 => System::QZSS,
         _ => System::Unknown,
     })(input)
-}
-
-pub(crate) fn star<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
-    tag("*")(input)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -928,7 +953,9 @@ pub struct GSVsatellite {
     pub cno: Option<u32>,
 }
 
-pub(crate) fn gsv_sat<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSVsatellite, E> {
+pub(crate) fn gsv_sat<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, GSVsatellite, E> {
     map(
         tuple((
             terminated(uint32, comma),
@@ -1217,4 +1244,3 @@ pub(crate) fn zda<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
         )),
     )(input)
 }
-
