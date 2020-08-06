@@ -293,31 +293,53 @@ fn quality<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Quali
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Signal {
-    GPSL1CA,
-    GPSL2CL,
-    GPSL2CM,
-    GalileoE1C,
-    GalileoE1B,
-    GalileoE5bI,
-    GalileoE5bQ,
-    BeiDuoB1ID1,
-    BeiDuoB1ID2,
-    BeiDuoB2ID1,
-    BeiDuoB2ID2,
-    QZSSL1CA,
-    QZSSL2CM,
-    QZSSL2CL,
-    GLONASSL1OF,
-    GLONASSL2OF,
-    Unknown,
+    // GPS L1C/A
+    // SBAS L1C/A
+    // BeiDou B1I D1
+    // BeiDou B1I D1
+    // QZSS L1C/A
+    // GLONASS L1 OF
+    L1,
+
+    // Galileo E5 bI
+    // Galileo E5 bQ
+    E5,
+
+    // GLONASS L2 OF
+    L2OF,
+
+    // QZSS L1S
+    L1S,
+
+    // GPS L2 CM
+    // QZSS L2 CM
+    L2CM,
+
+    // GPS L2 CL
+    // QZSS L2 CL
+    L2CL,
+
+    // Galileo E1 C
+    // Galileo E1 B
+    E1,
+
+    // BeiDou B2I D1
+    // BeiDou B2I D1
+    B2I,
+
+    Unknown
 }
 
 fn signal<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Signal, E> {
     map(uint32, |c| match c {
-        1 => Signal::GPSL1CA,
-        2 => Signal::GLONASSL1OF,
-        3 => Signal::GalileoE1C,
-        4 => Signal::BeiDuoB1ID1,
+        1 => Signal::L1,
+        2 => Signal::E5,
+        3 => Signal::L2OF,
+        4 => Signal::L1S,
+        5 => Signal::L2CM,
+        6 => Signal::L2CL,
+        7 => Signal::E1,
+        11 => Signal::B2I,
         _ => Signal::Unknown,
     })(input)
 }
@@ -336,15 +358,24 @@ fn status<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Status
     })(input)
 }
 
-fn system<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Signal, E> {
-    map(one_of("123567"), |c| match c {
-        '1' => Signal::GPSL1CA,
-        '2' => Signal::GalileoE5bI,
-        '3' => Signal::BeiDuoB1ID1,
-        '5' => Signal::GPSL2CM,
-        '6' => Signal::GPSL2CL,
-        '7' => Signal::GalileoE1C,
-        _ => Signal::Unknown,
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum System {
+    BeiDuo,
+    GLONASS,
+    GPS,
+    Galileo,
+    QZSS,
+    Unknown,
+}
+
+fn system<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, System, E> {
+    map(uint32, |c| match c {
+        1 => System::GPS,
+        2 => System::GLONASS,
+        3 => System::Galileo,
+        4 => System::BeiDuo,
+        5 => System::QZSS,
+        _ => System::Unknown,
     })(input)
 }
 
@@ -488,7 +519,7 @@ pub struct GBSdata {
     pub prob: Option<f32>,
     pub bias: Option<f32>,
     pub stddev: Option<f32>,
-    pub system: Option<Signal>,
+    pub system: Option<System>,
     pub signal: Option<Signal>,
 }
 
@@ -763,7 +794,7 @@ pub struct GRSdata {
     pub time: NaiveTime,
     pub gga_includes_residuals: bool,
     pub residuals: Vec<Option<f32>>,
-    pub system: Signal,
+    pub system: System,
     pub signal: Signal,
 }
 
@@ -802,7 +833,7 @@ pub struct GSAdata {
     pub pdop: f32,
     pub hdop: f32,
     pub vdop: f32,
-    pub system: Signal,
+    pub system: System,
 }
 
 fn gsa<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSAdata, E> {
@@ -1377,7 +1408,7 @@ mod tests {
         assert_eq!(None, parsed.prob);
         assert_eq!(Some(-21.4), parsed.bias);
         assert_eq!(Some(3.8), parsed.stddev);
-        assert_eq!(Some(Signal::GPSL1CA), parsed.system);
+        assert_eq!(Some(System::GPS), parsed.system);
         assert_eq!(Some(Signal::Unknown), parsed.signal);
     }
 
@@ -1476,8 +1507,8 @@ mod tests {
         assert_eq!(residuals[9], parsed.residuals[9]);
         assert_eq!(residuals[10], parsed.residuals[10]);
         assert_eq!(residuals[11], parsed.residuals[11]);
-        assert_eq!(Signal::GPSL1CA, parsed.system);
-        assert_eq!(Signal::GPSL1CA, parsed.signal);
+        assert_eq!(System::GPS, parsed.system);
+        assert_eq!(Signal::L1, parsed.signal);
 
         let parsed = grs::<VE>("GNGRS,104148.00,1,,0.0,2.5,0.0,,2.8,,,,,,,1,5")
             .unwrap()
@@ -1513,8 +1544,8 @@ mod tests {
         assert_eq!(residuals[9], parsed.residuals[9]);
         assert_eq!(residuals[10], parsed.residuals[10]);
         assert_eq!(residuals[11], parsed.residuals[11]);
-        assert_eq!(Signal::GPSL1CA, parsed.system);
-        assert_eq!(Signal::Unknown, parsed.signal);
+        assert_eq!(System::GPS, parsed.system);
+        assert_eq!(Signal::L2CM, parsed.signal);
     }
 
     #[test]
@@ -1556,7 +1587,7 @@ mod tests {
         assert_approx_eq!(1.94, parsed.pdop);
         assert_approx_eq!(1.18, parsed.hdop);
         assert_approx_eq!(1.54, parsed.vdop);
-        assert_eq!(Signal::GPSL1CA, parsed.system);
+        assert_eq!(System::GPS, parsed.system);
     }
 
     #[test]
@@ -1610,7 +1641,7 @@ mod tests {
         assert_eq!(1, parsed.msg);
         assert_eq!(9, parsed.num_satellites);
         assert_eq!(satellites, parsed.satellites);
-        assert_eq!(Signal::GPSL1CA, parsed.signal);
+        assert_eq!(Signal::L1, parsed.signal);
 
         let parsed = gsv::<VE>("GPGSV,3,3,09,25,,,40,1").unwrap().1;
 
@@ -1626,7 +1657,7 @@ mod tests {
         assert_eq!(3, parsed.msg);
         assert_eq!(9, parsed.num_satellites);
         assert_eq!(satellites, parsed.satellites);
-        assert_eq!(Signal::GPSL1CA, parsed.signal);
+        assert_eq!(Signal::L1, parsed.signal);
 
         let parsed = gsv::<VE>("GPGSV,1,1,03,12,,,42,24,,,47,32,,,37,5")
             .unwrap()
@@ -1658,7 +1689,7 @@ mod tests {
         assert_eq!(1, parsed.msg);
         assert_eq!(3, parsed.num_satellites);
         assert_eq!(satellites, parsed.satellites);
-        assert_eq!(Signal::Unknown, parsed.signal);
+        assert_eq!(Signal::L2CM, parsed.signal);
 
         let parsed = gsv::<VE>("GAGSV,1,1,00,2").unwrap().1;
 
@@ -1669,7 +1700,7 @@ mod tests {
         assert_eq!(1, parsed.msg);
         assert_eq!(0, parsed.num_satellites);
         assert_eq!(satellites, parsed.satellites);
-        assert_eq!(Signal::GLONASSL1OF, parsed.signal);
+        assert_eq!(Signal::E5, parsed.signal);
     }
 
     #[test]
