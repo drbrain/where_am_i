@@ -1,3 +1,4 @@
+mod codec;
 mod parser;
 
 #[cfg(test)]
