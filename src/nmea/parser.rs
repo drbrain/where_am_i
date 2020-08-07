@@ -46,14 +46,13 @@ pub struct ChecksumMismatch {
     pub calculated: u8,
 }
 
-pub fn parse<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NMEA, E> {
-    use nom::character::streaming::char;
-    use nom::character::streaming::line_ending;
+pub fn parse<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], NMEA, E> {
+    use nom::bytes::streaming::tag;
 
     let result = delimited(
-        preceded(garbage, char('$')),
+        preceded(garbage, tag(b"$")),
         tuple((terminated(non_star, star), checksum)),
-        line_ending,
+        terminated(opt(tag(b"\r")), tag(b"\n")),
     )(input);
 
     let (input, (data, given)) = match result {
@@ -65,11 +64,11 @@ pub fn parse<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NME
         Ok(t) => t,
     };
 
-    let given = u8::from_str_radix(given, 16).unwrap();
-    let calculated = data.bytes().fold(0, |c, b| c ^ b);
+    let calculated = data.iter().fold(0, |c, b| c ^ b);
+    let data = std::str::from_utf8(data).unwrap();
 
     if given == calculated {
-        match message::<E>(data) {
+        match message::<VerboseError<&'a str>>(data) {
             Err(Err::Error(_)) => Ok((input, NMEA::ParseError(String::from(data)))),
             Err(Err::Failure(_)) => Ok((input, NMEA::ParseFailure(String::from(data)))),
             Err(Err::Incomplete(_)) => panic!(
@@ -122,22 +121,23 @@ pub(crate) fn any<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
     map(take_while(|c| c != ','), |m: &str| m.to_string())(input)
 }
 
-pub(crate) fn star<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, char, E> {
-    use nom::character::streaming::one_of;
+pub(crate) fn star<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], &'a [u8], E> {
+    use nom::bytes::streaming::tag;
 
-    one_of("*")(input)
+    tag(b"*")(input)
 }
 
-pub(crate) fn non_star<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
-    use nom::character::streaming::none_of;
+pub(crate) fn non_star<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], &'a [u8], E> {
+    use nom::bytes::streaming::take_till;
 
-    recognize(many1(none_of("*")))(input)
+    recognize(take_till(|c| c == b'*'))(input)
 }
 
-pub(crate) fn checksum<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
-    use nom::character::streaming::one_of;
+pub(crate) fn checksum<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], u8, E> {
+    use nom::bytes::streaming::take_while_m_n;
+    use nom::character::is_hex_digit;
 
-    recognize(count(one_of("0123456789ABCDEFabcdef"), 2))(input)
+    map(recognize(take_while_m_n(2, 2, is_hex_digit)), |c| u8::from_str_radix(std::str::from_utf8(c).unwrap(), 16).unwrap())(input)
 }
 
 pub(crate) fn comma<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
@@ -179,15 +179,15 @@ pub(crate) fn flt32<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a s
     map_res(recognize_float, |s: &str| s.parse())(input)
 }
 
-pub(crate) fn garbage<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, usize, E> {
-    use nom::character::streaming::char;
-    use nom::character::streaming::none_of;
+pub(crate) fn garbage<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], usize, E> {
+    use nom::bytes::streaming::tag;
+    use nom::bytes::streaming::take_while_m_n;
 
     context(
         "garbage",
         cut(terminated(
-            map(many_m_n(0, 164, none_of("$")), |g| g.len()),
-            peek(char('$')),
+            map(take_while_m_n(0, 164, |c| c != b'$'), |g: &[u8]| g.len()),
+            peek(tag(b"$")),
         )),
     )(input)
 }

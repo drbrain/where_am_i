@@ -10,10 +10,11 @@ use nom::Err;
 use nom::Needed;
 
 type VE<'a> = VerboseError<&'a str>;
+type VEb<'a> = VerboseError<&'a [u8]>;
 
 #[test]
 fn test_parse() {
-    let parsed = parser::parse::<VE>("$EIGAQ,RMC*2B\r\n$").unwrap().1;
+    let parsed = parser::parse::<VEb>(b"$EIGAQ,RMC*2B\r\n$").unwrap().1;
     let data = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;
 
     assert_eq!(NMEA::GAQ(data), parsed);
@@ -21,7 +22,7 @@ fn test_parse() {
 
 #[test]
 fn test_unknown() {
-    let parsed = parser::parse::<VE>("$GPROT,35.6,A*01\r\n").unwrap().1;
+    let parsed = parser::parse::<VEb>(b"$GPROT,35.6,A*01\r\n").unwrap().1;
     let data = "GPROT,35.6,A".to_string();
 
     assert_eq!(NMEA::Unsupported(data), parsed);
@@ -29,7 +30,7 @@ fn test_unknown() {
 
 #[test]
 fn test_error_checksum() {
-    let result = parser::parse::<VE>("$EIGAQ,RMC*2C\r\n").unwrap().1;
+    let result = parser::parse::<VEb>(b"$EIGAQ,RMC*2C\r\n").unwrap().1;
 
     let mismatch = ChecksumMismatch {
         message: String::from("EIGAQ,RMC"),
@@ -42,8 +43,8 @@ fn test_error_checksum() {
 
 #[test]
 fn test_incomplete() {
-    let input = "$EIG";
-    let result = parser::parse::<VE>(input);
+    let input = b"$EIG";
+    let result = parser::parse::<VEb>(input);
 
     if let Err(Err::Incomplete(e)) = result {
         assert_eq!(Needed::Size(1), e);
@@ -54,7 +55,7 @@ fn test_incomplete() {
 
 #[test]
 fn test_skip_garbage() {
-    let parsed = parser::parse::<VE>("stuff*AA\r\n$EIGAQ,RMC*2B\r\n$")
+    let parsed = parser::parse::<VEb>(b"stuff*AA\r\n$EIGAQ,RMC*2B\r\n$")
         .unwrap()
         .1;
     let data = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;
@@ -74,26 +75,26 @@ fn test_dollar() {
 
 #[test]
 fn test_garbage() {
-    let input = "$";
-    let (input, count) = parser::garbage::<VE>(input).unwrap();
+    let input = b"$";
+    let (input, count) = parser::garbage::<VEb>(input).unwrap();
 
     assert_eq!(0, count);
-    assert_eq!("$", input);
+    assert_eq!(b"$", input);
 
-    let input = "x$";
-    let (input, count) = parser::garbage::<VE>(input).unwrap();
+    let input = b"x$";
+    let (input, count) = parser::garbage::<VEb>(input).unwrap();
 
     assert_eq!(1, count);
-    assert_eq!("$", input);
+    assert_eq!(b"$", input);
 
-    let input = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx$";
-    let (input, count) = parser::garbage::<VE>(input).unwrap();
+    let input = b"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx$";
+    let (input, count) = parser::garbage::<VEb>(input).unwrap();
 
     assert_eq!(164, count);
-    assert_eq!("$", input);
+    assert_eq!(b"$", input);
 
-    let input = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx$";
-    let result = parser::garbage::<VE>(input);
+    let input = b"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx$";
+    let result = parser::garbage::<VEb>(input);
 
     if let Err(Err::Failure(mut f)) = result {
         assert_eq!(Context("garbage"), f.errors.pop().unwrap().1);
