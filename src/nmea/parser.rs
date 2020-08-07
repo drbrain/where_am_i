@@ -9,6 +9,7 @@ use nom::error::*;
 use nom::multi::*;
 use nom::number::complete::*;
 use nom::sequence::*;
+use nom::Err;
 use nom::IResult;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -32,20 +33,64 @@ pub enum NMEA {
     VLW(VLWdata),
     VTG(VTGdata),
     ZDA(ZDAdata),
+    InvalidChecksum(ChecksumMismatch),
+    ParseError(String),
+    ParseFailure(String),
     Unsupported(String),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ChecksumMismatch {
+    pub message: String,
+    pub given: u8,
+    pub calculated: u8,
 }
 
 pub fn parse<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NMEA, E> {
     use nom::character::streaming::char;
     use nom::character::streaming::line_ending;
 
-    delimited(
+    let result = delimited(
         char('$'),
-        map(map_res(checksum_verify, |m| message::<E>(m)), |tuple| {
-            tuple.1
-        }),
+        tuple((terminated(non_star, star), checksum)),
         line_ending,
-    )(input)
+    )(input);
+
+    let (input, (data, given)) = match result {
+        Err(Err::Incomplete(_)) => {
+            return Err(result.err().unwrap());
+        }
+        Err(Err::Error(_)) => panic!("Some error parsing: {:?}", input),
+        Err(Err::Failure(_)) => panic!("Some failure parsing: {:?}", input),
+        Ok(t) => t,
+    };
+
+    let given = u8::from_str_radix(given, 16).unwrap();
+    let calculated = data.bytes().fold(0, |c, b| c ^ b);
+
+    if given == calculated {
+        match message::<E>(data) {
+            Err(Err::Error(_)) => Ok((input, NMEA::ParseError(String::from(data)))),
+            Err(Err::Failure(_)) => Ok((input, NMEA::ParseFailure(String::from(data)))),
+            Err(Err::Incomplete(_)) => panic!(
+                "Got Incomplete when complete parsers were used on: {:?}",
+                data
+            ),
+            // discard input from sub-parser, it was fully consumed
+            Ok((_, nmea)) => Ok((input, nmea)),
+        }
+    } else {
+        let message = String::from(data);
+
+        Ok((
+            input,
+            NMEA::InvalidChecksum(ChecksumMismatch {
+                message,
+                given,
+                calculated,
+            }),
+        ))
+    }
 }
 
 pub(crate) fn message<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NMEA, E> {
@@ -77,12 +122,6 @@ pub(crate) fn any<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
     map(take_while(|c| c != ','), |m: &str| m.to_string())(input)
 }
 
-pub(crate) fn checksum_check(data: &str, expected: &str) -> bool {
-    let expected = u8::from_str_radix(expected, 16).unwrap();
-
-    expected == data.bytes().fold(0, |cs, b| cs ^ b)
-}
-
 pub(crate) fn star<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, char, E> {
     use nom::character::streaming::one_of;
 
@@ -99,21 +138,6 @@ pub(crate) fn checksum<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'
     use nom::character::streaming::one_of;
 
     recognize(count(one_of("0123456789ABCDEFabcdef"), 2))(input)
-}
-
-pub(crate) fn checksum_verify<'a, E: ParseError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, &'a str, E> {
-    map(
-        context(
-            "checksum verification",
-            cut(verify(
-                tuple((terminated(non_star, star), checksum)),
-                |(message, expected)| checksum_check(message, expected),
-            )),
-        ),
-        |tuple| tuple.0,
-    )(input)
 }
 
 pub(crate) fn comma<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {

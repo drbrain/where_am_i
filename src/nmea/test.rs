@@ -4,7 +4,6 @@ use crate::nmea::parser::*;
 use chrono::naive::NaiveDate;
 use chrono::naive::NaiveTime;
 
-use nom::error::VerboseErrorKind::Context;
 use nom::error::*;
 use nom::Err;
 use nom::Needed;
@@ -29,14 +28,15 @@ fn test_unknown() {
 
 #[test]
 fn test_error_checksum() {
-    let input = "$EIGAQ,RMC*2C\r\n";
-    let result = parser::parse::<VE>(input);
+    let result = parser::parse::<VE>("$EIGAQ,RMC*2C\r\n").unwrap().1;
 
-    if let Err(Err::Failure(mut f)) = result {
-        assert_eq!(Context("checksum verification"), f.errors.pop().unwrap().1);
-    } else {
-        assert!(false, "Did not experience failure")
-    }
+    let mismatch = ChecksumMismatch {
+        message: String::from("EIGAQ,RMC"),
+        given: 44,
+        calculated: 43,
+    };
+
+    assert_eq!(NMEA::InvalidChecksum(mismatch), result);
 }
 
 #[test]
