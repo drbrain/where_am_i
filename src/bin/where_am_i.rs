@@ -1,32 +1,14 @@
-mod args;
-mod gps;
-mod gpsd;
-mod nmea;
-mod pps;
-mod shm;
-
-#[macro_use]
-extern crate nix;
-
-#[macro_use]
-extern crate assert_approx_eq;
-
-use gps::GPS;
-use gpsd::Server;
-use pps::PPS;
-use shm::NtpShm;
-
-use serde_json::Value;
+use where_am_i::args;
+use where_am_i::gps::GPS;
+use where_am_i::gpsd::Server;
+use where_am_i::pps::PPS;
+use where_am_i::shm::NtpShm;
 
 use tokio::runtime;
-use tokio::sync::broadcast;
 
 use tracing::error;
 use tracing::info;
 use tracing::Level;
-
-pub type JsonReceiver = broadcast::Receiver<Value>;
-pub type JsonSender = broadcast::Sender<Value>;
 
 fn main() {
     let mut runtime = runtime::Builder::new()
@@ -116,3 +98,4 @@ async fn run() {
     ntp_shm.run().await;
     server.run().await.unwrap();
 }
+
