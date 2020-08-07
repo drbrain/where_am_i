@@ -127,7 +127,9 @@ pub(crate) fn star<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a 
     tag(b"*")(input)
 }
 
-pub(crate) fn non_star<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], &'a [u8], E> {
+pub(crate) fn non_star<'a, E: ParseError<&'a [u8]>>(
+    input: &'a [u8],
+) -> IResult<&'a [u8], &'a [u8], E> {
     use nom::bytes::streaming::take_till;
 
     recognize(take_till(|c| c == b'*'))(input)
@@ -137,7 +139,9 @@ pub(crate) fn checksum<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<
     use nom::bytes::streaming::take_while_m_n;
     use nom::character::is_hex_digit;
 
-    map(recognize(take_while_m_n(2, 2, is_hex_digit)), |c| u8::from_str_radix(std::str::from_utf8(c).unwrap(), 16).unwrap())(input)
+    map(recognize(take_while_m_n(2, 2, is_hex_digit)), |c| {
+        u8::from_str_radix(std::str::from_utf8(c).unwrap(), 16).unwrap()
+    })(input)
 }
 
 pub(crate) fn comma<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
@@ -149,10 +153,6 @@ pub(crate) fn date<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a st
         tuple((two_digit, two_digit, two_digit_i)),
         |(day, month, year)| NaiveDate::from_ymd(year, month, day),
     )(input)
-}
-
-pub(crate) fn dollar<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
-    tag("$")(input)
 }
 
 pub(crate) fn dot<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {

@@ -69,11 +69,6 @@ fn test_comma() {
 }
 
 #[test]
-fn test_dollar() {
-    assert_eq!("$", parser::dollar::<VE>("$").unwrap().1);
-}
-
-#[test]
 fn test_garbage() {
     let input = b"$";
     let (input, count) = parser::garbage::<VEb>(input).unwrap();

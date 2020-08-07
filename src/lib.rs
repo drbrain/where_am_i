@@ -17,4 +17,3 @@ use tokio::sync::broadcast;
 
 pub type JsonReceiver = broadcast::Receiver<Value>;
 pub type JsonSender = broadcast::Sender<Value>;
-

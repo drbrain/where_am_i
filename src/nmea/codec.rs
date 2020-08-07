@@ -14,8 +14,7 @@ use std::io;
 use tokio_util::codec::Decoder;
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Codec {
-}
+pub struct Codec {}
 
 type VE<'a> = VerboseError<&'a [u8]>;
 
@@ -31,7 +30,7 @@ impl Decoder for Codec {
             Ok((input, nmea)) => {
                 buf.extend_from_slice(&Bytes::copy_from_slice(input));
                 Ok(Some(nmea))
-            },
+            }
             Err(Err::Incomplete(_)) => {
                 buf.extend_from_slice(&Bytes::copy_from_slice(input));
                 Ok(None)

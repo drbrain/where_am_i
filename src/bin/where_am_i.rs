@@ -98,4 +98,3 @@ async fn run() {
     ntp_shm.run().await;
     server.run().await.unwrap();
 }
-
