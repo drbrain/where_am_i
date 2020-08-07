@@ -51,7 +51,7 @@ pub fn parse<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NME
     use nom::character::streaming::line_ending;
 
     let result = delimited(
-        char('$'),
+        preceded(garbage, char('$')),
         tuple((terminated(non_star, star), checksum)),
         line_ending,
     )(input);
@@ -177,6 +177,19 @@ pub(crate) fn east_west<'a, E: ParseError<&'a str>>(
 
 pub(crate) fn flt32<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, f32, E> {
     map_res(recognize_float, |s: &str| s.parse())(input)
+}
+
+pub(crate) fn garbage<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, usize, E> {
+    use nom::character::streaming::char;
+    use nom::character::streaming::none_of;
+
+    context(
+        "garbage",
+        cut(terminated(
+            map(many_m_n(0, 164, none_of("$")), |g| g.len()),
+            peek(char('$')),
+        )),
+    )(input)
 }
 
 pub(crate) fn int32<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, i32, E> {

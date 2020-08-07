@@ -4,6 +4,7 @@ use crate::nmea::parser::*;
 use chrono::naive::NaiveDate;
 use chrono::naive::NaiveTime;
 
+use nom::error::VerboseErrorKind::Context;
 use nom::error::*;
 use nom::Err;
 use nom::Needed;
@@ -52,6 +53,16 @@ fn test_incomplete() {
 }
 
 #[test]
+fn test_skip_garbage() {
+    let parsed = parser::parse::<VE>("stuff*AA\r\n$EIGAQ,RMC*2B\r\n$")
+        .unwrap()
+        .1;
+    let data = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;
+
+    assert_eq!(NMEA::GAQ(data), parsed);
+}
+
+#[test]
 fn test_comma() {
     assert_eq!(",", parser::comma::<VE>(",").unwrap().1);
 }
@@ -59,6 +70,36 @@ fn test_comma() {
 #[test]
 fn test_dollar() {
     assert_eq!("$", parser::dollar::<VE>("$").unwrap().1);
+}
+
+#[test]
+fn test_garbage() {
+    let input = "$";
+    let (input, count) = parser::garbage::<VE>(input).unwrap();
+
+    assert_eq!(0, count);
+    assert_eq!("$", input);
+
+    let input = "x$";
+    let (input, count) = parser::garbage::<VE>(input).unwrap();
+
+    assert_eq!(1, count);
+    assert_eq!("$", input);
+
+    let input = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx$";
+    let (input, count) = parser::garbage::<VE>(input).unwrap();
+
+    assert_eq!(164, count);
+    assert_eq!("$", input);
+
+    let input = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx$";
+    let result = parser::garbage::<VE>(input);
+
+    if let Err(Err::Failure(mut f)) = result {
+        assert_eq!(Context("garbage"), f.errors.pop().unwrap().1);
+    } else {
+        assert!(false, "Garbage limit not reached");
+    }
 }
 
 #[test]
