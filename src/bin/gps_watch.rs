@@ -4,9 +4,9 @@ use tracing::error;
 use tracing::info;
 use tracing::Level;
 
+use where_am_i::gps::GPS;
 use where_am_i::nmea::Device;
 use where_am_i::nmea::NMEA;
-use where_am_i::gps::GPS;
 
 #[tokio::main]
 async fn main() {
@@ -36,8 +36,10 @@ async fn main() {
 
     while let Ok(nmea) = rx.recv().await {
         match nmea {
-            NMEA::InvalidChecksum(cm) => error!("checksum match, given {}, calculated {} on {}",
-                cm.given, cm.calculated, cm.message),
+            NMEA::InvalidChecksum(cm) => error!(
+                "checksum match, given {}, calculated {} on {}",
+                cm.given, cm.calculated, cm.message
+            ),
             NMEA::ParseError(e) => error!("parse error: {}", e),
             NMEA::ParseFailure(f) => error!("parse failure: {}", f),
             NMEA::Unsupported(n) => error!("unsupported: {}", n),
@@ -45,4 +47,3 @@ async fn main() {
         }
     }
 }
-

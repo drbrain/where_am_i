@@ -40,7 +40,12 @@ impl GPS {
         let data = Mutex::new(data);
         let data = Arc::new(data);
 
-        GPS { name, tx, device_tx, data }
+        GPS {
+            name,
+            tx,
+            device_tx,
+            data,
+        }
     }
 
     pub async fn read(&mut self) {
@@ -65,7 +70,10 @@ async fn read_device(mut rx: Receiver<NMEA>, data: Locked, name: String, tx: Jso
 
 fn read_nmea(nmea: NMEA, data: &mut Unlocked, name: &String, tx: &JsonSender) {
     match nmea {
-        NMEA::InvalidChecksum(cm) => error!("checksum match, given {}, calculated {} on {}", cm.given, cm.calculated, cm.message),
+        NMEA::InvalidChecksum(cm) => error!(
+            "checksum match, given {}, calculated {} on {}",
+            cm.given, cm.calculated, cm.message
+        ),
         NMEA::ParseError(e) => error!("parse error: {}", e),
         NMEA::ParseFailure(f) => error!("parse failure: {}", f),
         NMEA::Unsupported(n) => error!("unsupported: {}", n),
@@ -108,4 +116,3 @@ fn report_time(date: DateTime<Utc>, name: &String, tx: &JsonSender) {
 
     if tx.send(toff).is_ok() {}
 }
-

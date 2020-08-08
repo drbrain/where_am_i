@@ -28,6 +28,7 @@ pub enum NMEA {
     GSA(GSAdata),
     GST(GSTdata),
     GSV(GSVdata),
+    PUBX(UBXData),
     RMC(RMCdata),
     TXT(TXTdata),
     VLW(VLWdata),
@@ -108,6 +109,7 @@ pub(crate) fn message<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a
         map(gsa, |m| NMEA::GSA(m)),
         map(gst, |m| NMEA::GST(m)),
         map(gsv, |m| NMEA::GSV(m)),
+        map(pubx, |m| NMEA::PUBX(m)),
         map(rmc, |m| NMEA::RMC(m)),
         map(txt, |m| NMEA::TXT(m)),
         map(vlw, |m| NMEA::VLW(m)),
@@ -452,19 +454,24 @@ pub enum Talker {
     GLONASS,
     GPS,
     Galileo,
+    Private,
     Unknown(String),
 }
 
 pub(crate) fn talker<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Talker, E> {
-    map(take_while_m_n(2, 2, is_upper_alphanum), |t| match t {
-        "EI" => Talker::ECDIS,
-        "GA" => Talker::Galileo,
-        "GB" => Talker::BeiDuo,
-        "GL" => Talker::GLONASS,
-        "GN" => Talker::Combination,
-        "GP" => Talker::GPS,
-        _ => Talker::Unknown(t.to_string()),
-    })(input)
+    map(
+        alt((tag("P"), take_while_m_n(2, 2, is_upper_alphanum))),
+        |t| match t {
+            "EI" => Talker::ECDIS,
+            "GA" => Talker::Galileo,
+            "GB" => Talker::BeiDuo,
+            "GL" => Talker::GLONASS,
+            "GN" => Talker::Combination,
+            "GP" => Talker::GPS,
+            "P" => Talker::Private,
+            _ => Talker::Unknown(t.to_string()),
+        },
+    )(input)
 }
 
 pub(crate) fn three_digit<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
@@ -993,21 +1000,23 @@ pub struct GSVsatellite {
 pub(crate) fn gsv_sat<'a, E: ParseError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, GSVsatellite, E> {
-    context("GSV satellite",
-    map(
-        tuple((
-            preceded(comma, uint32),
-            preceded(comma, opt(uint32)),
-            preceded(comma, opt(uint32)),
-            preceded(comma, opt(uint32)),
-        )),
-        |(id, elevation, azimuth, cno)| GSVsatellite {
-            id,
-            elevation,
-            azimuth,
-            cno,
-        },
-    ))(input)
+    context(
+        "GSV satellite",
+        map(
+            tuple((
+                preceded(comma, uint32),
+                preceded(comma, opt(uint32)),
+                preceded(comma, opt(uint32)),
+                preceded(comma, opt(uint32)),
+            )),
+            |(id, elevation, azimuth, cno)| GSVsatellite {
+                id,
+                elevation,
+                azimuth,
+                cno,
+            },
+        ),
+    )(input)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1131,6 +1140,316 @@ pub(crate) fn txt<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 msg,
                 msg_type,
                 text,
+            },
+        )),
+    )(input)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum UBXData {
+    Config(UBXConfig),
+    Position(UBXPosition),
+    Satellites(UBXSatellites),
+    Time(UBXTime),
+}
+
+pub(crate) fn pubx<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, UBXData, E> {
+    context(
+        "PUBX",
+        alt((
+            map(ubx_00, |m| UBXData::Position(m)),
+            map(ubx_03, |m| UBXData::Satellites(m)),
+            map(ubx_04, |m| UBXData::Time(m)),
+        )),
+    )(input)
+}
+
+#[derive(Clone, Eq, Debug, PartialEq)]
+pub enum UBXPort {
+    DDC,
+    USART1,
+    USART2,
+    USB,
+    SPI,
+}
+
+#[derive(Clone, Eq, Debug, PartialEq)]
+pub struct UBXConfig {
+    pub port: UBXPort,
+    pub in_proto: u32,
+    pub out_proto: u32,
+    pub baud_rate: u32,
+    pub autobauding: bool,
+}
+
+#[derive(Clone, Eq, Debug, PartialEq)]
+pub struct UBXPositionPoll {}
+
+#[derive(Clone, Eq, Debug, PartialEq)]
+pub enum UBXNavigationStatus {
+    NoFix,
+    DeadRecokning,
+    Standalone2D,
+    Standalone3D,
+    Differential2D,
+    Differential3D,
+    Combined,
+    TimeOnly,
+    Unknown(String),
+}
+
+pub(crate) fn ubx_nav_stat<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, UBXNavigationStatus, E> {
+    context(
+        "UBX navigation status",
+        map(take_while_m_n(2, 2, is_upper_alphanum), |ns| match ns {
+            "NF" => UBXNavigationStatus::NoFix,
+            "DR" => UBXNavigationStatus::DeadRecokning,
+            "G2" => UBXNavigationStatus::Standalone2D,
+            "G3" => UBXNavigationStatus::Standalone3D,
+            "D2" => UBXNavigationStatus::Differential2D,
+            "D3" => UBXNavigationStatus::Differential3D,
+            "RK" => UBXNavigationStatus::Combined,
+            "TT" => UBXNavigationStatus::TimeOnly,
+            u => UBXNavigationStatus::Unknown(String::from(u)),
+        }),
+    )(input)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct UBXPosition {
+    pub time: NaiveTime,
+    pub lat_lon: LatLon,
+    pub alt_ref: f32,
+    pub nav_status: UBXNavigationStatus,
+    pub horizontal_accuracy: f32,
+    pub vertical_accuracy: f32,
+    pub speed_over_ground: f32,
+    pub course_over_ground: f32,
+    pub vertical_velocity: f32,
+    pub diff_age: Option<u32>,
+    pub hdop: f32,
+    pub vdop: f32,
+    pub tdop: f32,
+    pub num_satellites: u32,
+    pub reserved: u32,
+    pub dead_reckoning: bool,
+}
+
+pub(crate) fn ubx_00<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, UBXPosition, E> {
+    context(
+        "UBX 00",
+        all_consuming(map(
+            tuple((
+                preceded(
+                    tag("PUBX"),
+                    preceded(comma, preceded(tag("00"), preceded(comma, time))),
+                ),
+                preceded(comma, latlon),
+                preceded(comma, flt32),
+                preceded(comma, ubx_nav_stat),
+                preceded(comma, flt32),
+                preceded(comma, flt32),
+                preceded(comma, flt32),
+                preceded(comma, flt32),
+                preceded(comma, flt32),
+                preceded(comma, opt(uint32)),
+                preceded(comma, flt32),
+                preceded(comma, flt32),
+                preceded(comma, flt32),
+                preceded(comma, uint32),
+                preceded(comma, uint32),
+                preceded(comma, map(uint32, |dr| dr == 1)),
+            )),
+            |(
+                time,
+                lat_lon,
+                alt_ref,
+                nav_status,
+                horizontal_accuracy,
+                vertical_accuracy,
+                speed_over_ground,
+                course_over_ground,
+                vertical_velocity,
+                diff_age,
+                hdop,
+                vdop,
+                tdop,
+                num_satellites,
+                reserved,
+                dead_reckoning,
+            )| UBXPosition {
+                time,
+                lat_lon,
+                alt_ref,
+                nav_status,
+                horizontal_accuracy,
+                vertical_accuracy,
+                speed_over_ground,
+                course_over_ground,
+                vertical_velocity,
+                diff_age,
+                hdop,
+                vdop,
+                tdop,
+                num_satellites,
+                reserved,
+                dead_reckoning,
+            },
+        )),
+    )(input)
+}
+
+#[derive(Clone, Eq, Debug, PartialEq)]
+pub struct UBXRate {
+    pub rddc: bool,
+    pub rus1: u32,
+    pub rus2: u32,
+    pub rusb: u32,
+    pub rspi: u32,
+    pub reserved: u32,
+}
+
+#[derive(Clone, Eq, Debug, PartialEq)]
+pub struct UBXSvsPoll {}
+
+#[derive(Clone, Eq, Debug, PartialEq)]
+pub enum UBXSatelliteStatus {
+    NotUsed,
+    Used,
+    EphemerisAvailable,
+}
+
+pub(crate) fn ubx_sat_status<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, UBXSatelliteStatus, E> {
+    map(one_of("-Ue"), |c| match c {
+        '-' => UBXSatelliteStatus::NotUsed,
+        'U' => UBXSatelliteStatus::Used,
+        'e' => UBXSatelliteStatus::EphemerisAvailable,
+        _ => panic!("Unknown UBX satellite status {:?}", c),
+    })(input)
+}
+
+#[derive(Clone, Eq, Debug, PartialEq)]
+pub struct UBXSatellite {
+    pub id: u32,
+    pub status: UBXSatelliteStatus,
+    pub azimuth: Option<u32>,
+    pub elevation: Option<u32>,
+    pub cno: u32,
+    pub lock_time: u32,
+}
+
+pub(crate) fn ubx_satellite<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, UBXSatellite, E> {
+    context(
+        "UBX satellite",
+        map(
+            tuple((
+                preceded(comma, uint32),
+                preceded(comma, ubx_sat_status),
+                preceded(comma, opt(uint32)),
+                preceded(comma, opt(uint32)),
+                preceded(comma, uint32),
+                preceded(comma, uint32),
+            )),
+            |(id, status, azimuth, elevation, cno, lock_time)| UBXSatellite {
+                id,
+                status,
+                azimuth,
+                elevation,
+                cno,
+                lock_time,
+            },
+        ),
+    )(input)
+}
+
+#[derive(Clone, Eq, Debug, PartialEq)]
+pub struct UBXSatellites {
+    pub satellites: Vec<UBXSatellite>,
+}
+
+pub(crate) fn ubx_03<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, UBXSatellites, E> {
+    context(
+        "UBX 03",
+        all_consuming(map(
+            preceded(
+                preceded(
+                    tag("PUBX"),
+                    preceded(comma, preceded(tag("03"), preceded(comma, uint32))),
+                ),
+                many0(ubx_satellite),
+            ),
+            |satellites| UBXSatellites { satellites },
+        )),
+    )(input)
+}
+
+#[derive(Clone, Eq, Debug, PartialEq)]
+pub struct UBXTimePoll {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct UBXTime {
+    pub time: NaiveTime,
+    pub date: NaiveDate,
+    pub time_of_week: f32,
+    pub week: u32,
+    pub leap_seconds: u32,
+    pub leap_second_default: bool,
+    pub clock_bias: u32,
+    pub clock_drift: f32,
+    pub time_pulse_granularity: u32,
+}
+
+pub(crate) fn ubx_04<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, UBXTime, E> {
+    context(
+        "UBX 04",
+        all_consuming(map(
+            tuple((
+                preceded(
+                    tag("PUBX"),
+                    preceded(comma, preceded(tag("04"), preceded(comma, time))),
+                ),
+                preceded(comma, date),
+                preceded(comma, flt32),
+                preceded(comma, uint32),
+                preceded(comma, uint32),
+                map(opt(char('D')), |c| match c {
+                    Some(_) => true,
+                    None => false,
+                }),
+                preceded(comma, uint32),
+                preceded(comma, flt32),
+                preceded(comma, terminated(uint32, comma)),
+            )),
+            |(
+                time,
+                date,
+                time_of_week,
+                week,
+                leap_seconds,
+                leap_second_default,
+                clock_bias,
+                clock_drift,
+                time_pulse_granularity,
+            )| UBXTime {
+                time,
+                date,
+                time_of_week,
+                week,
+                leap_seconds,
+                leap_second_default,
+                clock_bias,
+                clock_drift,
+                time_pulse_granularity,
             },
         )),
     )(input)
