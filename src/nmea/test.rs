@@ -621,7 +621,29 @@ fn test_rmc() {
     assert_approx_eq!(47.28524, parsed.lat_lon.latitude);
     assert_approx_eq!(8.565253, parsed.lat_lon.longitude);
     assert_approx_eq!(0.004, parsed.speed);
-    assert_approx_eq!(77.52, parsed.course_over_ground);
+    assert_approx_eq!(77.52, parsed.course_over_ground.unwrap());
+    assert_eq!(NaiveDate::from_ymd(02, 12, 9), parsed.date);
+    assert_eq!(None, parsed.magnetic_variation);
+    assert_eq!(None, parsed.magnetic_variation_east_west);
+    assert_eq!(PositionMode::AutonomousGNSSFix, parsed.position_mode);
+    assert_eq!(Status::Invalid, parsed.nav_status);
+}
+
+#[test]
+fn test_gnrmc() {
+    let input = "GNRMC,083559.00,A,4717.11437,N,00833.91522,E,0.015,,091202,,,A,V";
+
+    let result = rmc::<VE>(input);
+
+    let parsed = p::<RMCdata>(input, result);
+
+    assert_eq!(Talker::Combination, parsed.talker);
+    assert_eq!(NaiveTime::from_hms_milli(08, 35, 59, 0), parsed.time);
+    assert_eq!(Status::Valid, parsed.status);
+    assert_approx_eq!(47.28524, parsed.lat_lon.latitude);
+    assert_approx_eq!(8.565253, parsed.lat_lon.longitude);
+    assert_approx_eq!(0.015, parsed.speed);
+    assert_eq!(None, parsed.course_over_ground);
     assert_eq!(NaiveDate::from_ymd(02, 12, 9), parsed.date);
     assert_eq!(None, parsed.magnetic_variation);
     assert_eq!(None, parsed.magnetic_variation_east_west);
