@@ -18,6 +18,12 @@ pub struct Codec {}
 
 type VE<'a> = VerboseError<&'a [u8]>;
 
+impl Codec {
+    pub fn new() -> Codec {
+        Codec {}
+    }
+}
+
 impl Decoder for Codec {
     type Item = NMEA;
     type Error = CodecError;
