@@ -686,13 +686,33 @@ fn test_vtg() {
         .1;
 
     assert_eq!(Talker::GPS, parsed.talker);
-    assert_approx_eq!(77.52, parsed.course_over_ground_true);
+    assert_approx_eq!(77.52, parsed.course_over_ground_true.unwrap());
     assert_eq!("T", parsed.course_over_ground_true_unit);
     assert_eq!(None, parsed.course_over_ground_magnetic);
     assert_eq!("M", parsed.course_over_ground_magnetic_unit);
     assert_approx_eq!(0.004, parsed.speed_over_ground_knots);
     assert_eq!("N", parsed.speed_over_ground_knots_unit);
     assert_approx_eq!(0.008, parsed.speed_over_ground_km);
+    assert_eq!("K", parsed.speed_over_ground_km_unit);
+    assert_eq!(PositionMode::AutonomousGNSSFix, parsed.position_mode);
+}
+
+#[test]
+fn test_gnvtg() {
+    let input = "GNVTG,,T,,M,0.015,N,0.027,K,A";
+
+    let result = vtg::<VE>(input);
+
+    let parsed = p::<VTGdata>(input, result);
+
+    assert_eq!(Talker::Combination, parsed.talker);
+    assert_eq!(None, parsed.course_over_ground_true);
+    assert_eq!("T", parsed.course_over_ground_true_unit);
+    assert_eq!(None, parsed.course_over_ground_magnetic);
+    assert_eq!("M", parsed.course_over_ground_magnetic_unit);
+    assert_approx_eq!(0.015, parsed.speed_over_ground_knots);
+    assert_eq!("N", parsed.speed_over_ground_knots_unit);
+    assert_approx_eq!(0.027, parsed.speed_over_ground_km);
     assert_eq!("K", parsed.speed_over_ground_km_unit);
     assert_eq!(PositionMode::AutonomousGNSSFix, parsed.position_mode);
 }

@@ -1192,7 +1192,7 @@ pub(crate) fn vlw<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 #[derive(Clone, Debug, PartialEq)]
 pub struct VTGdata {
     pub talker: Talker,
-    pub course_over_ground_true: f32,
+    pub course_over_ground_true: Option<f32>,
     pub course_over_ground_true_unit: String,
     pub course_over_ground_magnetic: Option<f32>,
     pub course_over_ground_magnetic_unit: String,
@@ -1208,16 +1208,16 @@ pub(crate) fn vtg<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
         "VTG",
         all_consuming(map(
             tuple((
-                terminated(talker, terminated(tag("VTG"), comma)),
-                terminated(flt32, comma),
-                terminated(any, comma),
-                terminated(opt(flt32), comma),
-                terminated(any, comma),
-                terminated(flt32, comma),
-                terminated(any, comma),
-                terminated(flt32, comma),
-                terminated(any, comma),
-                pos_mode,
+                terminated(talker, tag("VTG")),
+                preceded(comma, opt(flt32)),
+                preceded(comma, any),
+                preceded(comma, opt(flt32)),
+                preceded(comma, any),
+                preceded(comma, flt32),
+                preceded(comma, any),
+                preceded(comma, flt32),
+                preceded(comma, any),
+                preceded(comma, pos_mode),
             )),
             |(
                 talker,
