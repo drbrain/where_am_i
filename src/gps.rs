@@ -1,128 +1,101 @@
-use crate::JsonSender;
+use chrono::prelude::*;
 
-use chrono::DateTime;
-use chrono::NaiveDateTime;
-use chrono::Utc;
+use crate::nmea::*;
+use crate::JsonSender;
 
 use serde_json::json;
 
-use std::fmt;
-use std::io;
-use std::time::Duration;
+use std::sync::Arc;
 use std::time::SystemTime;
 
-use nmea::Nmea;
-use nmea::ParseResult;
-
-use tokio::io::AsyncBufReadExt;
-use tokio::io::BufReader;
 use tokio::sync::broadcast;
-use tokio::sync::mpsc;
-
-use tokio_serial::Serial;
-use tokio_serial::SerialPortSettings;
+use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast::Sender;
+use tokio::sync::Mutex;
+use tokio::sync::MutexGuard;
 
 use tracing::error;
 use tracing::info;
 
+type Locked = Arc<Mutex<GPSdata>>;
+type Unlocked<'a> = MutexGuard<'a, GPSdata>;
+
+#[derive(Debug, Default)]
+pub struct GPSdata {
+    pub time: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug)]
 pub struct GPS {
     pub name: String,
     pub tx: JsonSender,
-    settings: SerialPortSettings,
+    device_tx: Sender<NMEA>,
+    data: Locked,
 }
 
 impl GPS {
-    pub fn new(name: String, settings: SerialPortSettings) -> Self {
+    pub fn new(name: String, device_tx: Sender<NMEA>) -> Self {
         let (tx, _) = broadcast::channel(5);
+        let data = GPSdata::default();
+        let data = Mutex::new(data);
+        let data = Arc::new(data);
 
-        GPS { name, tx, settings }
+        GPS { name, tx, device_tx, data }
     }
 
-    #[tracing::instrument]
-    pub async fn run(&self) -> Result<(), io::Error> {
-        let (mut result_tx, mut result_rx) = mpsc::channel(1);
+    pub async fn read(&mut self) {
+        let data = Arc::clone(&self.data);
         let name = self.name.clone();
-        let settings = self.settings;
+        let rx = self.device_tx.subscribe();
         let tx = self.tx.clone();
 
         tokio::spawn(async move {
-            let serial = match Serial::from_path(name.clone(), &settings) {
-                Ok(s) => {
-                    result_tx.send(Ok(())).await.unwrap();
-                    s
-                }
-                Err(e) => {
-                    result_tx.send(Err(e)).await.unwrap();
-                    return;
-                }
-            };
-
-            let mut lines = BufReader::new(serial).lines();
-
-            info!("Opened GPS device {}", name);
-
-            let mut nmea = Nmea::new();
-
-            loop {
-                let line = match lines.next_line().await {
-                    Ok(l) => l,
-                    Err(e) => {
-                        error!("Failed to read from GPS ({:?})", e);
-                        break;
-                    }
-                };
-
-                let received = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-                    Ok(n) => n,
-                    Err(_) => continue,
-                };
-
-                let line = match line {
-                    Some(l) => l,
-                    None => {
-                        error!("No line from GPS");
-                        break;
-                    }
-                };
-
-                let parsed = nmea.parse(&line);
-
-                if parsed.is_err() {
-                    //error!("Failed to parse {} ({:?})", line, parsed.err());
-                    continue;
-                }
-
-                if let ParseResult::RMC(rmc) = parsed.unwrap() {
-                    report_time(rmc, name.clone(), received, &tx);
-                }
-            }
+            read_device(rx, data, name, tx).await;
         });
-
-        match result_rx.recv().await {
-            Some(Ok(_)) => Ok(()),
-            Some(Err(e)) => Err(e),
-            None => Ok(()), // Should raise a different error
-        }
     }
 }
 
+async fn read_device(mut rx: Receiver<NMEA>, data: Locked, name: String, tx: JsonSender) {
+    let mut data = data.lock().await;
+
+    while let Ok(nmea) = rx.recv().await {
+        read_nmea(nmea, &mut data, &name, &tx);
+    }
+}
+
+fn read_nmea(nmea: NMEA, data: &mut Unlocked, name: &String, tx: &JsonSender) {
+    match nmea {
+        NMEA::InvalidChecksum(cm) => error!("checksum match, given {}, calculated {} on {}", cm.given, cm.calculated, cm.message),
+        NMEA::ParseError(e) => error!("parse error: {}", e),
+        NMEA::ParseFailure(f) => error!("parse failure: {}", f),
+        NMEA::Unsupported(n) => error!("unsupported: {}", n),
+        NMEA::ZDA(nd) => zda(nd, data, name, tx),
+        _ => (),
+    }
+}
+
+fn zda(zda: ZDAdata, data: &mut Unlocked, name: &String, tx: &JsonSender) {
+    let date = NaiveDate::from_ymd(zda.year, zda.month, zda.day);
+    let time = NaiveDateTime::new(date, zda.time);
+    let time = DateTime::from_utc(time, Utc);
+
+    info!("{}", time);
+
+    data.time = Some(time);
+
+    report_time(time, name, tx);
+}
+
 #[tracing::instrument]
-fn report_time(rmc: nmea::RmcData, name: String, received: Duration, tx: &JsonSender) {
-    let time = rmc.fix_time;
-    if time.is_none() {
-        return;
-    }
+fn report_time(date: DateTime<Utc>, name: &String, tx: &JsonSender) {
+    let sec = date.timestamp();
+    let nsec = date.timestamp_subsec_nanos();
 
-    let date = rmc.fix_date;
-    if date.is_none() {
-        return;
-    }
-
-    let ts = NaiveDateTime::new(date.unwrap(), time.unwrap());
-    let timestamp = DateTime::<Utc>::from_utc(ts, Utc);
-
-    let sec = timestamp.timestamp();
-    let nsec = timestamp.timestamp_subsec_nanos();
+    // move this up
+    let received = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(n) => n,
+        Err(_) => return,
+    };
 
     let toff = json!({
         "class":      "TOFF".to_string(),
@@ -136,11 +109,3 @@ fn report_time(rmc: nmea::RmcData, name: String, received: Duration, tx: &JsonSe
     if tx.send(toff).is_ok() {}
 }
 
-impl fmt::Debug for GPS {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("GPS")
-            .field("name", &self.name)
-            .field("tx", &self.tx)
-            .finish()
-    }
-}

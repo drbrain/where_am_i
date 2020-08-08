@@ -6,6 +6,7 @@ use tracing::Level;
 
 use where_am_i::nmea::Device;
 use where_am_i::nmea::NMEA;
+use where_am_i::gps::GPS;
 
 #[tokio::main]
 async fn main() {
@@ -17,7 +18,7 @@ async fn main() {
 
     let (gps_name, serial_port_settings) = args::gps_watch_args();
 
-    let device = Device::new(gps_name, serial_port_settings);
+    let device = Device::new(gps_name.clone(), serial_port_settings);
 
     let tx = match device.run().await {
         Ok(t) => t,
@@ -26,6 +27,10 @@ async fn main() {
             std::process::exit(1);
         }
     };
+
+    let mut gps = GPS::new(gps_name, tx.clone());
+
+    gps.read().await;
 
     let mut rx = tx.subscribe();
 
@@ -36,7 +41,7 @@ async fn main() {
             NMEA::ParseError(e) => error!("parse error: {}", e),
             NMEA::ParseFailure(f) => error!("parse failure: {}", f),
             NMEA::Unsupported(n) => error!("unsupported: {}", n),
-            n => info!("{:?}", n),
+            n => (), //info!("{:?}", n),
         }
     }
 }

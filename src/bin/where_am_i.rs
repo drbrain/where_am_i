@@ -2,6 +2,8 @@ mod args;
 
 use where_am_i::gps::GPS;
 use where_am_i::gpsd::Server;
+use where_am_i::nmea::Device;
+use where_am_i::nmea::NMEA;
 use where_am_i::pps::PPS;
 use where_am_i::shm::NtpShm;
 
@@ -37,17 +39,21 @@ async fn run() {
 
     let (gps_name, serial_port_settings, pps_name) = args::where_am_i_args();
 
-    let gps = match gps_name.clone() {
+    let mut gps = match gps_name.clone() {
         Some(name) => {
-            let gps = GPS::new(name.clone(), serial_port_settings);
+            let device = Device::new(name.clone(), serial_port_settings);
 
-            match gps.run().await {
-                Ok(()) => (),
+            let device_tx = match device.run().await {
+                Ok(tx) => tx,
                 Err(e) => {
-                    error!("{}", e);
+                    error!("failed to read from GPS: {:?}", e);
                     std::process::exit(1);
                 }
-            }
+            };
+
+            let mut gps = GPS::new(name, device_tx);
+
+            gps.read().await;
 
             Some(gps)
         }
