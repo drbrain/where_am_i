@@ -96,7 +96,7 @@ fn stop_bits_from_str(i: u8) -> Result<StopBits, String> {
     }
 }
 
-pub fn parse() -> (Option<String>, SerialPortSettings, Option<String>) {
+pub fn where_am_i_args() -> (Option<String>, SerialPortSettings, Option<String>) {
     let args: Args = argh::from_env();
 
     let s = SerialPortSettings {
