@@ -12,6 +12,16 @@ use nom::Needed;
 type VE<'a> = VerboseError<&'a str>;
 type VEb<'a> = VerboseError<&'a [u8]>;
 
+fn p<'a, D>(input: &'a str, result: nom::IResult<&'a str, D, VE>) -> D {
+    match result {
+        Ok((_, data)) => data,
+        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
+            panic!("{}", convert_error(input, e));
+        }
+        Err(nom::Err::Incomplete(_)) => panic!("impossible incomplete error"),
+    }
+}
+
 #[test]
 fn test_parse() {
     let parsed = parser::parse::<VEb>(b"$EIGAQ,RMC*2B\r\n$").unwrap().1;
@@ -494,7 +504,7 @@ fn test_gsv() {
     assert_eq!(1, parsed.msg);
     assert_eq!(9, parsed.num_satellites);
     assert_eq!(satellites, parsed.satellites);
-    assert_eq!(Signal::L1, parsed.signal);
+    assert_eq!(Some(Signal::L1), parsed.signal);
 
     let parsed = parser::gsv::<VE>("GPGSV,3,3,09,25,,,40,1").unwrap().1;
 
@@ -510,7 +520,7 @@ fn test_gsv() {
     assert_eq!(3, parsed.msg);
     assert_eq!(9, parsed.num_satellites);
     assert_eq!(satellites, parsed.satellites);
-    assert_eq!(Signal::L1, parsed.signal);
+    assert_eq!(Some(Signal::L1), parsed.signal);
 
     let parsed = parser::gsv::<VE>("GPGSV,1,1,03,12,,,42,24,,,47,32,,,37,5")
         .unwrap()
@@ -542,7 +552,7 @@ fn test_gsv() {
     assert_eq!(1, parsed.msg);
     assert_eq!(3, parsed.num_satellites);
     assert_eq!(satellites, parsed.satellites);
-    assert_eq!(Signal::L2CM, parsed.signal);
+    assert_eq!(Some(Signal::L2CM), parsed.signal);
 
     let parsed = parser::gsv::<VE>("GAGSV,1,1,00,2").unwrap().1;
 
@@ -553,7 +563,49 @@ fn test_gsv() {
     assert_eq!(1, parsed.msg);
     assert_eq!(0, parsed.num_satellites);
     assert_eq!(satellites, parsed.satellites);
-    assert_eq!(Signal::E5, parsed.signal);
+    assert_eq!(Some(Signal::E5), parsed.signal);
+}
+
+#[test]
+fn test_gbgsv() {
+    let input = "GBGSV,2,1,07,04,00,261,,11,01,341,,12,30,300,,19,61,071,,";
+    let result = gsv::<VE>(input);
+
+    let parsed = p::<GSVdata>(input, result);
+
+    let satellites = vec![
+        GSVsatellite {
+            id: 4,
+            elevation: Some(0),
+            azimuth: Some(261),
+            cno: None,
+        },
+        GSVsatellite {
+            id: 11,
+            elevation: Some(1),
+            azimuth: Some(341),
+            cno: None,
+        },
+        GSVsatellite {
+            id: 12,
+            elevation: Some(30),
+            azimuth: Some(300),
+            cno: None,
+        },
+        GSVsatellite {
+            id: 19,
+            elevation: Some(61),
+            azimuth: Some(71),
+            cno: None,
+        },
+    ];
+
+    assert_eq!(Talker::BeiDuo, parsed.talker);
+    assert_eq!(2, parsed.num_msgs);
+    assert_eq!(1, parsed.msg);
+    assert_eq!(7, parsed.num_satellites);
+    assert_eq!(satellites, parsed.satellites);
+    assert_eq!(None, parsed.signal);
 }
 
 #[test]

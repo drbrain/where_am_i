@@ -993,12 +993,13 @@ pub struct GSVsatellite {
 pub(crate) fn gsv_sat<'a, E: ParseError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, GSVsatellite, E> {
+    context("GSV satellite",
     map(
         tuple((
-            terminated(uint32, comma),
-            terminated(opt(uint32), comma),
-            terminated(opt(uint32), comma),
-            opt(uint32),
+            preceded(comma, uint32),
+            preceded(comma, opt(uint32)),
+            preceded(comma, opt(uint32)),
+            preceded(comma, opt(uint32)),
         )),
         |(id, elevation, azimuth, cno)| GSVsatellite {
             id,
@@ -1006,7 +1007,7 @@ pub(crate) fn gsv_sat<'a, E: ParseError<&'a str>>(
             azimuth,
             cno,
         },
-    )(input)
+    ))(input)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1016,7 +1017,7 @@ pub struct GSVdata {
     pub msg: u32,
     pub num_satellites: u32,
     pub satellites: Vec<GSVsatellite>,
-    pub signal: Signal,
+    pub signal: Option<Signal>,
 }
 
 pub(crate) fn gsv<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSVdata, E> {
@@ -1024,12 +1025,12 @@ pub(crate) fn gsv<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
         "GSV",
         all_consuming(map(
             tuple((
-                terminated(talker, terminated(tag("GSV"), comma)),
-                terminated(uint32, comma),
-                terminated(uint32, comma),
-                terminated(uint32, comma),
-                many_m_n(0, 4, terminated(gsv_sat, comma)),
-                signal,
+                terminated(talker, tag("GSV")),
+                preceded(comma, uint32),
+                preceded(comma, uint32),
+                preceded(comma, uint32),
+                many_m_n(0, 4, gsv_sat),
+                preceded(comma, opt(signal)),
             )),
             |(talker, num_msgs, msg, num_satellites, satellites, signal)| GSVdata {
                 talker,
