@@ -4,6 +4,8 @@ use tracing::error;
 use tracing::info;
 use tracing::Level;
 
+use where_am_i::nmea::NMEA;
+
 #[tokio::main]
 async fn main() {
     let subscriber = tracing_subscriber::fmt()
@@ -27,7 +29,14 @@ async fn main() {
     let mut rx = tx.subscribe();
 
     while let Ok(nmea) = rx.recv().await {
-        info!("{:?}", nmea);
+        match nmea {
+            NMEA::InvalidChecksum(cm) => error!("checksum match, given {}, calculated {} on {}",
+                cm.given, cm.calculated, cm.message),
+            NMEA::ParseError(e) => error!("parse error: {}", e),
+            NMEA::ParseFailure(f) => error!("parse failure: {}", f),
+            NMEA::Unsupported(n) => error!("unsupported: {}", n),
+            n => info!("{:?}", n),
+        }
     }
 }
 
