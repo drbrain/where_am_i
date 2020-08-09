@@ -6,7 +6,7 @@ fn test_position_poll() {
 
     let nmea = ser::to_string(&poll).unwrap();
 
-    assert_eq!(String::from("PUBX,00*33"), nmea);
+    assert_eq!(String::from("PUBX,00"), nmea);
 }
 
 #[test]
@@ -15,7 +15,7 @@ fn test_svs_poll() {
 
     let nmea = ser::to_string(&poll).unwrap();
 
-    assert_eq!(String::from("PUBX,03*30"), nmea);
+    assert_eq!(String::from("PUBX,03"), nmea);
 }
 
 #[test]
@@ -24,7 +24,7 @@ fn test_time_poll() {
 
     let nmea = ser::to_string(&poll).unwrap();
 
-    assert_eq!(String::from("PUBX,04*37"), nmea);
+    assert_eq!(String::from("PUBX,04"), nmea);
 }
 
 #[test]
@@ -33,13 +33,13 @@ fn test_rate() {
 
     let nmea = ser::to_string(&rate).unwrap();
 
-    assert_eq!(String::from("PUBX,40,GLL,1,0,0,0,0,0*5D"), nmea);
+    assert_eq!(String::from("PUBX,40,GLL,1,0,0,0,0,0"), nmea);
 
     let rate = UBXRate { message: "ZDA".to_string(), rddc: 0, rus1: 1, rus2: 0, rusb: 0, rspi: 0, reserved: 0 };
 
     let nmea = ser::to_string(&rate).unwrap();
 
-    assert_eq!(String::from("PUBX,40,ZDA,0,1,0,0,0,0*45"), nmea);
+    assert_eq!(String::from("PUBX,40,ZDA,0,1,0,0,0,0"), nmea);
 }
 
 #[test]
@@ -48,6 +48,6 @@ fn test_config() {
 
     let nmea = ser::to_string(&config).unwrap();
 
-    assert_eq!(String::from("PUBX,41,1,0007,0003,19200,0*25"), nmea);
+    assert_eq!(String::from("PUBX,41,1,0007,0003,19200,0"), nmea);
 
 }

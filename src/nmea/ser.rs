@@ -319,10 +319,6 @@ impl<'a> ser::SerializeStruct for &'a mut Serializer {
     }
 
     fn end(self) -> Result<()> {
-        let checksum = self.output.bytes().fold(0, |c, b| c ^ b);
-
-        self.output += format!("*{:X?}", checksum).as_str();
-
         Ok(())
     }
 }
