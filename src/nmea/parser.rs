@@ -1165,7 +1165,7 @@ pub(crate) fn pubx<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a st
     )(input)
 }
 
-#[derive(Clone, Eq, Debug, PartialEq, Serialize)]
+#[derive(Clone, Eq, Debug, PartialEq)]
 pub enum UBXPort {
     I2C = 0,
     USART1 = 1,
