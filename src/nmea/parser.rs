@@ -1175,7 +1175,6 @@ pub enum UBXPort {
 }
 
 bitflags! {
-    #[derive(Serialize)]
     pub struct UBXPortMask: u16 {
 	const I2C = 0x0000;
 	const USART1 = 0x0001;

@@ -6,7 +6,7 @@ mod ser;
 pub use codec::Codec;
 pub use device::Device;
 pub use parser::NMEA;
-pub use ser::Serializer;
+pub use ser::ToNMEA;
 
 pub use parser::DTMdata;
 pub use parser::GAQdata;

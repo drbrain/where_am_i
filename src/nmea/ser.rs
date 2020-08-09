@@ -1,12 +1,16 @@
+use crate::nmea::*;
+
 use serde::ser;
-use serde::Serialize;
+use serde::ser::Serialize;
+use serde::ser::Serializer;
+use serde::ser::SerializeStruct;
 
 use std::fmt;
 
 use std;
 use std::fmt::Display;
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type NResult<T> = std::result::Result<T, Error>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
@@ -31,15 +35,15 @@ impl Display for Error {
 
 impl std::error::Error for Error {}
 
-pub struct Serializer {
+pub struct ToNMEA {
     output: String,
 }
 
-pub fn to_string<T>(value: &T) -> Result<String>
+pub fn to_string<T>(value: &T) -> NResult<String>
 where
     T: Serialize,
 {
-    let mut serializer = Serializer {
+    let mut serializer = ToNMEA {
         output: String::new(),
     };
 
@@ -47,7 +51,18 @@ where
     Ok(serializer.output)
 }
 
-impl<'a> ser::Serializer for &'a mut Serializer {
+impl Serialize for UBXPortMask {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+	S: Serializer,
+    {
+	let mut state = serializer.serialize_struct("UBXPortMask", 1)?;
+	state.serialize_field("no comma", &self.bits())?;
+	state.end()
+    }
+}
+
+impl<'a> ser::Serializer for &'a mut ToNMEA {
     type Ok = ();
     type Error = Error;
 
@@ -59,7 +74,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     type SerializeStruct = Self;
     type SerializeStructVariant = Self;
 
-    fn serialize_bool(self, v: bool) -> Result<()> {
+    fn serialize_bool(self, v: bool) -> NResult<()> {
         if v {
             self.output += "1";
         } else {
@@ -69,60 +84,53 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         Ok(())
     }
 
-    fn serialize_bytes(self, v: &[u8]) -> Result<()> {
-        use serde::ser::SerializeSeq;
-        let mut seq = self.serialize_seq(Some(v.len()))?;
-
-        for byte in v {
-            seq.serialize_element(byte)?;
-        }
-
-        seq.end()
+    fn serialize_bytes(self, _v: &[u8]) -> NResult<()> {
+        Ok(())
     }
 
-    fn serialize_char(self, v: char) -> Result<()> {
+    fn serialize_char(self, v: char) -> NResult<()> {
         self.output += &v.to_string();
 
         Ok(())
     }
 
-    fn serialize_f32(self, v: f32) -> Result<()> {
+    fn serialize_f32(self, v: f32) -> NResult<()> {
         self.output += &v.to_string();
 
         Ok(())
     }
 
-    fn serialize_f64(self, v: f64) -> Result<()> {
+    fn serialize_f64(self, v: f64) -> NResult<()> {
         self.output += &v.to_string();
 
         Ok(())
     }
 
-    fn serialize_i8(self, v: i8) -> Result<()> {
+    fn serialize_i8(self, v: i8) -> NResult<()> {
         self.output += &v.to_string();
 
         Ok(())
     }
 
-    fn serialize_i16(self, v: i16) -> Result<()> {
+    fn serialize_i16(self, v: i16) -> NResult<()> {
         self.output += &v.to_string();
 
         Ok(())
     }
 
-    fn serialize_i32(self, v: i32) -> Result<()> {
+    fn serialize_i32(self, v: i32) -> NResult<()> {
         self.output += &v.to_string();
 
         Ok(())
     }
 
-    fn serialize_i64(self, v: i64) -> Result<()> {
+    fn serialize_i64(self, v: i64) -> NResult<()> {
         self.output += &v.to_string();
 
         Ok(())
     }
 
-    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
+    fn serialize_map(self, _len: Option<usize>) -> NResult<Self::SerializeMap> {
         Ok(self)
     }
 
@@ -130,7 +138,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         self,
         _name: &'static str,
         v: &T,
-    ) -> Result<()>
+    ) -> NResult<()>
     where
         T: ?Sized + Serialize,
     {
@@ -143,7 +151,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         _variant_index: u32,
         variant: &'static str,
         v: &T,
-    ) -> Result<()>
+    ) -> NResult<()>
     where
         T: ?Sized + Serialize,
     {
@@ -155,35 +163,34 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         Ok(())
     }
 
-    fn serialize_none(self) -> Result<()> {
+    fn serialize_none(self) -> NResult<()> {
         Ok(())
     }
 
-    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
+    fn serialize_seq(self, _len: Option<usize>) -> NResult<Self::SerializeSeq> {
         Ok(self)
     }
 
-    fn serialize_some<T>(self, v: &T) -> Result<()>
+    fn serialize_some<T>(self, v: &T) -> NResult<()>
     where
         T: ?Sized + Serialize, {
         v.serialize(self)
     }
 
-    fn serialize_str(self, v: &str) -> Result<()> {
+    fn serialize_str(self, v: &str) -> NResult<()> {
         self.output += &v.to_string();
 
         Ok(())
     }
 
-    fn serialize_struct(self, name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
+    fn serialize_struct(self, name: &'static str, _len: usize) -> NResult<Self::SerializeStruct> {
         match name {
             "UBXPositionPoll" => { self.output += "PUBX,00" },
             "UBXSvsPoll" => { self.output += "PUBX,03" },
             "UBXTimePoll" => { self.output += "PUBX,04" },
             "UBXRate" => { self.output += "PUBX,40" },
             "UBXConfig" => { self.output += "PUBX,41" },
-	    "UBXPortMask" => {},
-            "plain" => {},
+            "UBXPortMask" => {},
             _ => panic!("don't know how to serialize struct {}", name),
         }
 
@@ -196,13 +203,13 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         _variant_index: u32,
         variant: &'static str,
         _len: usize,
-    ) -> Result<Self::SerializeStructVariant> {
+    ) -> NResult<Self::SerializeStructVariant> {
         eprintln!("serialize_struct_variant name: {}, variant: {}", _name, variant);
         variant.serialize(&mut *self)?;
         Ok(self)
     }
 
-    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple> {
+    fn serialize_tuple(self, len: usize) -> NResult<Self::SerializeTuple> {
         self.serialize_seq(Some(len))
     }
 
@@ -210,7 +217,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         self,
         _name: &'static str,
         len: usize,
-    ) -> Result<Self::SerializeTupleStruct> {
+    ) -> NResult<Self::SerializeTupleStruct> {
         self.serialize_seq(Some(len))
     }
 
@@ -220,54 +227,54 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         _variant_index: u32,
         variant: &'static str,
         _len: usize,
-    ) -> Result<Self::SerializeTupleVariant> {
+    ) -> NResult<Self::SerializeTupleVariant> {
         variant.serialize(&mut *self)?;
 
         Ok(self)
     }
 
-    fn serialize_u8(self, v: u8) -> Result<()> {
+    fn serialize_u8(self, v: u8) -> NResult<()> {
         self.output += &v.to_string();
 
         Ok(())
     }
 
-    fn serialize_u16(self, v: u16) -> Result<()> {
+    fn serialize_u16(self, v: u16) -> NResult<()> {
         self.output += format!("{:04X}", v).as_str();
 
         Ok(())
     }
 
-    fn serialize_u32(self, v: u32) -> Result<()> {
+    fn serialize_u32(self, v: u32) -> NResult<()> {
         self.output += &v.to_string();
 
         Ok(())
     }
 
-    fn serialize_u64(self, v: u64) -> Result<()> {
+    fn serialize_u64(self, v: u64) -> NResult<()> {
         self.output += &v.to_string();
 
         Ok(())
     }
 
-    fn serialize_unit(self) -> Result<()> {
+    fn serialize_unit(self) -> NResult<()> {
         Ok(())
     }
 
-    fn serialize_unit_struct(self, _name: &'static str) -> Result<()> {
+    fn serialize_unit_struct(self, _name: &'static str) -> NResult<()> {
         self.serialize_unit()
     }
 
-    fn serialize_unit_variant(self, _name: &'static str, _variant_index: u32, variant: &'static str) -> Result<()> {
+    fn serialize_unit_variant(self, _name: &'static str, _variant_index: u32, variant: &'static str) -> NResult<()> {
         self.serialize_str(variant)
     }
 }
 
-impl<'a> ser::SerializeMap for &'a mut Serializer {
+impl<'a> ser::SerializeMap for &'a mut ToNMEA {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_key<T>(&mut self, k: &T) -> Result<()>
+    fn serialize_key<T>(&mut self, k: &T) -> NResult<()>
     where
         T: ?Sized + Serialize,
     {
@@ -276,7 +283,7 @@ impl<'a> ser::SerializeMap for &'a mut Serializer {
         k.serialize(&mut **self)
     }
 
-    fn serialize_value<T>(&mut self, v: &T) -> Result<()>
+    fn serialize_value<T>(&mut self, v: &T) -> NResult<()>
     where
 	T: ?Sized + Serialize,
     {
@@ -284,16 +291,16 @@ impl<'a> ser::SerializeMap for &'a mut Serializer {
 	v.serialize(&mut **self)
     }
 
-    fn end(self) -> Result<()> {
+    fn end(self) -> NResult<()> {
 	Ok(())
     }
 }
 
-impl<'a> ser::SerializeSeq for &'a mut Serializer {
+impl<'a> ser::SerializeSeq for &'a mut ToNMEA {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_element<T>(&mut self, v: &T) -> Result<()>
+    fn serialize_element<T>(&mut self, v: &T) -> NResult<()>
     where
         T: ?Sized + Serialize,
     {
@@ -301,33 +308,37 @@ impl<'a> ser::SerializeSeq for &'a mut Serializer {
         v.serialize(&mut **self)
     }
 
-    fn end(self) -> Result<()> {
+    fn end(self) -> NResult<()> {
         Ok(())
     }
 }
 
-impl<'a> ser::SerializeStruct for &'a mut Serializer {
+impl<'a> ser::SerializeStruct for &'a mut ToNMEA {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_field<T>(&mut self, _key: &'static str, v: &T) -> Result<()>
+    fn serialize_field<T>(&mut self, k: &'static str, v: &T) -> NResult<()>
         where
             T: ?Sized + Serialize,
     {
-        self.output += ",";
+        match k {
+            "no comma" => (),
+            _ => self.output += ",",
+        }
+
         v.serialize(&mut **self)
     }
 
-    fn end(self) -> Result<()> {
+    fn end(self) -> NResult<()> {
         Ok(())
     }
 }
 
-impl<'a> ser::SerializeStructVariant for &'a mut Serializer {
+impl<'a> ser::SerializeStructVariant for &'a mut ToNMEA {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_field<T>(&mut self, _k: &'static str, v: &T) -> Result<()>
+    fn serialize_field<T>(&mut self, _k: &'static str, v: &T) -> NResult<()>
     where
 	T: ?Sized + Serialize,
     {
@@ -336,16 +347,16 @@ impl<'a> ser::SerializeStructVariant for &'a mut Serializer {
 	v.serialize(&mut **self)
     }
 
-    fn end(self) -> Result<()> {
+    fn end(self) -> NResult<()> {
 	Ok(())
     }
 }
 
-impl<'a> ser::SerializeTuple for &'a mut Serializer {
+impl<'a> ser::SerializeTuple for &'a mut ToNMEA {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_element<T>(&mut self, v: &T) -> Result<()>
+    fn serialize_element<T>(&mut self, v: &T) -> NResult<()>
     where
         T: ?Sized + Serialize,
     {
@@ -354,16 +365,16 @@ impl<'a> ser::SerializeTuple for &'a mut Serializer {
         v.serialize(&mut **self)
     }
 
-    fn end(self) -> Result<()> {
+    fn end(self) -> NResult<()> {
         Ok(())
     }
 }
 
-impl<'a> ser::SerializeTupleStruct for &'a mut Serializer {
+impl<'a> ser::SerializeTupleStruct for &'a mut ToNMEA {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_field<T>(&mut self, v: &T) -> Result<()>
+    fn serialize_field<T>(&mut self, v: &T) -> NResult<()>
     where
         T: ?Sized + Serialize,
     {
@@ -371,16 +382,16 @@ impl<'a> ser::SerializeTupleStruct for &'a mut Serializer {
         v.serialize(&mut **self)
     }
 
-    fn end(self) -> Result<()> {
+    fn end(self) -> NResult<()> {
         Ok(())
     }
 }
 
-impl<'a> ser::SerializeTupleVariant for &'a mut Serializer {
+impl<'a> ser::SerializeTupleVariant for &'a mut ToNMEA {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_field<T>(&mut self, v: &T) -> Result<()>
+    fn serialize_field<T>(&mut self, v: &T) -> NResult<()>
     where
         T: ?Sized + Serialize,
     {
@@ -388,7 +399,7 @@ impl<'a> ser::SerializeTupleVariant for &'a mut Serializer {
         v.serialize(&mut **self)
     }
 
-    fn end(self) -> Result<()> {
+    fn end(self) -> NResult<()> {
         Ok(())
     }
 }
