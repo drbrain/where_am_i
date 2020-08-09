@@ -11,6 +11,7 @@ path = "src/bin/where_am_i.rs"
 [dependencies]
 argh               = "0.1.0"
 assert_approx_eq   = "1.1.0"
+bitflags           = "1.2.0"
 bytes              = "0.5.0"
 chrono             = "0.4.0"
 futures            = "0.3.5"

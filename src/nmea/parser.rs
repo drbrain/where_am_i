@@ -12,6 +12,8 @@ use nom::sequence::*;
 use nom::Err;
 use nom::IResult;
 
+use serde::Serialize;
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum NMEA {
     DTM(DTMdata),
@@ -1147,7 +1149,6 @@ pub(crate) fn txt<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum UBXData {
-    Config(UBXConfig),
     Position(UBXPosition),
     Satellites(UBXSatellites),
     Time(UBXTime),
@@ -1164,25 +1165,36 @@ pub(crate) fn pubx<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a st
     )(input)
 }
 
-#[derive(Clone, Eq, Debug, PartialEq)]
+#[derive(Clone, Eq, Debug, PartialEq, Serialize)]
 pub enum UBXPort {
-    DDC,
-    USART1,
-    USART2,
-    USB,
-    SPI,
+    I2C = 0,
+    USART1 = 1,
+    USART2 = 2,
+    USB = 3,
+    SPI = 4,
 }
 
-#[derive(Clone, Eq, Debug, PartialEq)]
+bitflags! {
+    #[derive(Serialize)]
+    pub struct UBXPortMask: u16 {
+	const I2C = 0x0000;
+	const USART1 = 0x0001;
+	const USART2 = 0x0102;
+	const USB = 0x0003;
+	const SPI = 0x0004;
+    }
+}
+
+#[derive(Clone, Eq, Debug, PartialEq, Serialize)]
 pub struct UBXConfig {
     pub port: UBXPort,
-    pub in_proto: u32,
-    pub out_proto: u32,
-    pub baud_rate: u32,
+    pub in_proto: UBXPortMask,
+    pub out_proto: UBXPortMask,
+    pub baudrate: u32,
     pub autobauding: bool,
 }
 
-#[derive(Clone, Eq, Debug, PartialEq)]
+#[derive(Clone, Eq, Debug, PartialEq, Serialize)]
 pub struct UBXPositionPoll {}
 
 #[derive(Clone, Eq, Debug, PartialEq)]
@@ -1303,9 +1315,10 @@ pub(crate) fn ubx_00<'a, E: ParseError<&'a str>>(
     )(input)
 }
 
-#[derive(Clone, Eq, Debug, PartialEq)]
+#[derive(Clone, Eq, Debug, PartialEq, Serialize)]
 pub struct UBXRate {
-    pub rddc: bool,
+    pub message: String,
+    pub rddc: u32,
     pub rus1: u32,
     pub rus2: u32,
     pub rusb: u32,
@@ -1313,7 +1326,7 @@ pub struct UBXRate {
     pub reserved: u32,
 }
 
-#[derive(Clone, Eq, Debug, PartialEq)]
+#[derive(Clone, Eq, Debug, PartialEq, Serialize)]
 pub struct UBXSvsPoll {}
 
 #[derive(Clone, Eq, Debug, PartialEq)]
@@ -1393,7 +1406,7 @@ pub(crate) fn ubx_03<'a, E: ParseError<&'a str>>(
     )(input)
 }
 
-#[derive(Clone, Eq, Debug, PartialEq)]
+#[derive(Clone, Eq, Debug, PartialEq, Serialize)]
 pub struct UBXTimePoll {}
 
 #[derive(Clone, Debug, PartialEq)]

@@ -1,10 +1,12 @@
 mod codec;
 mod device;
 mod parser;
+mod ser;
 
 pub use codec::Codec;
 pub use device::Device;
 pub use parser::NMEA;
+pub use ser::Serializer;
 
 pub use parser::DTMdata;
 pub use parser::GAQdata;
@@ -26,5 +28,16 @@ pub use parser::VLWdata;
 pub use parser::VTGdata;
 pub use parser::ZDAdata;
 
+pub use parser::UBXConfig;
+pub use parser::UBXPort;
+pub use parser::UBXPortMask;
+pub use parser::UBXPositionPoll;
+pub use parser::UBXRate;
+pub use parser::UBXSvsPoll;
+pub use parser::UBXTimePoll;
+
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
+mod test_ser;
