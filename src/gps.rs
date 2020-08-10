@@ -87,8 +87,6 @@ fn zda(zda: ZDAdata, data: &mut Unlocked, name: &String, tx: &JsonSender) {
     let time = NaiveDateTime::new(date, zda.time);
     let time = DateTime::from_utc(time, Utc);
 
-    info!("{}", time);
-
     data.time = Some(time);
 
     report_time(time, name, tx);
