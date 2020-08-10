@@ -5,6 +5,7 @@ mod ser;
 
 pub use codec::Codec;
 pub use device::Device;
+pub use device::UBX_OUTPUT_MESSAGES;
 pub use parser::NMEA;
 pub use ser::ToNMEA;
 

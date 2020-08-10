@@ -1,17 +1,24 @@
 use crate::nmea::parser::parse;
 use crate::nmea::parser::NMEA;
+use crate::nmea::ser;
 
 use bytes::Buf;
+use bytes::BufMut;
 use bytes::Bytes;
 use bytes::BytesMut;
 
 use nom::error::VerboseError;
 use nom::Err;
 
+use serde::Serialize;
+
 use std::fmt;
 use std::io;
 
 use tokio_util::codec::Decoder;
+use tokio_util::codec::Encoder;
+
+use tracing::debug;
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Codec {}
@@ -44,6 +51,30 @@ impl Decoder for Codec {
             Err(Err::Error(_)) => panic!("impossible error!"),
             Err(Err::Failure(_)) => panic!("impossible failure!"),
         }
+    }
+}
+
+impl<T> Encoder<T> for Codec
+where
+    T: Serialize,
+{
+    type Error = CodecError;
+
+    fn encode(&mut self, nmea: T, buf: &mut BytesMut) -> Result<(), CodecError> {
+        let message = match ser::to_string(&nmea) {
+            Ok(m) => m,
+            Err(_) => return Err(CodecError::InternalError),
+        };
+
+        let checksum = message.bytes().fold(0, |c, b| c ^ b);
+        let line = format!("${}*{:02X}\r\n", message, checksum);
+
+        debug!("sending serial message: {:?}", line);
+
+        buf.reserve(line.len());
+        buf.put(line.as_bytes());
+
+        Ok(())
     }
 }
 

@@ -1,5 +1,7 @@
 mod args;
 
+use std::collections::HashMap;
+
 use tracing::error;
 use tracing::info;
 use tracing::Level;
@@ -7,6 +9,7 @@ use tracing::Level;
 use where_am_i::gps::GPS;
 use where_am_i::nmea::Device;
 use where_am_i::nmea::NMEA;
+use where_am_i::nmea::UBX_OUTPUT_MESSAGES;
 
 #[tokio::main]
 async fn main() {
@@ -16,9 +19,25 @@ async fn main() {
 
     tracing::subscriber::set_global_default(subscriber).expect("no global subscriber has been set");
 
-    let (gps_name, serial_port_settings) = args::gps_watch_args();
+    let (gps_name, serial_port_settings, messages) = args::gps_watch_args();
 
-    let device = Device::new(gps_name.clone(), serial_port_settings);
+    let mut device = Device::new(gps_name.clone(), serial_port_settings);
+
+    if messages.len() == 0 {
+        for message in &UBX_OUTPUT_MESSAGES {
+            device.message(message, true);
+        }
+    } else {
+        for default in &UBX_OUTPUT_MESSAGES {
+            let enabled = if messages.contains(&default.to_string()) {
+                true
+            } else {
+                false
+            };
+
+            device.message(&default.to_string(), enabled);
+        }
+    }
 
     let tx = match device.run().await {
         Ok(t) => t,
@@ -43,7 +62,7 @@ async fn main() {
             NMEA::ParseError(e) => error!("parse error: {}", e),
             NMEA::ParseFailure(f) => error!("parse failure: {}", f),
             NMEA::Unsupported(n) => error!("unsupported: {}", n),
-            n => (), //info!("{:?}", n),
+            n => info!("{:?}", n),
         }
     }
 }

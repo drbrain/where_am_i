@@ -34,6 +34,10 @@ struct Args {
     /// gps_device
     #[argh(positional)]
     gps_device: String,
+
+    /// enable GPS messages, defaults to all messages if unset
+    #[argh(option)]
+    message: Vec<String>,
 }
 
 fn default_baud() -> u32 {
@@ -96,7 +100,7 @@ fn stop_bits_from_str(i: u8) -> Result<StopBits, String> {
     }
 }
 
-pub fn gps_watch_args() -> (String, SerialPortSettings) {
+pub fn gps_watch_args() -> (String, SerialPortSettings, Vec<String>) {
     let args: Args = argh::from_env();
 
     let s = SerialPortSettings {
@@ -108,5 +112,5 @@ pub fn gps_watch_args() -> (String, SerialPortSettings) {
         timeout: Duration::from_millis(1),
     };
 
-    (args.gps_device, s)
+    (args.gps_device, s, args.message)
 }
