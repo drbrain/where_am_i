@@ -64,6 +64,7 @@ fn map_ntp_unit(unit: i32) -> io::Result<ShmTime> {
 
 async fn relay_timestamps(mut rx: JsonReceiver, unit: i32) {
     let mut time = map_ntp_unit(unit).unwrap();
+    let precision = if unit == 3 { -20 } else { -1 };
 
     info!("Feeding NTP SHM timestamps on unit {}", unit);
 
@@ -102,7 +103,7 @@ async fn relay_timestamps(mut rx: JsonReceiver, unit: i32) {
         time.receive_sec = receive_sec;
         time.receive_usec = receive_usec;
         time.leap = 0;
-        time.precision = -1;
+        time.precision = precision;
         time.clock_nsec = clock_nsec;
         time.receive_nsec = receive_nsec;
 

@@ -234,7 +234,7 @@ impl Future for FetchFuture {
                     "real_nsec":  fetch_time.real_nsec,
                     "clock_sec":  fetch_time.clock_sec,
                     "clock_nsec": fetch_time.clock_nsec,
-                    "precision":  -1,
+                    "precision":  -20,
                 })))
             } else {
                 Poll::Ready(Err("something went wrong".to_string()))
