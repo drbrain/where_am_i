@@ -4,6 +4,7 @@ use where_am_i::gps::GPS;
 use where_am_i::gpsd::Server;
 use where_am_i::nmea::Device;
 use where_am_i::nmea::NMEA;
+use where_am_i::nmea::UBX_OUTPUT_MESSAGES;
 use where_am_i::pps::PPS;
 use where_am_i::shm::NtpShm;
 
@@ -41,7 +42,13 @@ async fn run() {
 
     let mut gps = match gps_name.clone() {
         Some(name) => {
-            let device = Device::new(name.clone(), serial_port_settings);
+            let mut device = Device::new(name.clone(), serial_port_settings);
+
+            for default in &UBX_OUTPUT_MESSAGES {
+                device.message(&default.to_string(), false);
+            }
+
+            device.message(&"ZDA".to_string(), true);
 
             let device_tx = match device.run().await {
                 Ok(tx) => tx,
