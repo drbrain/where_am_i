@@ -865,7 +865,7 @@ pub struct GRSdata {
     pub gga_includes_residuals: bool,
     pub residuals: Vec<Option<f32>>,
     pub system: System,
-    pub signal: Signal,
+    pub signal: Option<Signal>,
 }
 
 pub(crate) fn grs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GRSdata, E> {
@@ -873,14 +873,14 @@ pub(crate) fn grs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
         "GRS",
         all_consuming(map(
             tuple((
-                terminated(talker, terminated(tag("GRS"), comma)),
-                terminated(time, comma),
-                terminated(map(one_of("10"), |c| c == '1'), comma),
-                map(many_m_n(12, 12, terminated(opt(flt32), comma)), |rs| {
+                terminated(talker, tag("GRS")),
+                preceded(comma, time),
+                preceded(comma, map(one_of("10"), |c| c == '1')),
+                map(many_m_n(12, 12, preceded(comma, opt(flt32))), |rs| {
                     Vec::from(rs)
                 }),
-                terminated(system, comma),
-                signal,
+                preceded(comma, system),
+                preceded(comma, opt(signal)),
             )),
             |(talker, time, gga_includes_residuals, residuals, system, signal)| GRSdata {
                 talker,
@@ -1176,11 +1176,11 @@ pub enum UBXPort {
 
 bitflags! {
     pub struct UBXPortMask: u16 {
-	const I2C = 0x0000;
-	const USART1 = 0x0001;
-	const USART2 = 0x0102;
-	const USB = 0x0003;
-	const SPI = 0x0004;
+    const I2C = 0x0000;
+    const USART1 = 0x0001;
+    const USART2 = 0x0102;
+    const USB = 0x0003;
+    const SPI = 0x0004;
     }
 }
 
