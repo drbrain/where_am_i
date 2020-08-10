@@ -1434,10 +1434,7 @@ pub(crate) fn ubx_04<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a 
                 preceded(comma, flt32),
                 preceded(comma, uint32),
                 preceded(comma, uint32),
-                map(opt(char('D')), |c| match c {
-                    Some(_) => true,
-                    None => false,
-                }),
+                map(opt(char('D')), |c| c.is_some()),
                 preceded(comma, uint32),
                 preceded(comma, flt32),
                 preceded(comma, terminated(uint32, comma)),

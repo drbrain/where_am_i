@@ -1,7 +1,5 @@
 mod args;
 
-use std::collections::HashMap;
-
 use tracing::error;
 use tracing::info;
 use tracing::Level;
@@ -23,17 +21,13 @@ async fn main() {
 
     let mut device = Device::new(gps_name.clone(), serial_port_settings);
 
-    if messages.len() == 0 {
+    if messages.is_empty() {
         for message in &UBX_OUTPUT_MESSAGES {
             device.message(message, true);
         }
     } else {
         for default in &UBX_OUTPUT_MESSAGES {
-            let enabled = if messages.contains(&default.to_string()) {
-                true
-            } else {
-                false
-            };
+            let enabled = messages.contains(&default.to_string());
 
             device.message(&default.to_string(), enabled);
         }

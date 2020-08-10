@@ -48,7 +48,7 @@ impl Device {
     pub fn message(&mut self, id: &str, enabled: bool) {
         let setting = MessageSetting {
             id: id.to_string(),
-            enabled: enabled,
+            enabled,
         };
 
         self.messages.push(setting);
@@ -66,7 +66,7 @@ impl Device {
 
         debug!("Opened NMEA device {}", self.name);
 
-        let mut serial = Framed::new(serial, Codec::new());
+        let mut serial = Framed::new(serial, Codec::default());
 
         for message in &self.messages {
             let rate = rate_for(message.id.clone(), message.enabled);
@@ -94,7 +94,7 @@ fn rate_for(msg_id: String, enabled: bool) -> UBXRate {
     UBXRate {
         message: msg_id,
         rddc: 0,
-        rus1: rus1,
+        rus1,
         rus2: 0,
         rusb: 0,
         rspi: 0,

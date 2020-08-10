@@ -15,7 +15,6 @@ use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
 
 use tracing::error;
-use tracing::info;
 
 type Locked = Arc<Mutex<GPSdata>>;
 type Unlocked<'a> = MutexGuard<'a, GPSdata>;

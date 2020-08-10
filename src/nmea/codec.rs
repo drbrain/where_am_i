@@ -20,16 +20,10 @@ use tokio_util::codec::Encoder;
 
 use tracing::debug;
 
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Codec {}
 
 type VE<'a> = VerboseError<&'a [u8]>;
-
-impl Codec {
-    pub fn new() -> Codec {
-        Codec {}
-    }
-}
 
 impl Decoder for Codec {
     type Item = NMEA;

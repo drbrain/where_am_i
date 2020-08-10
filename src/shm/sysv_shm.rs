@@ -1,5 +1,3 @@
-use libc;
-
 use std::io;
 use std::mem;
 use std::mem::ManuallyDrop;

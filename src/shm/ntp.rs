@@ -23,7 +23,7 @@ const NTPD_BASE: i32 = 0x4e545030;
 impl NtpShm {
     pub fn new(unit: i32) -> NtpShm {
         NtpShm {
-            unit: unit,
+            unit,
             gps_tx: None,
             pps_tx: None,
         }

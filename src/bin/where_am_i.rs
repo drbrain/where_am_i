@@ -3,7 +3,6 @@ mod args;
 use where_am_i::gps::GPS;
 use where_am_i::gpsd::Server;
 use where_am_i::nmea::Device;
-use where_am_i::nmea::NMEA;
 use where_am_i::nmea::UBX_OUTPUT_MESSAGES;
 use where_am_i::pps::PPS;
 use where_am_i::shm::NtpShm;
@@ -40,7 +39,7 @@ async fn run() {
 
     let (gps_name, serial_port_settings, pps_name) = args::where_am_i_args();
 
-    let mut gps = match gps_name.clone() {
+    let gps = match gps_name.clone() {
         Some(name) => {
             let mut device = Device::new(name.clone(), serial_port_settings);
 

@@ -2,12 +2,11 @@ use crate::nmea::*;
 
 use serde::ser;
 use serde::ser::Serialize;
-use serde::ser::Serializer;
 use serde::ser::SerializeStruct;
+use serde::ser::Serializer;
 
 use std::fmt;
 
-use std;
 use std::fmt::Display;
 
 pub type NResult<T> = std::result::Result<T, Error>;
@@ -58,12 +57,12 @@ impl Serialize for UBXPort {
     {
         let mut state = serializer.serialize_struct("UBXPort", 1)?;
         let value: u32 = match self {
-			UBXPort::I2C => 0,
-			UBXPort::USART1 => 1,
-			UBXPort::USART2 => 2,
-			UBXPort::USB => 3,
-			UBXPort::SPI => 4,
-		};
+            UBXPort::I2C => 0,
+            UBXPort::USART1 => 1,
+            UBXPort::USART2 => 2,
+            UBXPort::USB => 3,
+            UBXPort::SPI => 4,
+        };
 
         state.serialize_field("no comma", &value)?;
         state.end()
@@ -153,11 +152,7 @@ impl<'a> ser::Serializer for &'a mut ToNMEA {
         Ok(self)
     }
 
-    fn serialize_newtype_struct<T>(
-        self,
-        _name: &'static str,
-        v: &T,
-    ) -> NResult<()>
+    fn serialize_newtype_struct<T>(self, _name: &'static str, v: &T) -> NResult<()>
     where
         T: ?Sized + Serialize,
     {
@@ -192,7 +187,8 @@ impl<'a> ser::Serializer for &'a mut ToNMEA {
 
     fn serialize_some<T>(self, v: &T) -> NResult<()>
     where
-        T: ?Sized + Serialize, {
+        T: ?Sized + Serialize,
+    {
         v.serialize(self)
     }
 
@@ -204,13 +200,13 @@ impl<'a> ser::Serializer for &'a mut ToNMEA {
 
     fn serialize_struct(self, name: &'static str, _len: usize) -> NResult<Self::SerializeStruct> {
         match name {
-            "UBXPositionPoll" => { self.output += "PUBX,00" },
-            "UBXSvsPoll" => { self.output += "PUBX,03" },
-            "UBXTimePoll" => { self.output += "PUBX,04" },
-            "UBXRate" => { self.output += "PUBX,40" },
-            "UBXConfig" => { self.output += "PUBX,41" },
-            "UBXPort" => {},
-            "UBXPortMask" => {},
+            "UBXPositionPoll" => self.output += "PUBX,00",
+            "UBXSvsPoll" => self.output += "PUBX,03",
+            "UBXTimePoll" => self.output += "PUBX,04",
+            "UBXRate" => self.output += "PUBX,40",
+            "UBXConfig" => self.output += "PUBX,41",
+            "UBXPort" => {}
+            "UBXPortMask" => {}
             _ => panic!("don't know how to serialize struct {}", name),
         }
 
@@ -224,7 +220,10 @@ impl<'a> ser::Serializer for &'a mut ToNMEA {
         variant: &'static str,
         _len: usize,
     ) -> NResult<Self::SerializeStructVariant> {
-        eprintln!("serialize_struct_variant name: {}, variant: {}", _name, variant);
+        eprintln!(
+            "serialize_struct_variant name: {}, variant: {}",
+            _name, variant
+        );
         variant.serialize(&mut *self)?;
         Ok(self)
     }
@@ -285,7 +284,12 @@ impl<'a> ser::Serializer for &'a mut ToNMEA {
         self.serialize_unit()
     }
 
-    fn serialize_unit_variant(self, _name: &'static str, _variant_index: u32, variant: &'static str) -> NResult<()> {
+    fn serialize_unit_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        variant: &'static str,
+    ) -> NResult<()> {
         self.serialize_str(variant)
     }
 }
@@ -298,21 +302,21 @@ impl<'a> ser::SerializeMap for &'a mut ToNMEA {
     where
         T: ?Sized + Serialize,
     {
-	self.output += ",";
+        self.output += ",";
 
         k.serialize(&mut **self)
     }
 
     fn serialize_value<T>(&mut self, v: &T) -> NResult<()>
     where
-	T: ?Sized + Serialize,
+        T: ?Sized + Serialize,
     {
-	self.output += ",";
-	v.serialize(&mut **self)
+        self.output += ",";
+        v.serialize(&mut **self)
     }
 
     fn end(self) -> NResult<()> {
-	Ok(())
+        Ok(())
     }
 }
 
@@ -338,8 +342,8 @@ impl<'a> ser::SerializeStruct for &'a mut ToNMEA {
     type Error = Error;
 
     fn serialize_field<T>(&mut self, k: &'static str, v: &T) -> NResult<()>
-        where
-            T: ?Sized + Serialize,
+    where
+        T: ?Sized + Serialize,
     {
         match k {
             "no comma" => (),
@@ -360,15 +364,15 @@ impl<'a> ser::SerializeStructVariant for &'a mut ToNMEA {
 
     fn serialize_field<T>(&mut self, _k: &'static str, v: &T) -> NResult<()>
     where
-	T: ?Sized + Serialize,
+        T: ?Sized + Serialize,
     {
         eprintln!("serialize_field key: {}", _k);
-	self.output += ",";
-	v.serialize(&mut **self)
+        self.output += ",";
+        v.serialize(&mut **self)
     }
 
     fn end(self) -> NResult<()> {
-	Ok(())
+        Ok(())
     }
 }
 
@@ -423,4 +427,3 @@ impl<'a> ser::SerializeTupleVariant for &'a mut ToNMEA {
         Ok(())
     }
 }
-
