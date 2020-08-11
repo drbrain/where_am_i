@@ -67,7 +67,7 @@ async fn read_device(mut rx: Receiver<NMEA>, data: Locked, name: String, tx: Jso
     }
 }
 
-fn read_nmea(nmea: NMEA, data: &mut Unlocked, name: &String, tx: &JsonSender) {
+fn read_nmea(nmea: NMEA, data: &mut Unlocked, name: &str, tx: &JsonSender) {
     match nmea {
         NMEA::InvalidChecksum(cm) => error!(
             "checksum match, given {}, calculated {} on {}",
@@ -81,7 +81,7 @@ fn read_nmea(nmea: NMEA, data: &mut Unlocked, name: &String, tx: &JsonSender) {
     }
 }
 
-fn zda(zda: ZDAdata, data: &mut Unlocked, name: &String, tx: &JsonSender) {
+fn zda(zda: ZDAdata, data: &mut Unlocked, name: &str, tx: &JsonSender) {
     let date = NaiveDate::from_ymd(zda.year, zda.month, zda.day);
     let time = NaiveDateTime::new(date, zda.time);
     let time = DateTime::from_utc(time, Utc);
@@ -92,7 +92,7 @@ fn zda(zda: ZDAdata, data: &mut Unlocked, name: &String, tx: &JsonSender) {
 }
 
 #[tracing::instrument]
-fn report_time(date: DateTime<Utc>, name: &String, tx: &JsonSender) {
+fn report_time(date: DateTime<Utc>, name: &str, tx: &JsonSender) {
     let sec = date.timestamp();
     let nsec = date.timestamp_subsec_nanos();
 

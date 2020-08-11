@@ -369,7 +369,7 @@ fn test_grs() {
     assert_eq!(residuals[10], parsed.residuals[10]);
     assert_eq!(residuals[11], parsed.residuals[11]);
     assert_eq!(System::GPS, parsed.system);
-    assert_eq!(Signal::L1, parsed.signal);
+    assert_eq!(Some(Signal::L1), parsed.signal);
 
     let parsed = parser::grs::<VE>("GNGRS,104148.00,1,,0.0,2.5,0.0,,2.8,,,,,,,1,5")
         .unwrap()
@@ -406,7 +406,7 @@ fn test_grs() {
     assert_eq!(residuals[10], parsed.residuals[10]);
     assert_eq!(residuals[11], parsed.residuals[11]);
     assert_eq!(System::GPS, parsed.system);
-    assert_eq!(Signal::L2CM, parsed.signal);
+    assert_eq!(Some(Signal::L2CM), parsed.signal);
 }
 
 #[test]

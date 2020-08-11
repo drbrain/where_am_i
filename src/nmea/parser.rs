@@ -97,26 +97,26 @@ pub fn parse<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], 
 
 pub(crate) fn message<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NMEA, E> {
     alt((
-        map(dtm, |m| NMEA::DTM(m)),
-        map(gaq, |m| NMEA::GAQ(m)),
-        map(gbq, |m| NMEA::GBQ(m)),
-        map(gbs, |m| NMEA::GBS(m)),
-        map(gga, |m| NMEA::GGA(m)),
-        map(gll, |m| NMEA::GLL(m)),
-        map(glq, |m| NMEA::GLQ(m)),
-        map(gnq, |m| NMEA::GNQ(m)),
-        map(gns, |m| NMEA::GNS(m)),
-        map(gpq, |m| NMEA::GPQ(m)),
-        map(grs, |m| NMEA::GRS(m)),
-        map(gsa, |m| NMEA::GSA(m)),
-        map(gst, |m| NMEA::GST(m)),
-        map(gsv, |m| NMEA::GSV(m)),
-        map(pubx, |m| NMEA::PUBX(m)),
-        map(rmc, |m| NMEA::RMC(m)),
-        map(txt, |m| NMEA::TXT(m)),
-        map(vlw, |m| NMEA::VLW(m)),
-        map(vtg, |m| NMEA::VTG(m)),
-        map(zda, |m| NMEA::ZDA(m)),
+        map(dtm, NMEA::DTM),
+        map(gaq, NMEA::GAQ),
+        map(gbq, NMEA::GBQ),
+        map(gbs, NMEA::GBS),
+        map(gga, NMEA::GGA),
+        map(gll, NMEA::GLL),
+        map(glq, NMEA::GLQ),
+        map(gnq, NMEA::GNQ),
+        map(gns, NMEA::GNS),
+        map(gpq, NMEA::GPQ),
+        map(grs, NMEA::GRS),
+        map(gsa, NMEA::GSA),
+        map(gst, NMEA::GST),
+        map(gsv, NMEA::GSV),
+        map(pubx, NMEA::PUBX),
+        map(rmc, NMEA::RMC),
+        map(txt, NMEA::TXT),
+        map(vlw, NMEA::VLW),
+        map(vtg, NMEA::VTG),
+        map(zda, NMEA::ZDA),
         map(rest, |m: &str| NMEA::Unsupported(m.to_string())),
     ))(input)
 }
@@ -876,9 +876,7 @@ pub(crate) fn grs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 terminated(talker, tag("GRS")),
                 preceded(comma, time),
                 preceded(comma, map(one_of("10"), |c| c == '1')),
-                map(many_m_n(12, 12, preceded(comma, opt(flt32))), |rs| {
-                    Vec::from(rs)
-                }),
+                map(many_m_n(12, 12, preceded(comma, opt(flt32))), Vec::from),
                 preceded(comma, system),
                 preceded(comma, opt(signal)),
             )),
@@ -914,9 +912,7 @@ pub(crate) fn gsa<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 terminated(talker, terminated(tag("GSA"), comma)),
                 terminated(op_mode, comma),
                 terminated(nav_mode, comma),
-                map(many_m_n(12, 12, terminated(opt(uint32), comma)), |sids| {
-                    Vec::from(sids)
-                }),
+                map(many_m_n(12, 12, terminated(opt(uint32), comma)), Vec::from),
                 terminated(flt32, comma),
                 terminated(flt32, comma),
                 terminated(flt32, comma),
@@ -1158,9 +1154,9 @@ pub(crate) fn pubx<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a st
     context(
         "PUBX",
         alt((
-            map(ubx_00, |m| UBXData::Position(m)),
-            map(ubx_03, |m| UBXData::Satellites(m)),
-            map(ubx_04, |m| UBXData::Time(m)),
+            map(ubx_00, UBXData::Position),
+            map(ubx_03, UBXData::Satellites),
+            map(ubx_04, UBXData::Time),
         )),
     )(input)
 }

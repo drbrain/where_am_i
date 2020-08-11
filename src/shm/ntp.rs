@@ -68,12 +68,7 @@ async fn relay_timestamps(mut rx: JsonReceiver, unit: i32) {
 
     info!("Feeding NTP SHM timestamps on unit {}", unit);
 
-    loop {
-        let gps_ts = match rx.recv().await {
-            Ok(ts) => ts,
-            Err(_) => break,
-        };
-
+    while let Ok(gps_ts) = rx.recv().await {
         let clock_sec = gps_ts["clock_sec"]
             .as_i64()
             .unwrap_or(0)
