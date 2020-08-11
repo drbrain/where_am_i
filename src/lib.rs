@@ -1,3 +1,4 @@
+pub mod configuration;
 pub mod gps;
 pub mod gpsd;
 pub mod nmea;
