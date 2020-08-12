@@ -78,3 +78,68 @@ device = "/dev/pps1"
 
     assert_eq!(expected, config);
 }
+
+#[test]
+fn test_try_from() {
+    let gps = Gps {
+        name: "GPS".to_string(),
+        device: "/dev/gps0".to_string(),
+        pps: None,
+        baud_rate: Some(38400),
+        framing: Some("7O2".to_string()),
+        flow_control: Some("H".to_string()),
+        timeout: Some(10),
+        messages: None,
+    };
+
+    let settings = SerialPortSettings::try_from(gps).unwrap();
+
+    assert_eq!(38400, settings.baud_rate);
+    assert_eq!(DataBits::Seven, settings.data_bits);
+    assert_eq!(FlowControl::Hardware, settings.flow_control);
+    assert_eq!(Parity::Odd, settings.parity);
+    assert_eq!(StopBits::Two, settings.stop_bits);
+    assert_eq!(Duration::from_millis(10), settings.timeout);
+}
+
+#[test]
+fn test_try_from_default() {
+    let gps = Gps {
+        name: "GPS".to_string(),
+        device: "/dev/gps0".to_string(),
+        pps: None,
+        baud_rate: None,
+        framing: None,
+        flow_control: None,
+        timeout: None,
+        messages: None,
+    };
+
+    let settings = SerialPortSettings::try_from(gps).unwrap();
+
+    assert_eq!(38400, settings.baud_rate);
+    assert_eq!(DataBits::Eight, settings.data_bits);
+    assert_eq!(FlowControl::None, settings.flow_control);
+    assert_eq!(Parity::None, settings.parity);
+    assert_eq!(StopBits::One, settings.stop_bits);
+    assert_eq!(Duration::from_millis(1), settings.timeout);
+}
+
+#[test]
+fn test_try_from_error() {
+    let gps = Gps {
+        name: "GPS".to_string(),
+        device: "/dev/gps0".to_string(),
+        pps: None,
+        baud_rate: Some(38400),
+        framing: Some("9N1".to_string()),
+        flow_control: None,
+        timeout: None,
+        messages: None,
+    };
+
+    match SerialPortSettings::try_from(gps).err().unwrap() {
+        ConfigurationError::InvalidDataBits(e) => assert_eq!('9', e),
+        _ => assert!(false),
+    }
+}
