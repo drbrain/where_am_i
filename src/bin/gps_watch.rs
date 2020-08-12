@@ -1,13 +1,16 @@
-mod args;
+use std::convert::TryFrom;
 
 use tracing::error;
 use tracing::info;
 use tracing::Level;
 
+use where_am_i::configuration::Configuration;
 use where_am_i::gps::GPS;
 use where_am_i::nmea::Device;
 use where_am_i::nmea::NMEA;
 use where_am_i::nmea::UBX_OUTPUT_MESSAGES;
+
+use tokio_serial::SerialPortSettings;
 
 #[tokio::main]
 async fn main() {
@@ -17,7 +20,34 @@ async fn main() {
 
     tracing::subscriber::set_global_default(subscriber).expect("no global subscriber has been set");
 
-    let (gps_name, serial_port_settings, messages) = args::gps_watch_args();
+    let file = match std::env::args().nth(1) {
+        None => {
+            error!("You must provide a configuration file");
+            std::process::exit(1);
+        }
+        Some(f) => f,
+    };
+
+    let config = match Configuration::load(file) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("failed to load configuration file: {:?}", e);
+            std::process::exit(1);
+        }
+    };
+
+    let device = config.gps[0].clone();
+
+    let gps_name = device.clone().device;
+    let messages = device.clone().messages.unwrap_or(vec![]);
+
+    let serial_port_settings = match SerialPortSettings::try_from(device) {
+        Ok(s) => s,
+        Err(e) => {
+            error!("{}", e);
+            std::process::exit(1);
+        }
+    };
 
     let mut device = Device::new(gps_name.clone(), serial_port_settings);
 

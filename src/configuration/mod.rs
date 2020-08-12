@@ -14,12 +14,12 @@ use tokio_serial::Parity;
 use tokio_serial::SerialPortSettings;
 use tokio_serial::StopBits;
 
-#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct Configuration {
     pub gps: Vec<Gps>,
 }
 
-#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct Gps {
     pub name: String,
     pub device: String,
@@ -108,7 +108,7 @@ impl TryFrom<Gps> for SerialPortSettings {
     }
 }
 
-#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct Pps {
     pub device: String,
 }
