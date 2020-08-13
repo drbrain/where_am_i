@@ -31,8 +31,7 @@ use tracing::info;
 pub struct PPS {
     pub name: String,
     pub tx: JsonSender,
-    // Name of the device sent in PPS records
-    device_name: String,
+    pub device_name: String,
 }
 
 impl PPS {

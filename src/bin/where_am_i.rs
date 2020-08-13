@@ -1,17 +1,20 @@
-mod args;
+use std::convert::TryFrom;
 
+use tokio::runtime;
+
+use tokio_serial::SerialPortSettings;
+
+use tracing::error;
+use tracing::info;
+use tracing::Level;
+
+use where_am_i::configuration::Configuration;
 use where_am_i::gps::GPS;
 use where_am_i::gpsd::Server;
 use where_am_i::nmea::Device;
 use where_am_i::nmea::UBX_OUTPUT_MESSAGES;
 use where_am_i::pps::PPS;
 use where_am_i::shm::NtpShm;
-
-use tokio::runtime;
-
-use tracing::error;
-use tracing::info;
-use tracing::Level;
 
 fn main() {
     let mut runtime = runtime::Builder::new()
@@ -37,48 +40,72 @@ async fn run() {
 
     tracing::subscriber::set_global_default(subscriber).expect("no global subscriber has been set");
 
-    let (gps_name, serial_port_settings, pps_name) = args::where_am_i_args();
-
-    let gps = match gps_name.clone() {
-        Some(name) => {
-            let mut device = Device::new(name.clone(), serial_port_settings);
-
-            for default in &UBX_OUTPUT_MESSAGES {
-                device.message(&default.to_string(), false);
-            }
-
-            device.message(&"ZDA".to_string(), true);
-
-            let device_tx = match device.run().await {
-                Ok(tx) => tx,
-                Err(e) => {
-                    error!("failed to read from GPS: {:?}", e);
-                    std::process::exit(1);
-                }
-            };
-
-            let mut gps = GPS::new(name, device_tx);
-
-            gps.read().await;
-
-            Some(gps)
+    let file = match std::env::args().nth(1) {
+        None => {
+            error!("You must provide a configuration file");
+            std::process::exit(1);
         }
-        None => None,
+        Some(f) => f,
     };
 
-    let pps = match pps_name {
-        Some(name) => {
-            let device_name = match gps_name.clone() {
-                Some(n) => n,
-                None => name.clone(),
-            };
+    let config = match Configuration::load(file) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("failed to load configuration file: {:?}", e);
+            std::process::exit(1);
+        }
+    };
 
-            let mut pps = PPS::new(name, device_name);
+    let gps_config = config.gps[0].clone();
+
+    let name = gps_config.name.clone();
+    let gps_name = gps_config.device.clone();
+    let messages = gps_config.messages.clone().unwrap_or(vec![]);
+
+    let serial_port_settings = match SerialPortSettings::try_from(gps_config.clone()) {
+        Ok(s) => s,
+        Err(e) => {
+            error!("{}", e);
+            std::process::exit(1);
+        }
+    };
+
+    let mut device = Device::new(gps_name.clone(), serial_port_settings);
+
+    if messages.is_empty() {
+        for message in &UBX_OUTPUT_MESSAGES {
+            device.message(message, true);
+        }
+    } else {
+        for default in &UBX_OUTPUT_MESSAGES {
+            let enabled = messages.contains(&default.to_string());
+
+            device.message(&default.to_string(), enabled);
+        }
+    }
+
+    let gps_tx = match device.run().await {
+        Ok(t) => t,
+        Err(e) => {
+            error!("failed to read from GPS: {:?}", e);
+            std::process::exit(1);
+        }
+    };
+
+    let mut gps = GPS::new(gps_name, gps_tx.clone());
+
+    gps.read().await;
+
+    let pps = match gps_config.pps {
+        Some(p) => {
+            let device_name = p.device.clone();
+
+            let mut pps = PPS::new(device_name.clone(), name);
 
             match pps.run().await {
                 Ok(()) => (),
                 Err(e) => {
-                    error!("{}", e);
+                    error!("Error opening PPS device {}: {}", device_name, e);
                     std::process::exit(1);
                 }
             };
@@ -91,20 +118,14 @@ async fn run() {
     let mut ntp_shm = NtpShm::new(2);
     let mut server = Server::new(2947);
 
-    if let Some(g) = gps {
-        ntp_shm.add_gps(g.tx.clone());
-        server.add_gps(g);
-        info!("registered GPS");
-    }
+    ntp_shm.add_gps(gps.tx.clone());
+    server.add_gps(gps);
+    info!("registered GPS");
 
     if let Some(p) = pps {
-        let device_name = match gps_name {
-            Some(n) => n,
-            None => p.name.clone(),
-        };
-
+        let pps_device_name = p.device_name.clone();
         ntp_shm.add_pps(p.tx.clone());
-        server.add_pps(p, device_name);
+        server.add_pps(p, pps_device_name);
         info!("registered PPS");
     }
 
