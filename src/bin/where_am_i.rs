@@ -126,26 +126,26 @@ async fn start_gps(gps_config: &GpsConfig, server: &mut Server) {
 
     match &gps_config.pps {
         Some(pps_config) => {
-            let device_name = pps_config.device.clone();
+            let pps_name = pps_config.device.clone();
 
-            let mut pps = PPS::new(device_name.clone(), name);
+            let mut pps = PPS::new(pps_name.clone(), gps_name.clone());
 
             match pps.run().await {
                 Ok(()) => (),
                 Err(e) => {
-                    error!("Error opening PPS device {}: {}", device_name, e);
+                    error!("Error opening PPS device {}: {}", pps_name, e);
                     std::process::exit(1);
                 }
             };
 
             server.add_pps(&pps, gps_name.clone());
-            info!("registered PPS {} under {}", device_name, gps_name);
+            info!("registered PPS {} under {}", pps_name, gps_name);
 
             if let Some(ntp_unit) = pps_config.ntp_unit {
                 NtpShm::run(ntp_unit, -20, pps.tx.subscribe()).await;
                 info!(
                     "Sending PPS time from {} via NTP unit {}",
-                    device_name, ntp_unit
+                    pps_name, ntp_unit
                 );
             }
 
