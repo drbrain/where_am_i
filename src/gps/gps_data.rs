@@ -30,28 +30,28 @@ impl GPSData {
             NMEA::ParseError(e) => error!("parse error: {}", e),
             NMEA::ParseFailure(f) => error!("parse failure: {}", f),
             NMEA::Unsupported(n) => error!("unsupported: {}", n),
-            NMEA::GGA(nd) => gga(self, nd, name, tx),
-            NMEA::ZDA(nd) => zda(self, nd, name, tx),
+            NMEA::GGA(nd) => self.gga(nd, name, tx),
+            NMEA::ZDA(nd) => self.zda(nd, name, tx),
             _ => (),
         }
     }
-}
 
-fn gga(data: &mut GPSData, gga: GGAData, name: &str, tx: &JsonSender) {
-    data.quality = gga.quality;
-    data.lat_lon = Some(gga.lat_lon);
-    data.altitude_msl = Some(gga.alt);
-}
+    fn gga(&mut self, gga: GGAData, name: &str, tx: &JsonSender) {
+        self.quality = gga.quality;
+        self.lat_lon = Some(gga.lat_lon);
+        self.altitude_msl = Some(gga.alt);
+    }
 
-fn zda(data: &mut GPSData, zda: ZDAData, name: &str, tx: &JsonSender) {
-    let date = NaiveDate::from_ymd(zda.year, zda.month, zda.day);
-    let time = NaiveDateTime::new(date, zda.time);
-    let time = DateTime::from_utc(time, Utc);
+    fn zda(&mut self, zda: ZDAData, name: &str, tx: &JsonSender) {
+        let date = NaiveDate::from_ymd(zda.year, zda.month, zda.day);
+        let time = NaiveDateTime::new(date, zda.time);
+        let time = DateTime::from_utc(time, Utc);
 
-    data.time = Some(time);
-    data.year = time.year();
+        self.time = Some(time);
+        self.year = time.year();
 
-    report_time(time, name, tx);
+        report_time(time, name, tx);
+    }
 }
 
 #[tracing::instrument]
