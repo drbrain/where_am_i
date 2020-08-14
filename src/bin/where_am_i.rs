@@ -138,8 +138,8 @@ async fn start_gps(gps_config: &GpsConfig, server: &mut Server) {
                 }
             };
 
-            server.add_pps(&pps, device_name.clone());
-            info!("registered PPS {}", device_name);
+            server.add_pps(&pps, gps_name.clone());
+            info!("registered PPS {} under {}", device_name, gps_name);
 
             if let Some(ntp_unit) = pps_config.ntp_unit {
                 NtpShm::run(ntp_unit, -20, pps.tx.subscribe()).await;
