@@ -34,27 +34,9 @@ fn main() {
 }
 
 async fn run() {
-    let subscriber = tracing_subscriber::fmt()
-        .with_max_level(Level::TRACE)
-        .finish();
+    start_tracing();
 
-    tracing::subscriber::set_global_default(subscriber).expect("no global subscriber has been set");
-
-    let file = match std::env::args().nth(1) {
-        None => {
-            error!("You must provide a configuration file");
-            std::process::exit(1);
-        }
-        Some(f) => f,
-    };
-
-    let config = match Configuration::load(file) {
-        Ok(c) => c,
-        Err(e) => {
-            error!("failed to load configuration file: {:?}", e);
-            std::process::exit(1);
-        }
-    };
+    let config = load_config();
 
     let gps_config = config.gps[0].clone();
 
@@ -131,4 +113,30 @@ async fn run() {
 
     ntp_shm.run().await;
     server.run().await.unwrap();
+}
+
+fn start_tracing() {
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(Level::TRACE)
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber).expect("no global subscriber has been set");
+}
+
+fn load_config() -> Configuration {
+    let file = match std::env::args().nth(1) {
+        None => {
+            error!("You must provide a configuration file");
+            std::process::exit(1);
+        }
+        Some(f) => f,
+    };
+
+    match Configuration::load(file) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("failed to load configuration file: {:?}", e);
+            std::process::exit(1);
+        }
+    }
 }
