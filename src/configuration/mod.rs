@@ -16,14 +16,14 @@ use tokio_serial::StopBits;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct Configuration {
-    pub gps: Vec<Gps>,
+    pub gps: Vec<GpsConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct Gps {
+pub struct GpsConfig {
     pub name: String,
     pub device: String,
-    pub pps: Option<Pps>,
+    pub pps: Option<PpsConfig>,
     pub baud_rate: Option<u32>,
     pub framing: Option<String>,
     pub flow_control: Option<String>,
@@ -31,10 +31,10 @@ pub struct Gps {
     pub messages: Option<Vec<String>>,
 }
 
-impl TryFrom<Gps> for SerialPortSettings {
+impl TryFrom<GpsConfig> for SerialPortSettings {
     type Error = ConfigurationError;
 
-    fn try_from(device: Gps) -> Result<SerialPortSettings, ConfigurationError> {
+    fn try_from(device: GpsConfig) -> Result<SerialPortSettings, ConfigurationError> {
         let mut baud_rate = 38400;
         let mut data_bits = DataBits::Eight;
         let mut flow_control = FlowControl::None;
@@ -109,7 +109,7 @@ impl TryFrom<Gps> for SerialPortSettings {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct Pps {
+pub struct PpsConfig {
     pub device: String,
 }
 
