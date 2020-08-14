@@ -16,11 +16,11 @@ use tokio::sync::MutexGuard;
 
 use tracing::error;
 
-type Locked = Arc<Mutex<GPSdata>>;
-type Unlocked<'a> = MutexGuard<'a, GPSdata>;
+type Locked = Arc<Mutex<GPSData>>;
+type Unlocked<'a> = MutexGuard<'a, GPSData>;
 
 #[derive(Debug, Default)]
-pub struct GPSdata {
+pub struct GPSData {
     pub time: Option<DateTime<Utc>>,
 }
 
@@ -35,7 +35,7 @@ pub struct GPS {
 impl GPS {
     pub fn new(name: String, device_tx: Sender<NMEA>) -> Self {
         let (tx, _) = broadcast::channel(5);
-        let data = GPSdata::default();
+        let data = GPSData::default();
         let data = Mutex::new(data);
         let data = Arc::new(data);
 
@@ -81,7 +81,7 @@ fn read_nmea(nmea: NMEA, data: &mut Unlocked, name: &str, tx: &JsonSender) {
     }
 }
 
-fn zda(zda: ZDAdata, data: &mut Unlocked, name: &str, tx: &JsonSender) {
+fn zda(zda: ZDAData, data: &mut Unlocked, name: &str, tx: &JsonSender) {
     let date = NaiveDate::from_ymd(zda.year, zda.month, zda.day);
     let time = NaiveDateTime::new(date, zda.time);
     let time = DateTime::from_utc(time, Utc);

@@ -16,26 +16,26 @@ use serde::Serialize;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum NMEA {
-    DTM(DTMdata),
-    GAQ(GAQdata),
-    GBQ(GBQdata),
-    GBS(GBSdata),
-    GGA(GGAdata),
-    GLL(GLLdata),
-    GLQ(GLQdata),
-    GNQ(GNQdata),
-    GNS(GNSdata),
-    GPQ(GPQdata),
-    GRS(GRSdata),
-    GSA(GSAdata),
-    GST(GSTdata),
-    GSV(GSVdata),
+    DTM(DTMData),
+    GAQ(GAQData),
+    GBQ(GBQData),
+    GBS(GBSData),
+    GGA(GGAData),
+    GLL(GLLData),
+    GLQ(GLQData),
+    GNQ(GNQData),
+    GNS(GNSData),
+    GPQ(GPQData),
+    GRS(GRSData),
+    GSA(GSAData),
+    GST(GSTData),
+    GSV(GSVData),
     PUBX(UBXData),
-    RMC(RMCdata),
-    TXT(TXTdata),
-    VLW(VLWdata),
-    VTG(VTGdata),
-    ZDA(ZDAdata),
+    RMC(RMCData),
+    TXT(TXTData),
+    VLW(VLWData),
+    VTG(VTGData),
+    ZDA(ZDAData),
     InvalidChecksum(ChecksumMismatch),
     ParseError(String),
     ParseFailure(String),
@@ -502,7 +502,7 @@ pub(crate) fn uint32<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a 
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct DTMdata {
+pub struct DTMData {
     pub talker: Talker,
     pub datum: String,
     pub sub_datum: String,
@@ -514,7 +514,7 @@ pub struct DTMdata {
     pub ref_datum: String,
 }
 
-pub(crate) fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMdata, E> {
+pub(crate) fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMData, E> {
     context(
         "DTM",
         all_consuming(map(
@@ -530,7 +530,7 @@ pub(crate) fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 any,
             )),
             |(talker, datum, sub_datum, lat, north_south, lon, east_west, alt, ref_datum)| {
-                DTMdata {
+                DTMData {
                     talker,
                     datum,
                     sub_datum,
@@ -547,39 +547,39 @@ pub(crate) fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct GAQdata {
+pub struct GAQData {
     pub talker: Talker,
     pub message_id: String,
 }
 
-pub(crate) fn gaq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GAQdata, E> {
+pub(crate) fn gaq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GAQData, E> {
     context(
         "GAQ",
         all_consuming(map(
             tuple((talker, preceded(tag("GAQ"), preceded(comma, any)))),
-            |(talker, message_id)| GAQdata { talker, message_id },
+            |(talker, message_id)| GAQData { talker, message_id },
         )),
     )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct GBQdata {
+pub struct GBQData {
     pub talker: Talker,
     pub message_id: String,
 }
 
-pub(crate) fn gbq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GBQdata, E> {
+pub(crate) fn gbq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GBQData, E> {
     context(
         "GBQ",
         all_consuming(map(
             tuple((talker, preceded(tag("GBQ"), preceded(comma, any)))),
-            |(talker, message_id)| GBQdata { talker, message_id },
+            |(talker, message_id)| GBQData { talker, message_id },
         )),
     )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct GBSdata {
+pub struct GBSData {
     pub talker: Talker,
     pub time: NaiveTime,
     pub err_lat: f32,
@@ -593,7 +593,7 @@ pub struct GBSdata {
     pub signal: Option<Signal>,
 }
 
-pub(crate) fn gbs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GBSdata, E> {
+pub(crate) fn gbs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GBSData, E> {
     context(
         "GBS",
         all_consuming(map(
@@ -623,7 +623,7 @@ pub(crate) fn gbs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 system,
                 signal,
             )| {
-                GBSdata {
+                GBSData {
                     talker,
                     time,
                     err_lat,
@@ -642,7 +642,7 @@ pub(crate) fn gbs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct GGAdata {
+pub struct GGAData {
     pub talker: Talker,
     pub time: NaiveTime,
     pub lat_lon: LatLon,
@@ -657,7 +657,7 @@ pub struct GGAdata {
     pub diff_station: Option<u32>,
 }
 
-pub(crate) fn gga<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GGAdata, E> {
+pub(crate) fn gga<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GGAData, E> {
     context(
         "GGA",
         all_consuming(map(
@@ -688,7 +688,7 @@ pub(crate) fn gga<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 sep_unit,
                 diff_age,
                 diff_station,
-            )| GGAdata {
+            )| GGAData {
                 talker,
                 time,
                 lat_lon,
@@ -707,7 +707,7 @@ pub(crate) fn gga<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct GLLdata {
+pub struct GLLData {
     pub talker: Talker,
     pub lat_lon: LatLon,
     pub time: NaiveTime,
@@ -715,7 +715,7 @@ pub struct GLLdata {
     pub position_mode: PositionMode,
 }
 
-pub(crate) fn gll<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GLLdata, E> {
+pub(crate) fn gll<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GLLData, E> {
     context(
         "GLL",
         all_consuming(map(
@@ -726,7 +726,7 @@ pub(crate) fn gll<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 terminated(status, comma),
                 pos_mode,
             )),
-            |(talker, lat_lon, time, status, position_mode)| GLLdata {
+            |(talker, lat_lon, time, status, position_mode)| GLLData {
                 talker,
                 lat_lon,
                 time,
@@ -738,39 +738,39 @@ pub(crate) fn gll<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct GLQdata {
+pub struct GLQData {
     pub talker: Talker,
     pub message_id: String,
 }
 
-pub(crate) fn glq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GLQdata, E> {
+pub(crate) fn glq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GLQData, E> {
     context(
         "GLQ",
         all_consuming(map(
             tuple((talker, preceded(tag("GLQ"), preceded(comma, any)))),
-            |(talker, message_id)| GLQdata { talker, message_id },
+            |(talker, message_id)| GLQData { talker, message_id },
         )),
     )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct GNQdata {
+pub struct GNQData {
     pub talker: Talker,
     pub message_id: String,
 }
 
-pub(crate) fn gnq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GNQdata, E> {
+pub(crate) fn gnq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GNQData, E> {
     context(
         "GNQ",
         all_consuming(map(
             tuple((talker, preceded(tag("GNQ"), preceded(comma, any)))),
-            |(talker, message_id)| GNQdata { talker, message_id },
+            |(talker, message_id)| GNQData { talker, message_id },
         )),
     )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct GNSdata {
+pub struct GNSData {
     pub talker: Talker,
     pub time: NaiveTime,
     pub lat_lon: LatLon,
@@ -787,7 +787,7 @@ pub struct GNSdata {
     pub nav_status: Status,
 }
 
-pub(crate) fn gns<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GNSdata, E> {
+pub(crate) fn gns<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GNSData, E> {
     context(
         "GNS",
         all_consuming(map(
@@ -822,7 +822,7 @@ pub(crate) fn gns<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 diff_age,
                 diff_station,
                 nav_status,
-            )| GNSdata {
+            )| GNSData {
                 talker,
                 time,
                 lat_lon,
@@ -843,23 +843,23 @@ pub(crate) fn gns<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct GPQdata {
+pub struct GPQData {
     pub talker: Talker,
     pub message_id: String,
 }
 
-pub(crate) fn gpq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GPQdata, E> {
+pub(crate) fn gpq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GPQData, E> {
     context(
         "GPQ",
         all_consuming(map(
             tuple((talker, preceded(tag("GPQ"), preceded(comma, any)))),
-            |(talker, message_id)| GPQdata { talker, message_id },
+            |(talker, message_id)| GPQData { talker, message_id },
         )),
     )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct GRSdata {
+pub struct GRSData {
     pub talker: Talker,
     pub time: NaiveTime,
     pub gga_includes_residuals: bool,
@@ -868,7 +868,7 @@ pub struct GRSdata {
     pub signal: Option<Signal>,
 }
 
-pub(crate) fn grs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GRSdata, E> {
+pub(crate) fn grs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GRSData, E> {
     context(
         "GRS",
         all_consuming(map(
@@ -880,7 +880,7 @@ pub(crate) fn grs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 preceded(comma, system),
                 preceded(comma, opt(signal)),
             )),
-            |(talker, time, gga_includes_residuals, residuals, system, signal)| GRSdata {
+            |(talker, time, gga_includes_residuals, residuals, system, signal)| GRSData {
                 talker,
                 time,
                 gga_includes_residuals,
@@ -893,7 +893,7 @@ pub(crate) fn grs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct GSAdata {
+pub struct GSAData {
     pub talker: Talker,
     pub operation_mode: OperationMode,
     pub navigation_mode: NavigationMode,
@@ -904,7 +904,7 @@ pub struct GSAdata {
     pub system: System,
 }
 
-pub(crate) fn gsa<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSAdata, E> {
+pub(crate) fn gsa<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSAData, E> {
     context(
         "GSA",
         all_consuming(map(
@@ -919,7 +919,7 @@ pub(crate) fn gsa<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 system,
             )),
             |(talker, operation_mode, navigation_mode, satellite_ids, pdop, hdop, vdop, system)| {
-                GSAdata {
+                GSAData {
                     talker,
                     operation_mode,
                     navigation_mode,
@@ -935,7 +935,7 @@ pub(crate) fn gsa<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct GSTdata {
+pub struct GSTData {
     pub talker: Talker,
     pub time: NaiveTime,
     pub range_rms: Option<f32>,
@@ -947,7 +947,7 @@ pub struct GSTdata {
     pub std_alt: Option<f32>,
 }
 
-pub(crate) fn gst<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSTdata, E> {
+pub(crate) fn gst<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSTData, E> {
     context(
         "GST",
         all_consuming(map(
@@ -972,7 +972,7 @@ pub(crate) fn gst<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 std_lat,
                 std_lon,
                 std_alt,
-            )| GSTdata {
+            )| GSTData {
                 talker,
                 time,
                 range_rms,
@@ -1018,7 +1018,7 @@ pub(crate) fn gsv_sat<'a, E: ParseError<&'a str>>(
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct GSVdata {
+pub struct GSVData {
     pub talker: Talker,
     pub num_msgs: u32,
     pub msg: u32,
@@ -1027,7 +1027,7 @@ pub struct GSVdata {
     pub signal: Option<Signal>,
 }
 
-pub(crate) fn gsv<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSVdata, E> {
+pub(crate) fn gsv<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSVData, E> {
     context(
         "GSV",
         all_consuming(map(
@@ -1039,7 +1039,7 @@ pub(crate) fn gsv<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 many_m_n(0, 4, gsv_sat),
                 preceded(comma, opt(signal)),
             )),
-            |(talker, num_msgs, msg, num_satellites, satellites, signal)| GSVdata {
+            |(talker, num_msgs, msg, num_satellites, satellites, signal)| GSVData {
                 talker,
                 num_msgs,
                 msg,
@@ -1052,7 +1052,7 @@ pub(crate) fn gsv<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct RMCdata {
+pub struct RMCData {
     pub talker: Talker,
     pub time: NaiveTime,
     pub status: Status,
@@ -1066,7 +1066,7 @@ pub struct RMCdata {
     pub nav_status: Status,
 }
 
-pub(crate) fn rmc<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, RMCdata, E> {
+pub(crate) fn rmc<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, RMCData, E> {
     context(
         "RMC",
         all_consuming(map(
@@ -1095,7 +1095,7 @@ pub(crate) fn rmc<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 magnetic_variation_east_west,
                 position_mode,
                 nav_status,
-            )| RMCdata {
+            )| RMCData {
                 talker,
                 time,
                 status,
@@ -1113,7 +1113,7 @@ pub(crate) fn rmc<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct TXTdata {
+pub struct TXTData {
     pub talker: Talker,
     pub num_msgs: u32,
     pub msg: u32,
@@ -1121,7 +1121,7 @@ pub struct TXTdata {
     pub text: String,
 }
 
-pub(crate) fn txt<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, TXTdata, E> {
+pub(crate) fn txt<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, TXTData, E> {
     context(
         "TXT",
         all_consuming(map(
@@ -1132,7 +1132,7 @@ pub(crate) fn txt<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 terminated(msg_type, comma),
                 any,
             )),
-            |(talker, num_msgs, msg, msg_type, text)| TXTdata {
+            |(talker, num_msgs, msg, msg_type, text)| TXTData {
                 talker,
                 num_msgs,
                 msg,
@@ -1461,7 +1461,7 @@ pub(crate) fn ubx_04<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a 
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct VLWdata {
+pub struct VLWData {
     pub talker: Talker,
     pub total_water_distance: Option<f32>,
     pub total_water_distance_unit: String,
@@ -1473,7 +1473,7 @@ pub struct VLWdata {
     pub ground_distance_unit: String,
 }
 
-pub(crate) fn vlw<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, VLWdata, E> {
+pub(crate) fn vlw<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, VLWData, E> {
     context(
         "VLW",
         all_consuming(map(
@@ -1498,7 +1498,7 @@ pub(crate) fn vlw<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 total_ground_distance_unit,
                 ground_distance,
                 ground_distance_unit,
-            )| VLWdata {
+            )| VLWData {
                 talker,
                 total_water_distance,
                 total_water_distance_unit,
@@ -1514,7 +1514,7 @@ pub(crate) fn vlw<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct VTGdata {
+pub struct VTGData {
     pub talker: Talker,
     pub course_over_ground_true: Option<f32>,
     pub course_over_ground_true_unit: String,
@@ -1527,7 +1527,7 @@ pub struct VTGdata {
     pub position_mode: PositionMode,
 }
 
-pub(crate) fn vtg<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, VTGdata, E> {
+pub(crate) fn vtg<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, VTGData, E> {
     context(
         "VTG",
         all_consuming(map(
@@ -1554,7 +1554,7 @@ pub(crate) fn vtg<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 speed_over_ground_km,
                 speed_over_ground_km_unit,
                 position_mode,
-            )| VTGdata {
+            )| VTGData {
                 talker,
                 course_over_ground_true,
                 course_over_ground_true_unit,
@@ -1571,7 +1571,7 @@ pub(crate) fn vtg<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ZDAdata {
+pub struct ZDAData {
     pub talker: Talker,
     pub time: NaiveTime,
     pub day: u32,
@@ -1581,7 +1581,7 @@ pub struct ZDAdata {
     pub local_tz_minute: u32,
 }
 
-pub(crate) fn zda<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, ZDAdata, E> {
+pub(crate) fn zda<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, ZDAData, E> {
     context(
         "ZDA",
         all_consuming(map(
@@ -1594,7 +1594,7 @@ pub(crate) fn zda<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 terminated(int32, comma),
                 uint32,
             )),
-            |(talker, time, day, month, year, local_tz_hour, local_tz_minute)| ZDAdata {
+            |(talker, time, day, month, year, local_tz_hour, local_tz_minute)| ZDAData {
                 talker,
                 time,
                 day,
