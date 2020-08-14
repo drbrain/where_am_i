@@ -37,22 +37,13 @@ fn main() {
 async fn run() {
     start_tracing();
 
+    let mut server = Server::new(2947);
+
     let config = load_config();
 
     let gps_config = config.gps[0].clone();
 
-    let (gps, pps) = start_gps(gps_config).await;
-
-    let mut server = Server::new(2947);
-
-    server.add_gps(gps);
-    info!("registered GPS");
-
-    if let Some(p) = pps {
-        let pps_device_name = p.device_name.clone();
-        server.add_pps(p, pps_device_name);
-        info!("registered PPS");
-    }
+    start_gps(gps_config, &mut server).await;
 
     server.run().await.unwrap();
 }
@@ -86,7 +77,7 @@ fn load_config() -> Configuration {
     }
 }
 
-async fn start_gps(gps_config: GpsConfig) -> (GPS, Option<PPS>) {
+async fn start_gps(gps_config: GpsConfig, server: &mut Server) {
     let name = gps_config.name.clone();
     let gps_name = gps_config.device.clone();
     let messages = gps_config.messages.clone().unwrap_or(vec![]);
@@ -125,15 +116,15 @@ async fn start_gps(gps_config: GpsConfig) -> (GPS, Option<PPS>) {
 
     gps.read().await;
 
+    server.add_gps(&gps);
+    info!("registered GPS {}", name.clone());
+
     if let Some(ntp_unit) = gps_config.ntp_unit {
         NtpShm::run(ntp_unit, -1, gps.tx.subscribe()).await;
-        info!(
-            "Sending GPS time from {} via NTP unit {}",
-            gps_name, ntp_unit
-        );
+        info!("Sending GPS time from {} via NTP unit {}", name, ntp_unit);
     }
 
-    let pps = match gps_config.pps {
+    match gps_config.pps {
         Some(pps_config) => {
             let device_name = pps_config.device.clone();
 
@@ -147,6 +138,9 @@ async fn start_gps(gps_config: GpsConfig) -> (GPS, Option<PPS>) {
                 }
             };
 
+            server.add_pps(&pps, device_name.clone());
+            info!("registered PPS {}", device_name);
+
             if let Some(ntp_unit) = pps_config.ntp_unit {
                 NtpShm::run(ntp_unit, -20, pps.tx.subscribe()).await;
                 info!(
@@ -159,6 +153,4 @@ async fn start_gps(gps_config: GpsConfig) -> (GPS, Option<PPS>) {
         }
         None => None,
     };
-
-    (gps, pps)
 }

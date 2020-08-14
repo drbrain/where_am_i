@@ -33,12 +33,12 @@ impl Server {
         }
     }
 
-    pub fn add_gps(&mut self, gps: GPS) {
-        self.gps_tx.insert(gps.name.clone(), gps.tx);
+    pub fn add_gps(&mut self, gps: &GPS) {
+        self.gps_tx.insert(gps.name.clone(), gps.tx.clone());
     }
 
-    pub fn add_pps(&mut self, pps: PPS, name: String) {
-        self.pps_tx.insert(name, pps.tx);
+    pub fn add_pps(&mut self, pps: &PPS, name: String) {
+        self.pps_tx.insert(name, pps.tx.clone());
     }
 
     pub fn gps_rx_for(&self, device: String) -> Option<JsonReceiver> {

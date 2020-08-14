@@ -8,8 +8,6 @@ use std::io;
 use std::sync::atomic::compiler_fence;
 use std::sync::atomic::Ordering;
 
-use tracing::info;
-
 pub struct NtpShm {}
 
 const NTPD_BASE: i32 = 0x4e545030;
@@ -30,8 +28,6 @@ fn map_ntp_unit(unit: i32) -> io::Result<ShmTime> {
 
 async fn relay_timestamps(unit: i32, precision: i32, mut rx: JsonReceiver) {
     let mut time = map_ntp_unit(unit).unwrap();
-
-    info!("Sending NTP SHM timestamps on unit {}", unit);
 
     while let Ok(ts) = rx.recv().await {
         let clock_sec = ts["clock_sec"].as_i64().unwrap_or(0).try_into().unwrap();
