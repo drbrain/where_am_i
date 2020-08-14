@@ -29,6 +29,7 @@ pub struct GpsConfig {
     pub flow_control: Option<String>,
     pub timeout: Option<u32>,
     pub messages: Option<Vec<String>>,
+    pub ntp_unit: Option<i32>,
 }
 
 impl TryFrom<GpsConfig> for SerialPortSettings {
@@ -111,6 +112,7 @@ impl TryFrom<GpsConfig> for SerialPortSettings {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct PpsConfig {
     pub device: String,
+    pub ntp_unit: Option<i32>,
 }
 
 impl Configuration {

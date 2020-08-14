@@ -9,6 +9,7 @@ use tracing::info;
 use tracing::Level;
 
 use where_am_i::configuration::Configuration;
+use where_am_i::configuration::GpsConfig;
 use where_am_i::gps::GPS;
 use where_am_i::gpsd::Server;
 use where_am_i::nmea::Device;
@@ -40,6 +41,52 @@ async fn run() {
 
     let gps_config = config.gps[0].clone();
 
+    let (gps, pps) = start_gps(gps_config).await;
+
+    let mut server = Server::new(2947);
+
+    server.add_gps(gps);
+    info!("registered GPS");
+
+    if let Some(p) = pps {
+        let pps_device_name = p.device_name.clone();
+        server.add_pps(p, pps_device_name);
+        info!("registered PPS");
+    }
+
+    server.run().await.unwrap();
+}
+
+fn start_tracing() {
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(Level::TRACE)
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber).expect("no global subscriber has been set");
+}
+
+fn load_config() -> Configuration {
+    let file = match std::env::args().nth(1) {
+        None => {
+            error!("You must provide a configuration file");
+            std::process::exit(1);
+        }
+        Some(f) => f,
+    };
+
+    match Configuration::load(file.clone()) {
+        Ok(c) => {
+            info!("Loaded configuration from {}", file);
+            c
+        }
+        Err(e) => {
+            error!("failed to load configuration file: {:?}", e);
+            std::process::exit(1);
+        }
+    }
+}
+
+async fn start_gps(gps_config: GpsConfig) -> (GPS, Option<PPS>) {
     let name = gps_config.name.clone();
     let gps_name = gps_config.device.clone();
     let messages = gps_config.messages.clone().unwrap_or(vec![]);
@@ -74,13 +121,21 @@ async fn run() {
         }
     };
 
-    let mut gps = GPS::new(gps_name, gps_tx.clone());
+    let mut gps = GPS::new(gps_name.clone(), gps_tx.clone());
 
     gps.read().await;
 
+    if let Some(ntp_unit) = gps_config.ntp_unit {
+        NtpShm::run(ntp_unit, -1, gps.tx.subscribe()).await;
+        info!(
+            "Sending GPS time from {} via NTP unit {}",
+            gps_name, ntp_unit
+        );
+    }
+
     let pps = match gps_config.pps {
-        Some(p) => {
-            let device_name = p.device.clone();
+        Some(pps_config) => {
+            let device_name = pps_config.device.clone();
 
             let mut pps = PPS::new(device_name.clone(), name);
 
@@ -92,51 +147,18 @@ async fn run() {
                 }
             };
 
+            if let Some(ntp_unit) = pps_config.ntp_unit {
+                NtpShm::run(ntp_unit, -20, pps.tx.subscribe()).await;
+                info!(
+                    "Sending PPS time from {} via NTP unit {}",
+                    device_name, ntp_unit
+                );
+            }
+
             Some(pps)
         }
         None => None,
     };
 
-    let mut ntp_shm = NtpShm::new(2);
-    let mut server = Server::new(2947);
-
-    ntp_shm.add_gps(gps.tx.clone());
-    server.add_gps(gps);
-    info!("registered GPS");
-
-    if let Some(p) = pps {
-        let pps_device_name = p.device_name.clone();
-        ntp_shm.add_pps(p.tx.clone());
-        server.add_pps(p, pps_device_name);
-        info!("registered PPS");
-    }
-
-    ntp_shm.run().await;
-    server.run().await.unwrap();
-}
-
-fn start_tracing() {
-    let subscriber = tracing_subscriber::fmt()
-        .with_max_level(Level::TRACE)
-        .finish();
-
-    tracing::subscriber::set_global_default(subscriber).expect("no global subscriber has been set");
-}
-
-fn load_config() -> Configuration {
-    let file = match std::env::args().nth(1) {
-        None => {
-            error!("You must provide a configuration file");
-            std::process::exit(1);
-        }
-        Some(f) => f,
-    };
-
-    match Configuration::load(file) {
-        Ok(c) => c,
-        Err(e) => {
-            error!("failed to load configuration file: {:?}", e);
-            std::process::exit(1);
-        }
-    }
+    (gps, pps)
 }

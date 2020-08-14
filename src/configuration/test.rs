@@ -25,9 +25,11 @@ name = "GPS0"
 device = "/dev/gps0"
 baud_rate = 38400
 messages = [ "ZDA" ]
+ntp_unit = 2
 
 [gps.pps]
 device = "/dev/pps0"
+ntp_unit = 3
 
 [[gps]]
 name = "GPS1"
@@ -55,10 +57,12 @@ device = "/dev/pps1"
         flow_control: None,
         timeout: None,
         messages: Some(vec!["ZDA".to_string()]),
+        ntp_unit: Some(2),
     };
 
     let pps1 = Pps {
         device: "/dev/pps1".to_string(),
+        ntp_unit: Some(3),
     };
 
     let gps1 = Gps {
@@ -70,10 +74,12 @@ device = "/dev/pps1"
         flow_control: None,
         timeout: None,
         messages: None,
+        ntp_unit: None,
     };
 
     let expected = Configuration {
         gps: vec![gps0, gps1],
+        ntp_unit: None,
     };
 
     assert_eq!(expected, config);
