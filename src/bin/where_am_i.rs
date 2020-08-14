@@ -41,9 +41,9 @@ async fn run() {
 
     let config = load_config();
 
-    let gps_config = config.gps[0].clone();
-
-    start_gps(gps_config, &mut server).await;
+    for gps_config in config.gps.iter() {
+        start_gps(gps_config, &mut server).await;
+    }
 
     server.run().await.unwrap();
 }
@@ -77,7 +77,7 @@ fn load_config() -> Configuration {
     }
 }
 
-async fn start_gps(gps_config: GpsConfig, server: &mut Server) {
+async fn start_gps(gps_config: &GpsConfig, server: &mut Server) {
     let name = gps_config.name.clone();
     let gps_name = gps_config.device.clone();
     let messages = gps_config.messages.clone().unwrap_or(vec![]);
@@ -124,7 +124,7 @@ async fn start_gps(gps_config: GpsConfig, server: &mut Server) {
         info!("Sending GPS time from {} via NTP unit {}", name, ntp_unit);
     }
 
-    match gps_config.pps {
+    match &gps_config.pps {
         Some(pps_config) => {
             let device_name = pps_config.device.clone();
 
