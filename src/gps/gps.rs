@@ -22,6 +22,12 @@ type Unlocked<'a> = MutexGuard<'a, GPSData>;
 #[derive(Debug, Default)]
 pub struct GPSData {
     pub time: Option<DateTime<Utc>>,
+    pub year: i32,
+
+    pub lat_lon: Option<LatLon>,
+    pub altitude_msl: Option<f32>,
+
+    pub quality: Quality,
 }
 
 #[derive(Debug)]
@@ -76,9 +82,16 @@ fn read_nmea(nmea: NMEA, data: &mut Unlocked, name: &str, tx: &JsonSender) {
         NMEA::ParseError(e) => error!("parse error: {}", e),
         NMEA::ParseFailure(f) => error!("parse failure: {}", f),
         NMEA::Unsupported(n) => error!("unsupported: {}", n),
+        NMEA::GGA(nd) => gga(nd, data, name, tx),
         NMEA::ZDA(nd) => zda(nd, data, name, tx),
         _ => (),
     }
+}
+
+fn gga(gga: GGAData, data: &mut Unlocked, name: &str, tx: &JsonSender) {
+    data.quality = gga.quality;
+    data.lat_lon = Some(gga.lat_lon);
+    data.altitude_msl = Some(gga.alt);
 }
 
 fn zda(zda: ZDAData, data: &mut Unlocked, name: &str, tx: &JsonSender) {
@@ -87,6 +100,7 @@ fn zda(zda: ZDAData, data: &mut Unlocked, name: &str, tx: &JsonSender) {
     let time = DateTime::from_utc(time, Utc);
 
     data.time = Some(time);
+    data.year = time.year();
 
     report_time(time, name, tx);
 }

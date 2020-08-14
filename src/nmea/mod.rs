@@ -6,8 +6,11 @@ mod ser;
 pub use codec::Codec;
 pub use device::Device;
 pub use device::UBX_OUTPUT_MESSAGES;
-pub use parser::NMEA;
 pub use ser::ToNMEA;
+
+pub use parser::LatLon;
+pub use parser::Quality;
+pub use parser::NMEA;
 
 pub use parser::DTMData;
 pub use parser::GAQData;

@@ -348,6 +348,12 @@ pub enum Quality {
     RTKFloat,
 }
 
+impl Default for Quality {
+    fn default() -> Self {
+        Quality::NoFix
+    }
+}
+
 pub(crate) fn quality<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Quality, E> {
     map(one_of("012456"), |c| match c {
         '0' => Quality::NoFix,
