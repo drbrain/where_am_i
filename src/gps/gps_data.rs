@@ -11,8 +11,11 @@ use tracing::error;
 
 #[derive(Debug, Default)]
 pub struct GPSData {
+    pub(crate) naive_date: Option<NaiveDate>,
+    pub(crate) naive_time: Option<NaiveTime>,
+    pub(crate) year: i32,
+
     pub time: Option<DateTime<Utc>>,
-    pub year: i32,
 
     pub lat_lon: Option<LatLon>,
     pub altitude_msl: Option<f32>,
@@ -36,13 +39,27 @@ impl GPSData {
         }
     }
 
-    fn gga(&mut self, gga: GGAData, name: &str, tx: &JsonSender) {
+    pub(crate) fn update_time(&mut self, new_time: NaiveTime) {
+        if let Some(mut date) = self.naive_date {
+            if let Some(time) = self.naive_time {
+                if new_time < time {
+                    date = date.succ();
+                }
+            }
+
+            let time = NaiveDateTime::new(date, new_time);
+
+            self.time = Some(DateTime::from_utc(time, Utc));
+        }
+    }
+
+    pub(crate) fn gga(&mut self, gga: GGAData, name: &str, tx: &JsonSender) {
         self.quality = gga.quality;
         self.lat_lon = Some(gga.lat_lon);
         self.altitude_msl = Some(gga.alt);
     }
 
-    fn zda(&mut self, zda: ZDAData, name: &str, tx: &JsonSender) {
+    pub(crate) fn zda(&mut self, zda: ZDAData, name: &str, tx: &JsonSender) {
         let date = NaiveDate::from_ymd(zda.year, zda.month, zda.day);
         let time = NaiveDateTime::new(date, zda.time);
         let time = DateTime::from_utc(time, Utc);

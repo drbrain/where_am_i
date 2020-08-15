@@ -10,6 +10,7 @@ pub use ser::ToNMEA;
 
 pub use parser::LatLon;
 pub use parser::Quality;
+pub use parser::Talker;
 pub use parser::NMEA;
 
 pub use parser::DTMData;
