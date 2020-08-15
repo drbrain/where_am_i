@@ -346,6 +346,8 @@ pub enum Quality {
     NoFix,
     RTKFixed,
     RTKFloat,
+    Fix2D,
+    Fix3D,
 }
 
 impl Default for Quality {

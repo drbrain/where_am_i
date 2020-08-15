@@ -9,7 +9,10 @@ pub use device::UBX_OUTPUT_MESSAGES;
 pub use ser::ToNMEA;
 
 pub use parser::LatLon;
+pub use parser::NavigationMode;
+pub use parser::OperationMode;
 pub use parser::Quality;
+pub use parser::System;
 pub use parser::Talker;
 pub use parser::NMEA;
 

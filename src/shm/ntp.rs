@@ -8,6 +8,8 @@ use std::io;
 use std::sync::atomic::compiler_fence;
 use std::sync::atomic::Ordering;
 
+use tracing::error;
+
 pub struct NtpShm {}
 
 const NTPD_BASE: i32 = 0x4e545030;
@@ -30,6 +32,12 @@ async fn relay_timestamps(unit: i32, precision: i32, mut rx: JsonReceiver) {
     let mut time = map_ntp_unit(unit).unwrap();
 
     while let Ok(ts) = rx.recv().await {
+        let class = &ts["class"];
+
+        if class != "TOFF" && class != "PPS" {
+            continue;
+        }
+
         let clock_sec = ts["clock_sec"].as_i64().unwrap_or(0).try_into().unwrap();
         let clock_nsec = ts["clock_nsec"].as_i64().unwrap_or(0).try_into().unwrap();
         let clock_usec = (clock_nsec / 1000) as i32;
@@ -56,6 +64,8 @@ async fn relay_timestamps(unit: i32, precision: i32, mut rx: JsonReceiver) {
         time.count.update(|c| *c += 1);
         time.valid.write(1);
     }
+
+    error!("Sending timestamps failed");
 
     sysv_shm::unmap(time);
 }

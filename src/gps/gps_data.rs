@@ -20,7 +20,13 @@ pub struct GPSData {
     pub lat_lon: Option<LatLon>,
     pub altitude_msl: Option<f32>,
 
-    pub quality: Quality,
+    pub gps_navigation_mode: Option<NavigationMode>,
+    pub glonass_navigation_mode: Option<NavigationMode>,
+    pub galileo_navigation_mode: Option<NavigationMode>,
+    pub beiduo_navigation_mode: Option<NavigationMode>,
+    mode: Option<u32>,
+
+    pub quality: Option<Quality>,
 }
 
 impl GPSData {
@@ -34,6 +40,7 @@ impl GPSData {
             NMEA::ParseFailure(f) => error!("parse failure: {}", f),
             NMEA::Unsupported(n) => error!("unsupported: {}", n),
             NMEA::GGA(nd) => self.gga(nd, name, tx),
+            NMEA::GSA(nd) => self.gsa(nd, name, tx),
             NMEA::ZDA(nd) => self.zda(nd, name, tx),
             _ => (),
         }
@@ -54,9 +61,46 @@ impl GPSData {
     }
 
     pub(crate) fn gga(&mut self, gga: GGAData, name: &str, tx: &JsonSender) {
-        self.quality = gga.quality;
+        self.quality = Some(gga.quality);
         self.lat_lon = Some(gga.lat_lon);
         self.altitude_msl = Some(gga.alt);
+    }
+
+    pub(crate) fn gsa(&mut self, gsa: GSAData, name: &str, tx: &JsonSender) {
+        match gsa.system {
+            System::BeiDuo => self.beiduo_navigation_mode = Some(gsa.navigation_mode),
+            System::GLONASS => self.glonass_navigation_mode = Some(gsa.navigation_mode),
+            System::GPS => self.gps_navigation_mode = Some(gsa.navigation_mode),
+            System::Galileo => self.galileo_navigation_mode = Some(gsa.navigation_mode),
+            _ => return,
+        }
+
+        let mut modes = Vec::with_capacity(4);
+
+        if let Some(beiduo) = &self.beiduo_navigation_mode {
+            modes.push(beiduo);
+        }
+
+        if let Some(glonass) = &self.glonass_navigation_mode {
+            modes.push(glonass);
+        }
+
+        if let Some(gps) = &self.gps_navigation_mode {
+            modes.push(gps);
+        }
+
+        if let Some(galileo) = &self.galileo_navigation_mode {
+            modes.push(galileo);
+        }
+
+        if modes.len() == 4 {
+            self.mode = Some(modes.iter().map(|m| gpsd_mode(m)).fold(0, u32::max));
+
+            self.beiduo_navigation_mode = None;
+            self.galileo_navigation_mode = None;
+            self.glonass_navigation_mode = None;
+            self.gps_navigation_mode = None;
+        }
     }
 
     pub(crate) fn zda(&mut self, zda: ZDAData, name: &str, tx: &JsonSender) {
@@ -67,12 +111,20 @@ impl GPSData {
         self.time = Some(time);
         self.year = time.year();
 
-        report_time(time, name, tx);
+        report_toff(time, name, tx);
+        report_tpv(time, self.mode, name, tx);
     }
 }
 
-#[tracing::instrument]
-fn report_time(date: DateTime<Utc>, name: &str, tx: &JsonSender) {
+fn gpsd_mode(navigation_mode: &NavigationMode) -> u32 {
+    match navigation_mode {
+        NavigationMode::FixNone => 1,
+        NavigationMode::Fix2D => 2,
+        NavigationMode::Fix3D => 3,
+    }
+}
+
+fn report_toff(date: DateTime<Utc>, name: &str, tx: &JsonSender) {
     let sec = date.timestamp();
     let nsec = date.timestamp_subsec_nanos();
 
@@ -92,4 +144,18 @@ fn report_time(date: DateTime<Utc>, name: &str, tx: &JsonSender) {
     });
 
     if tx.send(toff).is_ok() {}
+}
+
+fn report_tpv(time: DateTime<Utc>, mode: Option<u32>, name: &str, tx: &JsonSender) {
+    let time = time.to_rfc3339();
+    let mode = mode.unwrap_or(0);
+
+    let tpv = json!({
+        "class":  "TPV".to_string(),
+        "device": name,
+        "time":   time,
+        "mode":   mode,
+    });
+
+    if tx.send(tpv).is_ok() {}
 }
