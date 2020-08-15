@@ -55,8 +55,8 @@ fn test_update_time_day_boundary() {
 #[test]
 fn test_gga() {
     let (tx, _) = broadcast::channel(1);
-
     let mut gps = GPSData::default();
+
     let gga = GGAData {
         talker: Talker::GPS,
         time: NaiveTime::from_hms_milli(1, 8, 2, 0),
@@ -83,4 +83,27 @@ fn test_gga() {
     assert_approx_eq!(44.9343, lat_lon.latitude);
     assert_approx_eq!(-93.2624, lat_lon.latitude);
     assert_approx_eq!(264.0, gps.altitude_msl.unwrap());
+}
+
+#[test]
+fn test_zda() {
+    let (tx, _) = broadcast::channel(1);
+    let mut gps = GPSData::default();
+
+    let zda = ZDAData {
+        talker: Talker::GPS,
+        time: NaiveTime::from_hms_milli(1, 8, 0, 0),
+        day: 26,
+        month: 5,
+        year: 2020,
+        local_tz_hour: 0,
+        local_tz_minute: 0,
+    };
+
+    let expected_time = build_time(2020, 5, 26, 1, 8, 0, 0);
+
+    gps.zda(zda, "name", &tx);
+
+    assert_eq!(2020, gps.year);
+    assert_eq!(expected_time, gps.time.unwrap());
 }
