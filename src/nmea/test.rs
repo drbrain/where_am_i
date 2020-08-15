@@ -571,7 +571,7 @@ fn test_gbgsv() {
     let input = "GBGSV,2,1,07,04,00,261,,11,01,341,,12,30,300,,19,61,071,,";
     let result = gsv::<VE>(input);
 
-    let parsed = p::<GSVdata>(input, result);
+    let parsed = p::<GSVData>(input, result);
 
     let satellites = vec![
         GSVsatellite {
@@ -635,7 +635,7 @@ fn test_gnrmc() {
 
     let result = rmc::<VE>(input);
 
-    let parsed = p::<RMCdata>(input, result);
+    let parsed = p::<RMCData>(input, result);
 
     assert_eq!(Talker::Combination, parsed.talker);
     assert_eq!(NaiveTime::from_hms_milli(08, 35, 59, 0), parsed.time);
@@ -848,7 +848,7 @@ fn test_gnvtg() {
 
     let result = vtg::<VE>(input);
 
-    let parsed = p::<VTGdata>(input, result);
+    let parsed = p::<VTGData>(input, result);
 
     assert_eq!(Talker::Combination, parsed.talker);
     assert_eq!(None, parsed.course_over_ground_true);

@@ -44,11 +44,12 @@ device = "/dev/pps1"
     let path = dir.path().join("where.toml");
     let config = Configuration::load(path).unwrap();
 
-    let pps0 = Pps {
+    let pps0 = PpsConfig {
         device: "/dev/pps0".to_string(),
+        ntp_unit: Some(3),
     };
 
-    let gps0 = Gps {
+    let gps0 = GpsConfig {
         name: "GPS0".to_string(),
         device: "/dev/gps0".to_string(),
         pps: Some(pps0),
@@ -60,12 +61,12 @@ device = "/dev/pps1"
         ntp_unit: Some(2),
     };
 
-    let pps1 = Pps {
+    let pps1 = PpsConfig {
         device: "/dev/pps1".to_string(),
-        ntp_unit: Some(3),
+        ntp_unit: None,
     };
 
-    let gps1 = Gps {
+    let gps1 = GpsConfig {
         name: "GPS1".to_string(),
         device: "/dev/gps1".to_string(),
         pps: Some(pps1),
@@ -79,7 +80,6 @@ device = "/dev/pps1"
 
     let expected = Configuration {
         gps: vec![gps0, gps1],
-        ntp_unit: None,
     };
 
     assert_eq!(expected, config);
@@ -87,7 +87,7 @@ device = "/dev/pps1"
 
 #[test]
 fn test_try_from() {
-    let gps = Gps {
+    let gps = GpsConfig {
         name: "GPS".to_string(),
         device: "/dev/gps0".to_string(),
         pps: None,
@@ -96,6 +96,7 @@ fn test_try_from() {
         flow_control: Some("H".to_string()),
         timeout: Some(10),
         messages: None,
+        ntp_unit: None,
     };
 
     let settings = SerialPortSettings::try_from(gps).unwrap();
@@ -110,7 +111,7 @@ fn test_try_from() {
 
 #[test]
 fn test_try_from_default() {
-    let gps = Gps {
+    let gps = GpsConfig {
         name: "GPS".to_string(),
         device: "/dev/gps0".to_string(),
         pps: None,
@@ -119,6 +120,7 @@ fn test_try_from_default() {
         flow_control: None,
         timeout: None,
         messages: None,
+        ntp_unit: None,
     };
 
     let settings = SerialPortSettings::try_from(gps).unwrap();
@@ -133,7 +135,7 @@ fn test_try_from_default() {
 
 #[test]
 fn test_try_from_error() {
-    let gps = Gps {
+    let gps = GpsConfig {
         name: "GPS".to_string(),
         device: "/dev/gps0".to_string(),
         pps: None,
@@ -142,6 +144,7 @@ fn test_try_from_error() {
         flow_control: None,
         timeout: None,
         messages: None,
+        ntp_unit: None,
     };
 
     match SerialPortSettings::try_from(gps).err().unwrap() {
