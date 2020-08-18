@@ -6,6 +6,10 @@ This project aims to replace enough of gpsd to allow me to feed timestamp and
 PPS data into the [Network Time Protocol](https://www.ntp.org) daemon, and to
 allow tracking of GPS statistics.
 
+Presently it is only known to work with [u-blox
+ZED-F9P](https://www.u-blox.com/en/product/zed-f9p-module)-based GNSS
+receivers.
+
 ## How do I use this?
 
 ### Raspberry Pi configuration
@@ -63,8 +67,9 @@ KERNEL=="ttyAMA0", SYMLINK+="gps0"
 
 Presently only enough of the gpsd protocol to support the GPSD_JSON refclock is
 implemented.  This includes the `?VERSION` command and enough of the `?WATCH`
-commands for ntpd to stream `TOFF` and `PPS` events.  (The refclock driver says
-it requires `TPV` events, but it accepts either `PPS` or `TPV` events.)
+commands for ntpd to stream `TOFF` and `PPS` events.  (The refclock driver
+manual page says it requires `TPV` events, but if the gpsd protocol version is
+3.10 it only reads `TOFF` and `PPS` events depending.)
 
 Add the driver to `/etc/ntp.conf` with:
 
@@ -75,25 +80,73 @@ fudge 127.127.46.0
 
 ### NTP driver notes
 
-Both drivers are still unreliable with GPS offsets, so some work remains to do
-there.  Once they start working properly you'll need to adjust the `time1`
-offsets to get accurate timekeeping.
+After running NTP for a while and getting stable output you will need to adjust
+the NTP offsets for each driver.  This is done through the `time1` fudge
+setting for the NTP SHM driver and the `time` and `time2` fudge settings for
+the GPSD_JSON driver.
 
 See the respective driver manual pages for more info.
 
 ### Running where_am_i
 
+This sections shows how to set up `where_am_i` for timekeeping purposes.
+Positioning is not yet implemented.
+
+First create a `where.toml`:
+
+```toml
+[[gps]]
+name = "GPS0"
+device = "/dev/gps0"
+baud_rate = 38400
+messages = [ "ZDA" ]
+ntp_unit = 2
+
+[gps.pps]
+device = "/dev/pps0"
+ntp_unit = 3
+```
+
+This will send GNSS timestamps to NTP SHM unit 2 and PPS timestamps to NTP SHM
+unit 3.  You can choose other NTP SHM units if you like.
+
 To run the server:
 
 ```sh
-cargo build && sudo target/debug/where_am_i /dev/gps0 --pps-device /dev/pps0
+cargo build && sudo target/debug/where_am_i where.toml
 ```
 
 Then restart `ntpd`.  It will take several seconds before `ntpd` first connects
-to the server, and at least a minute for `ntpd` to start using time data from
+to the gpsd server, and at least a minute for `ntpd` to start using time data from
 the GPS and PPS, be patient.
 
 You can monitor the status of the clock with `ntpq -p`.
+
+## where.toml
+
+### Global options
+
+### `[[gps]]` options
+
+The `[[gps]]` section may be repeated if you have more than one GPS receiver.
+It supports the following fields:
+
+* `name`: A friendly name for the GPS device.
+* `device`: The TTY device to open to interact with the GPS.
+* `baud_rate`: The speed of the GPS device, defaults to 38400.
+* `framing`: The data bits, parity bit, and stop bit configuration.  Defaults to `"8N1"`.
+* `flow_control`: GPS device flow control.  Defaults to none.  Maybe be empty.
+  (none), `"H"` for hardware flow control or `"S"` for software flow control.
+* `timeout`: Timeout for reading from the GPS device in milliseconds.  Defaults to 1 ms.
+* `messages`: List of messages to enable for a u-blox GPS device.  Defaults to all known.
+* `ntp_unit`: NTP SHM unit to use for sending timestamps.  Defaults to none.
+
+### `[gps.pps]` options
+
+The `[gps.pps]` section allows you to attach a PPS device to a GPS device.
+
+* `device`: The name of the PPS device to open.
+* `ntp_unit`: NTP SHM unit to use for sending timestamps.  Defaults to none.
 
 ## gpsd already does all this?
 
