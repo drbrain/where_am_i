@@ -609,6 +609,28 @@ fn test_gbgsv() {
 }
 
 #[test]
+fn test_mkt_010() {
+    let parsed = parser::mkt_010::<VE>("PMTK010,000").unwrap().1;
+
+    assert_eq!(MKTSystemMessage::Unknown, parsed);
+
+    let parsed = parser::mkt_010::<VE>("PMTK010,001").unwrap().1;
+
+    assert_eq!(MKTSystemMessage::Startup, parsed);
+
+    let parsed = parser::mkt_010::<VE>("PMTK010,004").unwrap().1;
+
+    assert_eq!(MKTSystemMessage::Unhandled(4), parsed);
+}
+
+#[test]
+fn test_mkt_011() {
+    let parsed = parser::mkt_011::<VE>("PMTK011,MTKGPS").unwrap().1;
+
+    assert_eq!("MTKGPS", parsed.message);
+}
+
+#[test]
 fn test_rmc() {
     let parsed =
         parser::rmc::<VE>("GPRMC,083559.00,A,4717.11437,N,00833.91522,E,0.004,77.52,091202,,,A,V")
