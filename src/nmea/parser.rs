@@ -1157,7 +1157,7 @@ pub struct RMCData {
     pub magnetic_variation: Option<f32>,
     pub magnetic_variation_east_west: Option<EastWest>,
     pub position_mode: PositionMode,
-    pub nav_status: Status,
+    pub nav_status: Option<Status>,
 }
 
 pub(crate) fn rmc<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, RMCData, E> {
@@ -1175,7 +1175,7 @@ pub(crate) fn rmc<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 preceded(comma, opt(flt32)),
                 preceded(comma, opt(east_west)),
                 preceded(comma, pos_mode),
-                preceded(comma, status),
+                opt(preceded(comma, status)),
             )),
             |(
                 talker,

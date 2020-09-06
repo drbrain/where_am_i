@@ -737,7 +737,29 @@ fn test_rmc() {
     assert_eq!(None, parsed.magnetic_variation);
     assert_eq!(None, parsed.magnetic_variation_east_west);
     assert_eq!(PositionMode::AutonomousGNSSFix, parsed.position_mode);
-    assert_eq!(Status::Invalid, parsed.nav_status);
+    assert_eq!(Some(Status::Invalid), parsed.nav_status);
+}
+
+#[test]
+fn test_rmc_empty() {
+    let parsed =
+        parser::rmc::<VE>("GPRMC,204849.013,V,,,,,0.00,0.00,050920,,,N")
+            .unwrap()
+            .1;
+
+    assert_eq!(Talker::GPS, parsed.talker);
+    assert_eq!(NaiveTime::from_hms_milli(20, 48, 49, 130), parsed.time);
+    assert_eq!(Status::Invalid, parsed.status);
+
+    assert_eq!(None, parsed.lat_lon);
+
+    assert_approx_eq!(0.0, parsed.speed);
+    assert_approx_eq!(0.0, parsed.course_over_ground.unwrap());
+    assert_eq!(NaiveDate::from_ymd(20, 9, 5), parsed.date);
+    assert_eq!(None, parsed.magnetic_variation);
+    assert_eq!(None, parsed.magnetic_variation_east_west);
+    assert_eq!(PositionMode::NoFix, parsed.position_mode);
+    assert_eq!(None, parsed.nav_status);
 }
 
 #[test]
@@ -762,7 +784,7 @@ fn test_gnrmc() {
     assert_eq!(None, parsed.magnetic_variation);
     assert_eq!(None, parsed.magnetic_variation_east_west);
     assert_eq!(PositionMode::AutonomousGNSSFix, parsed.position_mode);
-    assert_eq!(Status::Invalid, parsed.nav_status);
+    assert_eq!(Some(Status::Invalid), parsed.nav_status);
 }
 
 #[test]
