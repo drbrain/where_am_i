@@ -199,6 +199,36 @@ fn test_talker() {
 }
 
 #[test]
+fn test_time_hms() {
+    let input = "072732";
+    let result = parser::time::<VE>(input);
+
+    let time = p::<NaiveTime>(input, result);
+
+    assert_eq!(NaiveTime::from_hms_milli(7, 27, 32, 0), time);
+}
+
+#[test]
+fn test_time_hms_centi() {
+    let input = "072732.91";
+    let result = parser::time::<VE>(input);
+
+    let time = p::<NaiveTime>(input, result);
+
+    assert_eq!(NaiveTime::from_hms_milli(7, 27, 32, 910), time);
+}
+
+#[test]
+fn test_time_hms_milli() {
+    let input = "072732.911";
+    let result = parser::time::<VE>(input);
+
+    let time = p::<NaiveTime>(input, result);
+
+    assert_eq!(NaiveTime::from_hms_milli(7, 27, 32, 911), time);
+}
+
+#[test]
 fn test_dtm() {
     let parsed = parser::dtm::<VE>("GPDTM,W84,,0.0,N,0.0,E,0.0,W84")
         .unwrap()
@@ -312,7 +342,7 @@ fn test_gga_startup() {
         .1;
 
     assert_eq!(Talker::GPS, parsed.talker);
-    assert_eq!(NaiveTime::from_hms_milli(20, 48, 49, 130), parsed.time);
+    assert_eq!(NaiveTime::from_hms_milli(20, 48, 49, 013), parsed.time);
     assert_eq!(None, parsed.lat_lon);
     assert_eq!(Quality::NoFix, parsed.quality);
     assert_eq!(0, parsed.num_satellites);
@@ -343,13 +373,11 @@ fn test_gll() {
 
 #[test]
 fn test_gll_startup() {
-    let parsed = parser::gll::<VE>("GPGLL,,,,,204849.013,V,N")
-        .unwrap()
-        .1;
+    let parsed = parser::gll::<VE>("GPGLL,,,,,204849.013,V,N").unwrap().1;
 
     assert_eq!(Talker::GPS, parsed.talker);
     assert_eq!(None, parsed.lat_lon);
-    assert_eq!(NaiveTime::from_hms_milli(20, 48, 49, 130), parsed.time);
+    assert_eq!(NaiveTime::from_hms_milli(20, 48, 49, 013), parsed.time);
     assert_eq!(Status::Invalid, parsed.status);
     assert_eq!(PositionMode::NoFix, parsed.position_mode);
 }
@@ -499,9 +527,7 @@ fn test_gsa() {
 
 #[test]
 fn test_gsa_startup() {
-    let parsed = parser::gsa::<VE>("GPGSA,A,1,,,,,,,,,,,,,,,")
-        .unwrap()
-        .1;
+    let parsed = parser::gsa::<VE>("GPGSA,A,1,,,,,,,,,,,,,,,").unwrap().1;
 
     assert_eq!(Talker::GPS, parsed.talker);
     assert_eq!(OperationMode::Automatic, parsed.operation_mode);
@@ -742,13 +768,12 @@ fn test_rmc() {
 
 #[test]
 fn test_rmc_empty() {
-    let parsed =
-        parser::rmc::<VE>("GPRMC,204849.013,V,,,,,0.00,0.00,050920,,,N")
-            .unwrap()
-            .1;
+    let parsed = parser::rmc::<VE>("GPRMC,204849.013,V,,,,,0.00,0.00,050920,,,N")
+        .unwrap()
+        .1;
 
     assert_eq!(Talker::GPS, parsed.talker);
-    assert_eq!(NaiveTime::from_hms_milli(20, 48, 49, 130), parsed.time);
+    assert_eq!(NaiveTime::from_hms_milli(20, 48, 49, 013), parsed.time);
     assert_eq!(Status::Invalid, parsed.status);
 
     assert_eq!(None, parsed.lat_lon);

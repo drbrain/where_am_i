@@ -524,11 +524,39 @@ pub(crate) fn three_digit<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult
     map_res(take_while_m_n(3, 3, is_digit), |i: &str| i.parse())(input)
 }
 
+enum TimeResolution {
+    Centisecond(u32),
+    Millisecond(u32),
+}
+
+// Parses time without subseconds: 010203
+//
+// with centiseconds: 010203.45
+//
+// with milliseconds: 010203.456
+
 pub(crate) fn time<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NaiveTime, E> {
     map(
-        tuple((two_digit, two_digit, two_digit, preceded(dot, uint32))),
-        |(hour, minute, second, subsec)| {
-            NaiveTime::from_hms_milli(hour, minute, second, subsec * 10)
+        tuple((
+            two_digit,
+            two_digit,
+            two_digit,
+            opt(preceded(
+                dot,
+                alt((
+                    map(three_digit, TimeResolution::Millisecond),
+                    map(two_digit, TimeResolution::Centisecond),
+                )),
+            )),
+        )),
+        |(hour, minute, second, subsec)| match subsec {
+            Some(TimeResolution::Centisecond(subsec)) => {
+                NaiveTime::from_hms_milli(hour, minute, second, subsec * 10)
+            }
+            Some(TimeResolution::Millisecond(subsec)) => {
+                NaiveTime::from_hms_milli(hour, minute, second, subsec)
+            }
+            None => NaiveTime::from_hms_milli(hour, minute, second, 0),
         },
     )(input)
 }
