@@ -112,12 +112,19 @@ pub(crate) fn message<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a
         map(gsa, NMEA::GSA),
         map(gst, NMEA::GST),
         map(gsv, NMEA::GSV),
-        map(pubx, NMEA::PUBX),
         map(rmc, NMEA::RMC),
         map(txt, NMEA::TXT),
         map(vlw, NMEA::VLW),
         map(vtg, NMEA::VTG),
         map(zda, NMEA::ZDA),
+        private_message
+    ))(input)
+}
+
+pub(crate) fn private_message<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NMEA, E> {
+    alt((
+        map(pmkt, NMEA::PMKT),
+        map(pubx, NMEA::PUBX),
         map(rest, |m: &str| NMEA::Unsupported(m.to_string())),
     ))(input)
 }
