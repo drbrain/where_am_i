@@ -342,6 +342,19 @@ fn test_gll() {
 }
 
 #[test]
+fn test_gll_startup() {
+    let parsed = parser::gll::<VE>("GPGLL,,,,,204849.013,V,N")
+        .unwrap()
+        .1;
+
+    assert_eq!(Talker::GPS, parsed.talker);
+    assert_eq!(None, parsed.lat_lon);
+    assert_eq!(NaiveTime::from_hms_milli(20, 48, 49, 130), parsed.time);
+    assert_eq!(Status::Invalid, parsed.status);
+    assert_eq!(PositionMode::NoFix, parsed.position_mode);
+}
+
+#[test]
 fn test_glq() {
     let parsed = parser::glq::<VE>("EIGLQ,RMC").unwrap().1;
 
