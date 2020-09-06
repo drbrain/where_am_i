@@ -10,6 +10,9 @@ Presently it is only known to work with [u-blox
 ZED-F9P](https://www.u-blox.com/en/product/zed-f9p-module)-based GNSS
 receivers.
 
+I am also working with a GlobalTop-based GNSS receiver for expanded
+compatibility.
+
 ## How do I use this?
 
 ### Raspberry Pi configuration
