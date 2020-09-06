@@ -639,6 +639,20 @@ fn test_gsv() {
 }
 
 #[test]
+fn test_gsv_startup() {
+    let (_, parsed) = parser::gsv::<VE>("GPGSV,1,1,00").unwrap();
+
+    let satellites: Vec<GSVsatellite> = vec![];
+
+    assert_eq!(Talker::GPS, parsed.talker);
+    assert_eq!(1, parsed.num_msgs);
+    assert_eq!(1, parsed.msg);
+    assert_eq!(0, parsed.num_satellites);
+    assert_eq!(satellites, parsed.satellites);
+    assert_eq!(None, parsed.signal);
+}
+
+#[test]
 fn test_gbgsv() {
     let input = "GBGSV,2,1,07,04,00,261,,11,01,341,,12,30,300,,19,61,071,,";
     let result = gsv::<VE>(input);

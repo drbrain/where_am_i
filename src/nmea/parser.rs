@@ -1070,7 +1070,7 @@ pub(crate) fn gsv<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 preceded(comma, uint32),
                 preceded(comma, uint32),
                 many_m_n(0, 4, gsv_sat),
-                preceded(comma, opt(signal)),
+                opt(preceded(comma, opt(signal))),
             )),
             |(talker, num_msgs, msg, num_satellites, satellites, signal)| GSVData {
                 talker,
@@ -1078,7 +1078,7 @@ pub(crate) fn gsv<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 msg,
                 num_satellites,
                 satellites,
-                signal,
+                signal: signal.unwrap_or(None),
             },
         )),
     )(input)
