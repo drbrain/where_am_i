@@ -60,16 +60,16 @@ fn test_gga() {
     let gga = GGAData {
         talker: Talker::GPS,
         time: NaiveTime::from_hms_milli(1, 8, 2, 0),
-        lat_lon: LatLon {
+        lat_lon: Some(LatLon {
             latitude: 44.9343,
             longitude: -93.2624,
-        },
+        }),
         quality: Quality::AutonomousGNSSFix,
         num_satellites: 12,
-        hdop: 1.0,
-        alt: 264.0,
+        hdop: Some(1.0),
+        alt: Some(264.0),
         alt_unit: "m".to_string(),
-        sep: 0.0,
+        sep: Some(0.0),
         sep_unit: "M".to_string(),
         diff_age: None,
         diff_station: None,

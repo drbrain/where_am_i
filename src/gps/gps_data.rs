@@ -60,13 +60,13 @@ impl GPSData {
         }
     }
 
-    pub(crate) fn gga(&mut self, gga: GGAData, name: &str, tx: &JsonSender) {
+    pub(crate) fn gga(&mut self, gga: GGAData, _name: &str, _tx: &JsonSender) {
         self.quality = Some(gga.quality);
-        self.lat_lon = Some(gga.lat_lon);
-        self.altitude_msl = Some(gga.alt);
+        self.lat_lon = gga.lat_lon;
+        self.altitude_msl = gga.alt;
     }
 
-    pub(crate) fn gsa(&mut self, gsa: GSAData, name: &str, tx: &JsonSender) {
+    pub(crate) fn gsa(&mut self, gsa: GSAData, _name: &str, _tx: &JsonSender) {
         match gsa.system {
             System::BeiDuo => self.beiduo_navigation_mode = Some(gsa.navigation_mode),
             System::GLONASS => self.glonass_navigation_mode = Some(gsa.navigation_mode),

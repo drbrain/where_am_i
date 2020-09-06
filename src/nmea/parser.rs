@@ -232,20 +232,35 @@ pub struct LatLon {
     pub longitude: f32,
 }
 
-pub(crate) fn latlon<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, LatLon, E> {
+pub(crate) fn latlon<'a, E: ParseError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, Option<LatLon>, E> {
     map(
         tuple((
             map(
-                tuple((terminated(lat, comma), terminated(north_south, comma))),
-                |(l, d)| l * if d == NorthSouth::North { 1.0 } else { -1.0 },
+                tuple((
+                    terminated(opt(lat), comma),
+                    terminated(opt(north_south), comma),
+                )),
+                |(l, d)| match (l, d) {
+                    (Some(l), Some(d)) => Some(l * if d == NorthSouth::North { 1.0 } else { -1.0 }),
+                    _ => None,
+                },
             ),
-            map(tuple((terminated(lon, comma), east_west)), |(l, d)| {
-                l * if d == EastWest::East { 1.0 } else { -1.0 }
-            }),
+            map(
+                tuple((terminated(opt(lon), comma), opt(east_west))),
+                |(l, d)| match (l, d) {
+                    (Some(l), Some(d)) => Some(l * if d == EastWest::East { 1.0 } else { -1.0 }),
+                    _ => None,
+                },
+            ),
         )),
-        |(latitude, longitude)| LatLon {
-            latitude,
-            longitude,
+        |(latitude, longitude)| match (latitude, longitude) {
+            (Some(latitude), Some(longitude)) => Some(LatLon {
+                latitude,
+                longitude,
+            }),
+            _ => None,
         },
     )(input)
 }
@@ -491,9 +506,9 @@ pub(crate) fn three_digit<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult
 
 pub(crate) fn time<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NaiveTime, E> {
     map(
-        tuple((two_digit, two_digit, two_digit, preceded(dot, two_digit))),
+        tuple((two_digit, two_digit, two_digit, preceded(dot, uint32))),
         |(hour, minute, second, subsec)| {
-            NaiveTime::from_hms_milli(hour, minute, second, subsec * 100)
+            NaiveTime::from_hms_milli(hour, minute, second, subsec * 10)
         },
     )(input)
 }
@@ -654,13 +669,13 @@ pub(crate) fn gbs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 pub struct GGAData {
     pub talker: Talker,
     pub time: NaiveTime,
-    pub lat_lon: LatLon,
+    pub lat_lon: Option<LatLon>,
     pub quality: Quality,
     pub num_satellites: u32,
-    pub hdop: f32,
-    pub alt: f32,
+    pub hdop: Option<f32>,
+    pub alt: Option<f32>,
     pub alt_unit: String,
-    pub sep: f32,
+    pub sep: Option<f32>,
     pub sep_unit: String,
     pub diff_age: Option<u32>,
     pub diff_station: Option<u32>,
@@ -676,10 +691,10 @@ pub(crate) fn gga<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 terminated(latlon, comma),
                 terminated(quality, comma),
                 terminated(uint32, comma),
-                terminated(flt32, comma),
-                terminated(flt32, comma),
+                terminated(opt(flt32), comma),
+                terminated(opt(flt32), comma),
                 terminated(any, comma),
-                terminated(flt32, comma),
+                terminated(opt(flt32), comma),
                 terminated(any, comma),
                 terminated(opt(uint32), comma),
                 opt(uint32),
@@ -718,7 +733,7 @@ pub(crate) fn gga<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 #[derive(Clone, Debug, PartialEq)]
 pub struct GLLData {
     pub talker: Talker,
-    pub lat_lon: LatLon,
+    pub lat_lon: Option<LatLon>,
     pub time: NaiveTime,
     pub status: Status,
     pub position_mode: PositionMode,
@@ -782,7 +797,7 @@ pub(crate) fn gnq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 pub struct GNSData {
     pub talker: Talker,
     pub time: NaiveTime,
-    pub lat_lon: LatLon,
+    pub lat_lon: Option<LatLon>,
     pub gps_position_mode: PositionMode,
     pub glonass_position_mode: PositionMode,
     pub galileo_position_mode: PositionMode,
@@ -1126,7 +1141,7 @@ pub struct RMCData {
     pub talker: Talker,
     pub time: NaiveTime,
     pub status: Status,
-    pub lat_lon: LatLon,
+    pub lat_lon: Option<LatLon>,
     pub speed: f32,
     pub course_over_ground: Option<f32>,
     pub date: NaiveDate,
@@ -1297,7 +1312,7 @@ pub(crate) fn ubx_nav_stat<'a, E: ParseError<&'a str>>(
 #[derive(Clone, Debug, PartialEq)]
 pub struct UBXPosition {
     pub time: NaiveTime,
-    pub lat_lon: LatLon,
+    pub lat_lon: Option<LatLon>,
     pub alt_ref: f32,
     pub nav_status: UBXNavigationStatus,
     pub horizontal_accuracy: f32,

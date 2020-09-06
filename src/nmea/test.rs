@@ -117,10 +117,18 @@ fn test_lat() {
 fn test_latlon() {
     let lat_lon = parser::latlon::<VE>("4717.11399,N,00833.91590,W")
         .unwrap()
-        .1;
+        .1
+        .unwrap();
 
     assert_eq!(47.285233, lat_lon.latitude);
     assert_eq!(-8.565265, lat_lon.longitude);
+}
+
+#[test]
+fn test_latlon_empty() {
+    let lat_lon = parser::latlon::<VE>(",,,,").unwrap().1;
+
+    assert_eq!(None, lat_lon);
 }
 
 #[test]
@@ -282,14 +290,36 @@ fn test_gga() {
 
     assert_eq!(Talker::GPS, parsed.talker);
     assert_eq!(NaiveTime::from_hms_milli(09, 27, 25, 0), parsed.time);
-    assert_approx_eq!(47.285233, parsed.lat_lon.latitude);
-    assert_approx_eq!(8.565265, parsed.lat_lon.longitude);
+
+    let lat_lon = parsed.lat_lon.unwrap();
+    assert_approx_eq!(47.285233, lat_lon.latitude);
+    assert_approx_eq!(8.565265, lat_lon.longitude);
+
     assert_eq!(Quality::AutonomousGNSSFix, parsed.quality);
     assert_eq!(8, parsed.num_satellites);
-    assert_approx_eq!(1.01, parsed.hdop);
-    assert_approx_eq!(499.6, parsed.alt);
+    assert_approx_eq!(1.01, parsed.hdop.unwrap());
+    assert_approx_eq!(499.6, parsed.alt.unwrap());
     assert_eq!("M".to_string(), parsed.alt_unit);
-    assert_approx_eq!(48.0, parsed.sep);
+    assert_approx_eq!(48.0, parsed.sep.unwrap());
+    assert_eq!(None, parsed.diff_age);
+    assert_eq!(None, parsed.diff_station);
+}
+
+#[test]
+fn test_gga_startup() {
+    let parsed = parser::gga::<VE>("GPGGA,204849.013,,,,,0,0,,,M,,M,,")
+        .unwrap()
+        .1;
+
+    assert_eq!(Talker::GPS, parsed.talker);
+    assert_eq!(NaiveTime::from_hms_milli(20, 48, 49, 130), parsed.time);
+    assert_eq!(None, parsed.lat_lon);
+    assert_eq!(Quality::NoFix, parsed.quality);
+    assert_eq!(0, parsed.num_satellites);
+    assert_eq!(None, parsed.hdop);
+    assert_eq!(None, parsed.alt);
+    assert_eq!("M".to_string(), parsed.alt_unit);
+    assert_eq!(None, parsed.sep);
     assert_eq!(None, parsed.diff_age);
     assert_eq!(None, parsed.diff_station);
 }
@@ -301,8 +331,11 @@ fn test_gll() {
         .1;
 
     assert_eq!(Talker::GPS, parsed.talker);
-    assert_approx_eq!(47.28523, parsed.lat_lon.latitude);
-    assert_approx_eq!(8.565261, parsed.lat_lon.longitude);
+
+    let lat_lon = parsed.lat_lon.unwrap();
+    assert_approx_eq!(47.28523, lat_lon.latitude);
+    assert_approx_eq!(8.565261, lat_lon.longitude);
+
     assert_eq!(NaiveTime::from_hms_milli(09, 23, 21, 0), parsed.time);
     assert_eq!(Status::Valid, parsed.status);
     assert_eq!(PositionMode::AutonomousGNSSFix, parsed.position_mode);
@@ -640,8 +673,11 @@ fn test_rmc() {
     assert_eq!(Talker::GPS, parsed.talker);
     assert_eq!(NaiveTime::from_hms_milli(08, 35, 59, 0), parsed.time);
     assert_eq!(Status::Valid, parsed.status);
-    assert_approx_eq!(47.28524, parsed.lat_lon.latitude);
-    assert_approx_eq!(8.565253, parsed.lat_lon.longitude);
+
+    let lat_lon = parsed.lat_lon.unwrap();
+    assert_approx_eq!(47.28524, lat_lon.latitude);
+    assert_approx_eq!(8.565253, lat_lon.longitude);
+
     assert_approx_eq!(0.004, parsed.speed);
     assert_approx_eq!(77.52, parsed.course_over_ground.unwrap());
     assert_eq!(NaiveDate::from_ymd(02, 12, 9), parsed.date);
@@ -662,8 +698,11 @@ fn test_gnrmc() {
     assert_eq!(Talker::Combination, parsed.talker);
     assert_eq!(NaiveTime::from_hms_milli(08, 35, 59, 0), parsed.time);
     assert_eq!(Status::Valid, parsed.status);
-    assert_approx_eq!(47.28524, parsed.lat_lon.latitude);
-    assert_approx_eq!(8.565253, parsed.lat_lon.longitude);
+
+    let lat_lon = parsed.lat_lon.unwrap();
+    assert_approx_eq!(47.28524, lat_lon.latitude);
+    assert_approx_eq!(8.565253, lat_lon.longitude);
+
     assert_approx_eq!(0.015, parsed.speed);
     assert_eq!(None, parsed.course_over_ground);
     assert_eq!(NaiveDate::from_ymd(02, 12, 9), parsed.date);
@@ -727,8 +766,11 @@ fn test_ubx_00() {
     let parsed = p::<UBXPosition>(input, result);
 
     assert_eq!(NaiveTime::from_hms_milli(8, 13, 50, 0), parsed.time);
-    assert_approx_eq!(47.28522, parsed.lat_lon.latitude);
-    assert_approx_eq!(8.565253, parsed.lat_lon.longitude);
+
+    let lat_lon = parsed.lat_lon.unwrap();
+    assert_approx_eq!(47.28522, lat_lon.latitude);
+    assert_approx_eq!(8.565253, lat_lon.longitude);
+
     assert_approx_eq!(546.589, parsed.alt_ref);
     assert_eq!(UBXNavigationStatus::Standalone3D, parsed.nav_status);
     assert_approx_eq!(2.1, parsed.horizontal_accuracy);
