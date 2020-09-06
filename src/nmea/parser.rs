@@ -14,6 +14,8 @@ use nom::IResult;
 
 use serde::Serialize;
 
+use tracing::trace;
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum NMEA {
     DTM(DTMData),
@@ -72,6 +74,8 @@ pub fn parse<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], 
     let data = std::str::from_utf8(data).unwrap();
 
     if given == calculated {
+        trace!("parsing \"{}\" (checksum OK)", data);
+
         match message::<VerboseError<&'a str>>(data) {
             Err(Err::Error(_)) => Ok((input, NMEA::ParseError(String::from(data)))),
             Err(Err::Failure(_)) => Ok((input, NMEA::ParseFailure(String::from(data)))),
@@ -83,6 +87,13 @@ pub fn parse<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], 
             Ok((_, nmea)) => Ok((input, nmea)),
         }
     } else {
+        trace!(
+            "invalid checksum for \"{}\" ({} != {})",
+            data,
+            given,
+            calculated
+        );
+
         let message = String::from(data);
 
         Ok((
