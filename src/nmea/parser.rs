@@ -931,10 +931,10 @@ pub struct GSAData {
     pub operation_mode: OperationMode,
     pub navigation_mode: NavigationMode,
     pub satellite_ids: Vec<Option<u32>>,
-    pub pdop: f32,
-    pub hdop: f32,
-    pub vdop: f32,
-    pub system: System,
+    pub pdop: Option<f32>,
+    pub hdop: Option<f32>,
+    pub vdop: Option<f32>,
+    pub system: Option<System>,
 }
 
 pub(crate) fn gsa<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSAData, E> {
@@ -946,10 +946,10 @@ pub(crate) fn gsa<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
                 terminated(op_mode, comma),
                 terminated(nav_mode, comma),
                 map(many_m_n(12, 12, terminated(opt(uint32), comma)), Vec::from),
-                terminated(flt32, comma),
-                terminated(flt32, comma),
-                terminated(flt32, comma),
-                system,
+                terminated(opt(flt32), comma),
+                terminated(opt(flt32), comma),
+                opt(flt32),
+                opt(preceded(comma, system)),
             )),
             |(talker, operation_mode, navigation_mode, satellite_ids, pdop, hdop, vdop, system)| {
                 GSAData {

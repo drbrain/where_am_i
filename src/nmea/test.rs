@@ -491,10 +491,36 @@ fn test_gsa() {
     assert_eq!(satellite_ids[9], parsed.satellite_ids[9]);
     assert_eq!(satellite_ids[10], parsed.satellite_ids[10]);
     assert_eq!(satellite_ids[11], parsed.satellite_ids[11]);
-    assert_approx_eq!(1.94, parsed.pdop);
-    assert_approx_eq!(1.18, parsed.hdop);
-    assert_approx_eq!(1.54, parsed.vdop);
-    assert_eq!(System::GPS, parsed.system);
+    assert_approx_eq!(1.94, parsed.pdop.unwrap());
+    assert_approx_eq!(1.18, parsed.hdop.unwrap());
+    assert_approx_eq!(1.54, parsed.vdop.unwrap());
+    assert_eq!(Some(System::GPS), parsed.system);
+}
+
+#[test]
+fn test_gsa_startup() {
+    let parsed = parser::gsa::<VE>("GPGSA,A,1,,,,,,,,,,,,,,,")
+        .unwrap()
+        .1;
+
+    assert_eq!(Talker::GPS, parsed.talker);
+    assert_eq!(OperationMode::Automatic, parsed.operation_mode);
+    assert_eq!(NavigationMode::FixNone, parsed.navigation_mode);
+    assert_eq!(None, parsed.satellite_ids[0]);
+    assert_eq!(None, parsed.satellite_ids[1]);
+    assert_eq!(None, parsed.satellite_ids[2]);
+    assert_eq!(None, parsed.satellite_ids[3]);
+    assert_eq!(None, parsed.satellite_ids[4]);
+    assert_eq!(None, parsed.satellite_ids[5]);
+    assert_eq!(None, parsed.satellite_ids[6]);
+    assert_eq!(None, parsed.satellite_ids[7]);
+    assert_eq!(None, parsed.satellite_ids[8]);
+    assert_eq!(None, parsed.satellite_ids[9]);
+    assert_eq!(None, parsed.satellite_ids[10]);
+    assert_eq!(None, parsed.satellite_ids[11]);
+    assert_eq!(None, parsed.pdop);
+    assert_eq!(None, parsed.hdop);
+    assert_eq!(None, parsed.vdop);
 }
 
 #[test]

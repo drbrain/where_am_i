@@ -95,10 +95,10 @@ fn test_gsa() {
         operation_mode: OperationMode::Automatic,
         navigation_mode: NavigationMode::Fix3D,
         satellite_ids: vec![Some(1), Some(2), Some(3)],
-        pdop: 1.0,
-        hdop: 1.0,
-        vdop: 1.0,
-        system: System::BeiDuo,
+        pdop: Some(1.0),
+        hdop: Some(1.0),
+        vdop: Some(1.0),
+        system: Some(System::BeiDuo),
     };
 
     let gagsa = GSAData {
@@ -106,10 +106,10 @@ fn test_gsa() {
         operation_mode: OperationMode::Automatic,
         navigation_mode: NavigationMode::Fix3D,
         satellite_ids: vec![Some(1), Some(2), Some(3)],
-        pdop: 1.0,
-        hdop: 1.0,
-        vdop: 1.0,
-        system: System::Galileo,
+        pdop: Some(1.0),
+        hdop: Some(1.0),
+        vdop: Some(1.0),
+        system: Some(System::Galileo),
     };
 
     let glgsa = GSAData {
@@ -117,10 +117,10 @@ fn test_gsa() {
         operation_mode: OperationMode::Automatic,
         navigation_mode: NavigationMode::Fix3D,
         satellite_ids: vec![Some(1), Some(2), Some(3)],
-        pdop: 1.0,
-        hdop: 1.0,
-        vdop: 1.0,
-        system: System::GLONASS,
+        pdop: Some(1.0),
+        hdop: Some(1.0),
+        vdop: Some(1.0),
+        system: Some(System::GLONASS),
     };
 
     let gpgsa = GSAData {
@@ -128,10 +128,10 @@ fn test_gsa() {
         operation_mode: OperationMode::Automatic,
         navigation_mode: NavigationMode::Fix3D,
         satellite_ids: vec![Some(1), Some(2), Some(3)],
-        pdop: 1.0,
-        hdop: 1.0,
-        vdop: 1.0,
-        system: System::GPS,
+        pdop: Some(1.0),
+        hdop: Some(1.0),
+        vdop: Some(1.0),
+        system: Some(System::GPS),
     };
 
     gps.gsa(gagsa, "name", &tx);
@@ -155,10 +155,10 @@ fn test_gsa_beiduo() {
         operation_mode: OperationMode::Automatic,
         navigation_mode: NavigationMode::Fix3D,
         satellite_ids: vec![Some(1), Some(2), Some(3)],
-        pdop: 1.0,
-        hdop: 1.0,
-        vdop: 1.0,
-        system: System::BeiDuo,
+        pdop: Some(1.0),
+        hdop: Some(1.0),
+        vdop: Some(1.0),
+        system: Some(System::BeiDuo),
     };
 
     gps.gsa(gbgsa, "name", &tx);
@@ -175,10 +175,10 @@ fn test_gsa_galileo() {
         operation_mode: OperationMode::Automatic,
         navigation_mode: NavigationMode::Fix3D,
         satellite_ids: vec![Some(1), Some(2), Some(3)],
-        pdop: 1.0,
-        hdop: 1.0,
-        vdop: 1.0,
-        system: System::Galileo,
+        pdop: Some(1.0),
+        hdop: Some(1.0),
+        vdop: Some(1.0),
+        system: Some(System::Galileo),
     };
 
     gps.gsa(gagsa, "name", &tx);
@@ -195,10 +195,10 @@ fn test_gsa_glonass() {
         operation_mode: OperationMode::Automatic,
         navigation_mode: NavigationMode::Fix3D,
         satellite_ids: vec![Some(1), Some(2), Some(3)],
-        pdop: 1.0,
-        hdop: 1.0,
-        vdop: 1.0,
-        system: System::GLONASS,
+        pdop: Some(1.0),
+        hdop: Some(1.0),
+        vdop: Some(1.0),
+        system: Some(System::GLONASS),
     };
 
     gps.gsa(glgsa, "name", &tx);
@@ -215,10 +215,10 @@ fn test_gsa_gps() {
         operation_mode: OperationMode::Automatic,
         navigation_mode: NavigationMode::Fix3D,
         satellite_ids: vec![Some(1), Some(2), Some(3)],
-        pdop: 1.0,
-        hdop: 1.0,
-        vdop: 1.0,
-        system: System::GPS,
+        pdop: Some(1.0),
+        hdop: Some(1.0),
+        vdop: Some(1.0),
+        system: Some(System::GPS),
     };
 
     gps.gsa(gpgsa, "name", &tx);

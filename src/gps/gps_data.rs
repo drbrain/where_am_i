@@ -68,10 +68,10 @@ impl GPSData {
 
     pub(crate) fn gsa(&mut self, gsa: GSAData, _name: &str, _tx: &JsonSender) {
         match gsa.system {
-            System::BeiDuo => self.beiduo_navigation_mode = Some(gsa.navigation_mode),
-            System::GLONASS => self.glonass_navigation_mode = Some(gsa.navigation_mode),
-            System::GPS => self.gps_navigation_mode = Some(gsa.navigation_mode),
-            System::Galileo => self.galileo_navigation_mode = Some(gsa.navigation_mode),
+            Some(System::BeiDuo) => self.beiduo_navigation_mode = Some(gsa.navigation_mode),
+            Some(System::GLONASS) => self.glonass_navigation_mode = Some(gsa.navigation_mode),
+            Some(System::GPS) => self.gps_navigation_mode = Some(gsa.navigation_mode),
+            Some(System::Galileo) => self.galileo_navigation_mode = Some(gsa.navigation_mode),
             _ => return,
         }
 
