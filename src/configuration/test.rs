@@ -1,10 +1,10 @@
 use crate::configuration::*;
 
-use std::io::Write;
-use std::time::Duration;
+use std::convert::TryFrom;
 use std::fs;
 use std::io;
-use std::convert::TryFrom;
+use std::io::Write;
+use std::time::Duration;
 
 use tempfile::tempdir;
 use tempfile::TempDir;
@@ -14,6 +14,8 @@ use tokio_serial::FlowControl;
 use tokio_serial::Parity;
 use tokio_serial::SerialPortSettings;
 use tokio_serial::StopBits;
+
+use tracing_subscriber::filter::EnvFilter;
 
 fn write(content: &str) -> Result<(fs::File, TempDir), io::Error> {
     let dir = tempdir()?;
@@ -30,6 +32,8 @@ fn write(content: &str) -> Result<(fs::File, TempDir), io::Error> {
 fn test_config() {
     let (_, dir) = write(
         r#"
+log_filter = "debug"
+
 [[gps]]
 name = "GPS0"
 device = "/dev/gps0"
@@ -89,6 +93,7 @@ device = "/dev/pps1"
     };
 
     let expected = Configuration {
+        log_filter: Some(String::from("debug")),
         gps: vec![gps0, gps1],
     };
 
@@ -96,7 +101,7 @@ device = "/dev/pps1"
 }
 
 #[test]
-fn test_try_from() {
+fn test_try_from_serial_port_settings() {
     let gps = GpsConfig {
         name: "GPS".to_string(),
         device: "/dev/gps0".to_string(),
@@ -120,7 +125,7 @@ fn test_try_from() {
 }
 
 #[test]
-fn test_try_from_default() {
+fn test_try_from_serial_port_settings_default() {
     let gps = GpsConfig {
         name: "GPS".to_string(),
         device: "/dev/gps0".to_string(),
@@ -144,7 +149,7 @@ fn test_try_from_default() {
 }
 
 #[test]
-fn test_try_from_error() {
+fn test_try_from_serial_port_settings_error() {
     let gps = GpsConfig {
         name: "GPS".to_string(),
         device: "/dev/gps0".to_string(),
@@ -161,4 +166,48 @@ fn test_try_from_error() {
         ConfigurationError::InvalidDataBits(e) => assert_eq!('9', e),
         _ => assert!(false),
     }
+}
+
+#[test]
+fn test_try_from_log_filter_default() {
+    let config = Configuration {
+        log_filter: None,
+        gps: vec![],
+    };
+
+    let filter = EnvFilter::try_from(config).unwrap();
+
+    let expected = String::from("info");
+
+    assert_eq!(expected, filter.to_string());
+}
+
+#[test]
+fn test_try_from_log_filter_set() {
+    let config = Configuration {
+        log_filter: Some(String::from("trace")),
+        gps: vec![],
+    };
+
+    let filter = EnvFilter::try_from(config).unwrap();
+
+    let expected = String::from("trace");
+
+    assert_eq!(expected, filter.to_string());
+}
+
+#[test]
+fn test_try_from_log_filter_error() {
+    let config = Configuration {
+        log_filter: Some(String::from("=garbage")),
+        gps: vec![],
+    };
+
+    match EnvFilter::try_from(config).err().unwrap() {
+        ConfigurationError::InvalidLogFilter(f, e) => {
+            assert_eq!("=garbage", f);
+            assert_eq!("invalid filter directive", e.to_string());
+        }
+        _ => assert!(false),
+    };
 }

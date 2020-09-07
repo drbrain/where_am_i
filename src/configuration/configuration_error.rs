@@ -2,11 +2,14 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 
+use tracing_subscriber::filter::ParseError;
+
 #[derive(Debug)]
 pub enum ConfigurationError {
     InvalidDataBits(char),
-    InvalidFraming(String),
     InvalidFlowControl(String),
+    InvalidFraming(String),
+    InvalidLogFilter(String, ParseError),
     InvalidParity(char),
     InvalidStopBits(char),
     Box(Box<dyn Error>),
@@ -30,6 +33,9 @@ impl fmt::Display for ConfigurationError {
                 "flow control {} must be H(ardware), S(oftware), or N(one)",
                 f
             ),
+            ConfigurationError::InvalidLogFilter(f, e) => {
+                write!(fmt, "log filter {} is invalid: {}", f, e)
+            }
             ConfigurationError::InvalidParity(p) => {
                 write!(fmt, "parity {} must be N(one), O(dd), or E(ven)", p)
             }
