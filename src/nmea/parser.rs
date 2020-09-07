@@ -14,6 +14,7 @@ use nom::IResult;
 
 use serde::Serialize;
 
+use tracing::error;
 use tracing::trace;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -65,8 +66,7 @@ pub fn parse<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], 
         Err(Err::Incomplete(_)) => {
             return Err(result.err().unwrap());
         }
-        Err(Err::Error(_)) => panic!("Some error parsing: {:?}", input),
-        Err(Err::Failure(_)) => panic!("Some failure parsing: {:?}", input),
+        Err(_) => return parse_error(input),
         Ok(t) => t,
     };
 
@@ -104,6 +104,26 @@ pub fn parse<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], 
                 calculated,
             }),
         ))
+    }
+}
+
+fn parse_error<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], NMEA, E> {
+    match std::str::from_utf8(input) {
+        Ok(i) => {
+            error!("Some error parsing: {}", i);
+
+            Ok((b"", NMEA::ParseError(String::from(i))))
+        }
+        Err(e) => {
+            error!("Some error parsing: {:?} (invalid UTF-8: {})", input, e);
+
+            let next_invalid = e.valid_up_to() + e.error_len().unwrap_or(1);
+
+            Ok((
+                &input[next_invalid..],
+                NMEA::ParseError(String::from("Invalid UTF-8")),
+            ))
+        }
     }
 }
 

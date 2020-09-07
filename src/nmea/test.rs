@@ -31,6 +31,17 @@ fn test_parse() {
 }
 
 #[test]
+fn test_parse_invalid_utf8() {
+    let (input, error) = parser::parse::<VEb>(
+        b"\x01\x1E$PUBX,40,ZDA,0,1,0,0,0,0*45\r\x1A\x18\x0F\x1F\x0C\xFF\xFF\xFF\xFF\xFF",
+    )
+    .unwrap();
+
+    assert_eq!(b"\xFF\xFF\xFF\xFF", input);
+    assert_eq!(NMEA::ParseError(String::from("Invalid UTF-8")), error);
+}
+
+#[test]
 fn test_unknown() {
     let parsed = parser::parse::<VEb>(b"$GPROT,35.6,A*01\r\n").unwrap().1;
     let data = "GPROT,35.6,A".to_string();
