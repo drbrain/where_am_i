@@ -1,9 +1,19 @@
 use crate::configuration::*;
 
 use std::io::Write;
+use std::time::Duration;
+use std::fs;
+use std::io;
+use std::convert::TryFrom;
 
 use tempfile::tempdir;
 use tempfile::TempDir;
+
+use tokio_serial::DataBits;
+use tokio_serial::FlowControl;
+use tokio_serial::Parity;
+use tokio_serial::SerialPortSettings;
+use tokio_serial::StopBits;
 
 fn write(content: &str) -> Result<(fs::File, TempDir), io::Error> {
     let dir = tempdir()?;
