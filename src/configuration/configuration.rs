@@ -8,7 +8,6 @@ use std::fs;
 use std::path::Path;
 
 use tracing_subscriber::filter::EnvFilter;
-use tracing_subscriber::filter::LevelFilter;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct Configuration {
@@ -40,7 +39,7 @@ impl TryFrom<Configuration> for EnvFilter {
                 Ok(f) => Ok(f),
                 Err(e) => Err(ConfigurationError::InvalidLogFilter(f, e)),
             },
-            None => Ok(EnvFilter::new("").add_directive(LevelFilter::INFO.into())),
+            None => Ok(EnvFilter::new("info")),
         }
     }
 }
