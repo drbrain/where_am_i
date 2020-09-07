@@ -15,7 +15,7 @@ use tokio_serial::SerialPortSettings;
 #[tokio::main]
 async fn main() {
     let subscriber = tracing_subscriber::fmt()
-        .with_max_level(Level::TRACE)
+        .with_max_level(Level::INFO)
         .finish();
 
     tracing::subscriber::set_global_default(subscriber).expect("no global subscriber has been set");
