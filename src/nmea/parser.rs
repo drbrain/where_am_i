@@ -194,9 +194,9 @@ pub(crate) fn comma<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a s
 }
 
 pub(crate) fn date<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NaiveDate, E> {
-    map(
+    map_opt(
         tuple((two_digit, two_digit, two_digit_i)),
-        |(day, month, year)| NaiveDate::from_ymd(year, month, day),
+        |(day, month, year)| NaiveDate::from_ymd_opt(year, month, day),
     )(input)
 }
 

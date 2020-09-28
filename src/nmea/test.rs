@@ -247,6 +247,13 @@ fn test_time_invalid() {
 }
 
 #[test]
+fn test_date_invalid() {
+    let error = parser::date::<VE>("890620").err().unwrap();
+
+    assert_eq!("Parsing Error: VerboseError { errors: [(\"890620\", Nom(MapOpt))] }", error.to_string());
+}
+
+#[test]
 fn test_dtm() {
     let parsed = parser::dtm::<VE>("GPDTM,W84,,0.0,N,0.0,E,0.0,W84")
         .unwrap()
