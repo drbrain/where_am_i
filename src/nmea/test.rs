@@ -240,6 +240,13 @@ fn test_time_hms_milli() {
 }
 
 #[test]
+fn test_time_invalid() {
+    let error = parser::time::<VE>("811118").err().unwrap();
+
+    assert_eq!("Parsing Error: VerboseError { errors: [(\"811118\", Nom(MapOpt))] }", error.to_string());
+}
+
+#[test]
 fn test_dtm() {
     let parsed = parser::dtm::<VE>("GPDTM,W84,,0.0,N,0.0,E,0.0,W84")
         .unwrap()

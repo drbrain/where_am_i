@@ -556,7 +556,7 @@ enum TimeResolution {
 // with milliseconds: 010203.456
 
 pub(crate) fn time<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NaiveTime, E> {
-    map(
+    map_opt(
         tuple((
             two_digit,
             two_digit,
@@ -569,14 +569,15 @@ pub(crate) fn time<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a st
                 )),
             )),
         )),
-        |(hour, minute, second, subsec)| match subsec {
+        |(hour, minute, second, subsec)|
+            match subsec {
             Some(TimeResolution::Centisecond(subsec)) => {
-                NaiveTime::from_hms_milli(hour, minute, second, subsec * 10)
+                NaiveTime::from_hms_milli_opt(hour, minute, second, subsec * 10)
             }
             Some(TimeResolution::Millisecond(subsec)) => {
-                NaiveTime::from_hms_milli(hour, minute, second, subsec)
+                NaiveTime::from_hms_milli_opt(hour, minute, second, subsec)
             }
-            None => NaiveTime::from_hms_milli(hour, minute, second, 0),
+            None => NaiveTime::from_hms_milli_opt(hour, minute, second, 0),
         },
     )(input)
 }
