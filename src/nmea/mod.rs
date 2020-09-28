@@ -44,6 +44,9 @@ pub use parser::UBXRate;
 pub use parser::UBXSvsPoll;
 pub use parser::UBXTimePoll;
 
+pub use parser::message;
+pub use parser::parse;
+
 #[cfg(test)]
 mod test;
 

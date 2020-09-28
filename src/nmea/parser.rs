@@ -127,7 +127,7 @@ fn parse_error<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8]
     }
 }
 
-pub(crate) fn message<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NMEA, E> {
+pub fn message<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NMEA, E> {
     alt((
         map(dtm, NMEA::DTM),
         map(gaq, NMEA::GAQ),

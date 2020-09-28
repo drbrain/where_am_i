@@ -1,0 +1,27 @@
+
+[package]
+name = "where_am_i-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.3"
+nom = "5.1.0"
+
+[dependencies.where_am_i]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "nmea_message"
+path = "nmea_message/nmea_message.rs"
+test = false
+doc = false
