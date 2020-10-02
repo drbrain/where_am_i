@@ -127,7 +127,10 @@ async fn read_nmea(mut reader: SerialCodec, tx: NMEASender) {
     loop {
         let nmea = match reader.next().await {
             Some(n) => n,
-            None => return,
+            None => {
+                error!("GPS device has no more messages");
+                return;
+            },
         };
 
         match nmea {
