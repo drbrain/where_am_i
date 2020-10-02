@@ -29,7 +29,7 @@ impl Decoder for Codec {
     type Item = NMEA;
     type Error = CodecError;
 
-    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<NMEA>, CodecError> {
+    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         let bytes = buf.to_bytes();
         let input = bytes.bytes();
 
