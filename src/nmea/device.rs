@@ -18,6 +18,9 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 
+type NMEASender = broadcast::Sender<NMEA>;
+type SerialCodec = Framed<Serial, Codec>;
+
 struct MessageSetting {
     id: String,
     enabled: bool,
@@ -30,6 +33,7 @@ pub const UBX_OUTPUT_MESSAGES: [&str; 15] = [
 
 pub struct Device {
     pub name: String,
+    pub sender: NMEASender,
     settings: SerialPortSettings,
     messages: Vec<MessageSetting>,
 }
@@ -38,36 +42,17 @@ impl Device {
     pub fn new(name: String, settings: SerialPortSettings) -> Self {
         let messages = vec![];
 
+        let (sender, _) = broadcast::channel(20);
+
         Device {
             name,
             settings,
             messages,
+            sender,
         }
     }
 
-    pub fn message(&mut self, id: &str, enabled: bool) {
-        let setting = MessageSetting {
-            id: id.to_string(),
-            enabled,
-        };
-
-        self.messages.push(setting);
-    }
-
-    pub async fn run(&self) -> Result<broadcast::Sender<NMEA>, io::Error> {
-        let (tx, _) = broadcast::channel(20);
-
-        let reader_tx = tx.clone();
-
-        let serial = match Serial::from_path(self.name.clone(), &self.settings) {
-            Ok(s) => s,
-            Err(e) => return Err(e),
-        };
-
-        debug!("Opened NMEA device {}", self.name);
-
-        let mut serial = Framed::new(serial, Codec::default());
-
+    async fn configure_device(&self, serial: &mut SerialCodec) {
         for message in &self.messages {
             let rate = rate_for(message.id.clone(), message.enabled);
 
@@ -80,12 +65,48 @@ impl Device {
             }
         }
 
+    }
+
+    pub fn message(&mut self, id: &str, enabled: bool) {
+        let setting = MessageSetting {
+            id: id.to_string(),
+            enabled,
+        };
+
+        self.messages.push(setting);
+    }
+
+    pub async fn run(&self) -> Result<NMEASender, io::Error> {
+        let mut serial = match open(&self.name, &self.settings) {
+            Ok(s) => s,
+            Err(e) => return Err(e),
+        };
+
+        self.configure_device(&mut serial).await;
+
+        self.send_messages(serial).await;
+
+        Ok(self.sender.clone())
+    }
+
+    async fn send_messages(&self, serial: SerialCodec) {
+        let reader_tx = self.sender.clone();
+
         tokio::spawn(async move {
             read_nmea(serial, reader_tx).await;
         });
-
-        Ok(tx)
     }
+}
+
+fn open(name: &str, settings: &SerialPortSettings) -> Result<SerialCodec, io::Error> {
+        let serial = match Serial::from_path(name.clone(), &settings) {
+            Ok(s) => s,
+            Err(e) => return Err(e),
+        };
+
+        debug!("Opened NMEA device {}", name);
+
+        Ok(Framed::new(serial, Codec::default()))
 }
 
 fn rate_for(msg_id: String, enabled: bool) -> UBXRate {
@@ -102,7 +123,7 @@ fn rate_for(msg_id: String, enabled: bool) -> UBXRate {
     }
 }
 
-async fn read_nmea(mut reader: Framed<Serial, Codec>, tx: broadcast::Sender<NMEA>) {
+async fn read_nmea(mut reader: SerialCodec, tx: NMEASender) {
     loop {
         let nmea = match reader.next().await {
             Some(n) => n,
@@ -124,3 +145,4 @@ async fn read_nmea(mut reader: Framed<Serial, Codec>, tx: broadcast::Sender<NMEA
         }
     }
 }
+
