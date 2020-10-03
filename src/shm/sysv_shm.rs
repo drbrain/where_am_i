@@ -84,7 +84,15 @@ mod tests {
 
     #[test]
     fn test_get_id() {
-        assert_eq!(65538, get_id(0x4e545032, 0o0666).unwrap());
+        let expected = if cfg!(target_os = "linux") {
+            65538
+        } else if cfg!(target_os = "macos") {
+            65536
+        } else {
+            0
+        };
+
+        assert_eq!(expected, get_id(0x4e545032, 0o0666).unwrap());
     }
 
     #[test]
