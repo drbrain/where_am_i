@@ -11,11 +11,13 @@ path = "src/bin/where_am_i.rs"
 [dependencies]
 argh               = "0.1.0"
 assert_approx_eq   = "1.1.0"
+backoff            = { version = "0.2.1", features = ["async-std"] }
 bitflags           = "1.2.0"
 bytes              = "0.5.0"
 chrono             = "0.4.0"
 futures            = "0.3.5"
 futures-util       = "0.3.5"
+instant            = "0.1"
 libc               = "0.2.0"
 nix                = "0.17.0"
 nom                = "5.1.0"

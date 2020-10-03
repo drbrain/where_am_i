@@ -1,11 +1,18 @@
+use backoff::future::FutureOperation;
+use backoff::ExponentialBackoff;
+use backoff::SystemClock;
+
 use crate::nmea::Codec;
 use crate::nmea::UBXRate;
 use crate::nmea::NMEA;
+
+use instant::Instant;
 
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 
 use std::io;
+use std::time::Duration;
 
 use tokio::sync::broadcast;
 
@@ -64,7 +71,6 @@ impl Device {
                 ),
             }
         }
-
     }
 
     pub fn message(&mut self, id: &str, enabled: bool) {
@@ -77,7 +83,7 @@ impl Device {
     }
 
     pub async fn run(&self) -> Result<NMEASender, io::Error> {
-        let mut serial = match open(&self.name, &self.settings) {
+        let mut serial = match open(&self.name, &self.settings).await {
             Ok(s) => s,
             Err(e) => return Err(e),
         };
@@ -98,15 +104,35 @@ impl Device {
     }
 }
 
-fn open(name: &str, settings: &SerialPortSettings) -> Result<SerialCodec, io::Error> {
-        let serial = match Serial::from_path(name.clone(), &settings) {
-            Ok(s) => s,
-            Err(e) => return Err(e),
-        };
+fn backoff() -> ExponentialBackoff {
+    ExponentialBackoff {
+        current_interval: Duration::from_millis(50),
+        initial_interval: Duration::from_millis(50),
+        randomization_factor: 0.25,
+        multiplier: 1.5,
+        max_interval: Duration::from_millis(60_000),
+        max_elapsed_time: None,
+        clock: SystemClock::default(),
+        start_time: Instant::now(),
+    }
+}
 
-        debug!("Opened NMEA device {}", name);
+async fn open(name: &str, settings: &SerialPortSettings) -> Result<SerialCodec, io::Error> {
+    (|| async {
+        let serial = Serial::from_path(name.clone(), &settings).map_err(open_error)?;
+
+        debug!("Opened NMEA device {}", name.clone());
 
         Ok(Framed::new(serial, Codec::default()))
+    })
+    .retry(backoff())
+    .await
+}
+
+fn open_error(e: io::Error) -> io::Error {
+    error!("Opening failed: {}", e.to_string());
+
+    e
 }
 
 fn rate_for(msg_id: String, enabled: bool) -> UBXRate {
@@ -130,7 +156,7 @@ async fn read_nmea(mut reader: SerialCodec, tx: NMEASender) {
             None => {
                 error!("GPS device has no more messages");
                 return;
-            },
+            }
         };
 
         match nmea {
@@ -148,4 +174,3 @@ async fn read_nmea(mut reader: SerialCodec, tx: NMEASender) {
         }
     }
 }
-
