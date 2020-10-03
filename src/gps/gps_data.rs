@@ -147,7 +147,7 @@ fn report_toff(date: DateTime<Utc>, name: &str, tx: &JsonSender) {
 }
 
 fn report_tpv(time: DateTime<Utc>, mode: Option<u32>, name: &str, tx: &JsonSender) {
-    let time = time.to_rfc3339();
+    let time = time.format("%Y-%m-%dT%H:%M:%SZ").to_string();
     let mode = mode.unwrap_or(0);
 
     let tpv = json!({
