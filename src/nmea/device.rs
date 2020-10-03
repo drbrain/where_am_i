@@ -15,6 +15,7 @@ use std::io;
 use std::time::Duration;
 
 use tokio::sync::broadcast;
+use tokio::sync::oneshot;
 
 use tokio_serial::Serial;
 use tokio_serial::SerialPortSettings;
@@ -26,8 +27,10 @@ use tracing::error;
 use tracing::info;
 
 type NMEASender = broadcast::Sender<NMEA>;
+type RestartWaiter = oneshot::Sender<()>;
 type SerialCodec = Framed<Serial, Codec>;
 
+#[derive(Clone, Debug)]
 struct MessageSetting {
     id: String,
     enabled: bool,
@@ -59,20 +62,6 @@ impl Device {
         }
     }
 
-    async fn configure_device(&self, serial: &mut SerialCodec) {
-        for message in &self.messages {
-            let rate = rate_for(message.id.clone(), message.enabled);
-
-            match serial.send(rate).await {
-                Ok(_) => info!("set {} to {}", message.id, message.enabled),
-                Err(e) => error!(
-                    "unable to set {} to {}: {:?}",
-                    message.id, message.enabled, e
-                ),
-            }
-        }
-    }
-
     pub fn message(&mut self, id: &str, enabled: bool) {
         let setting = MessageSetting {
             id: id.to_string(),
@@ -83,24 +72,16 @@ impl Device {
     }
 
     pub async fn run(&self) -> Result<NMEASender, io::Error> {
-        let mut serial = match open(&self.name, &self.settings).await {
-            Ok(s) => s,
-            Err(e) => return Err(e),
-        };
-
-        self.configure_device(&mut serial).await;
-
-        self.send_messages(serial).await;
-
-        Ok(self.sender.clone())
-    }
-
-    async fn send_messages(&self, serial: SerialCodec) {
+        let name = self.name.clone();
+        let settings = self.settings.clone();
+        let messages = self.messages.clone();
         let reader_tx = self.sender.clone();
 
         tokio::spawn(async move {
-            read_nmea(serial, reader_tx).await;
+            start(&name, &settings, messages, reader_tx).await;
         });
+
+        Ok(self.sender.clone())
     }
 }
 
@@ -114,6 +95,20 @@ fn backoff() -> ExponentialBackoff {
         max_elapsed_time: None,
         clock: SystemClock::default(),
         start_time: Instant::now(),
+    }
+}
+
+async fn configure_device(serial: &mut SerialCodec, messages: Vec<MessageSetting>) {
+    for message in messages {
+        let rate = rate_for(message.id.clone(), message.enabled);
+
+        match serial.send(rate).await {
+            Ok(_) => info!("set {} to {}", message.id, message.enabled),
+            Err(e) => error!(
+                "unable to set {} to {}: {:?}",
+                message.id, message.enabled, e
+            ),
+        }
     }
 }
 
@@ -149,7 +144,7 @@ fn rate_for(msg_id: String, enabled: bool) -> UBXRate {
     }
 }
 
-async fn read_nmea(mut reader: SerialCodec, tx: NMEASender) {
+async fn read_nmea(mut reader: SerialCodec, tx: NMEASender, restarter: RestartWaiter) {
     loop {
         let nmea = match reader.next().await {
             Some(n) => n,
@@ -169,8 +164,44 @@ async fn read_nmea(mut reader: SerialCodec, tx: NMEASender) {
             },
             Err(e) => {
                 error!("error reading from device: {:?}", e);
+
+                match restarter.send(()) {
+                    Ok(_) => (),
+                    Err(e) => error!("error notifying device it needs to restart: {:?}", e),
+                };
+
                 return;
             }
         }
+    }
+}
+
+async fn send_messages(reader_tx: NMEASender, serial: SerialCodec, restarter: RestartWaiter) {
+    tokio::spawn(async move {
+        read_nmea(serial, reader_tx, restarter).await;
+    });
+}
+
+async fn start(
+    name: &str,
+    settings: &SerialPortSettings,
+    messages: Vec<MessageSetting>,
+    reader_tx: NMEASender,
+) {
+    loop {
+        let (restarter, waiter) = oneshot::channel();
+
+        let mut serial = match open(&name, &settings).await {
+            Ok(s) => s,
+            Err(_) => unreachable!("open retries opening the device forever"),
+        };
+
+        configure_device(&mut serial, messages.clone()).await;
+
+        send_messages(reader_tx.clone(), serial, restarter).await;
+
+        waiter.await.unwrap_or_default();
+
+        info!("Device hung up, retrying");
     }
 }
