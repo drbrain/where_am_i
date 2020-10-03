@@ -7,11 +7,15 @@ use std::convert::TryFrom;
 use std::fs;
 use std::path::Path;
 
+use tracing::warn;
+use tracing::Level;
+
 use tracing_subscriber::filter::EnvFilter;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct Configuration {
     pub log_filter: Option<String>,
+    pub log_level: Option<String>,
     pub gps: Vec<GpsConfig>,
 }
 
@@ -40,6 +44,26 @@ impl TryFrom<Configuration> for EnvFilter {
                 Err(e) => Err(ConfigurationError::InvalidLogFilter(f, e)),
             },
             None => Ok(EnvFilter::new("info")),
+        }
+    }
+}
+
+impl From<Configuration> for Level {
+    fn from(config: Configuration) -> Level {
+        if let Some(level) = config.log_level {
+            match level.to_uppercase().as_str() {
+                "DEBUG" => Level::DEBUG,
+                "ERROR" => Level::ERROR,
+                "INFO" => Level::INFO,
+                "TRACE" => Level::TRACE,
+                "WARN" => Level::WARN,
+                other => {
+                    warn!("unknown level {}, using INFO", other);
+                    Level::INFO
+                }
+            }
+        } else {
+            Level::INFO
         }
     }
 }

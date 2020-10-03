@@ -15,6 +15,8 @@ use tokio_serial::Parity;
 use tokio_serial::SerialPortSettings;
 use tokio_serial::StopBits;
 
+use tracing::Level;
+
 use tracing_subscriber::filter::EnvFilter;
 
 fn write(content: &str) -> Result<(fs::File, TempDir), io::Error> {
@@ -95,13 +97,14 @@ device = "/dev/pps1"
     let expected = Configuration {
         log_filter: Some(String::from("debug")),
         gps: vec![gps0, gps1],
+        log_level: None,
     };
 
     assert_eq!(expected, config);
 }
 
 #[test]
-fn test_try_from_serial_port_settings() {
+fn test_try_from_gps_config() {
     let gps = GpsConfig {
         name: "GPS".to_string(),
         device: "/dev/gps0".to_string(),
@@ -125,7 +128,7 @@ fn test_try_from_serial_port_settings() {
 }
 
 #[test]
-fn test_try_from_serial_port_settings_default() {
+fn test_try_from_gps_config_default() {
     let gps = GpsConfig {
         name: "GPS".to_string(),
         device: "/dev/gps0".to_string(),
@@ -149,7 +152,7 @@ fn test_try_from_serial_port_settings_default() {
 }
 
 #[test]
-fn test_try_from_serial_port_settings_error() {
+fn test_try_from_gps_config_error() {
     let gps = GpsConfig {
         name: "GPS".to_string(),
         device: "/dev/gps0".to_string(),
@@ -172,6 +175,7 @@ fn test_try_from_serial_port_settings_error() {
 fn test_try_from_log_filter_default() {
     let config = Configuration {
         log_filter: None,
+        log_level: None,
         gps: vec![],
     };
 
@@ -186,6 +190,7 @@ fn test_try_from_log_filter_default() {
 fn test_try_from_log_filter_set() {
     let config = Configuration {
         log_filter: Some(String::from("trace")),
+        log_level: None,
         gps: vec![],
     };
 
@@ -200,6 +205,7 @@ fn test_try_from_log_filter_set() {
 fn test_try_from_log_filter_error() {
     let config = Configuration {
         log_filter: Some(String::from("=garbage")),
+        log_level: None,
         gps: vec![],
     };
 
@@ -210,4 +216,37 @@ fn test_try_from_log_filter_error() {
         }
         _ => assert!(false),
     };
+}
+
+#[test]
+fn test_from_tracing_none() {
+    let config = Configuration {
+        gps: vec![],
+        log_filter: None,
+        log_level: None,
+    };
+
+    assert_eq!(Level::INFO, Level::from(config));
+}
+
+#[test]
+fn test_from_tracing_set() {
+    let config = Configuration {
+        gps: vec![],
+        log_filter: None,
+        log_level: Some("debug".to_string()),
+    };
+
+    assert_eq!(Level::DEBUG, Level::from(config));
+}
+
+#[test]
+fn test_from_tracing_invalid() {
+    let config = Configuration {
+        gps: vec![],
+        log_filter: None,
+        log_level: Some("dabug".to_string()),
+    };
+
+    assert_eq!(Level::INFO, Level::from(config));
 }

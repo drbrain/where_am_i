@@ -129,6 +129,9 @@ You can monitor the status of the clock with `ntpq -p`.
 
 ### Global options
 
+* `log_level`: Tracing log level to use when outputting messages.  Defaults to
+  "INFO".  May be "DEBUG", "ERROR", "INFO", "TRACE", "WARN".
+
 ### `[[gps]]` options
 
 The `[[gps]]` section may be repeated if you have more than one GPS receiver.
