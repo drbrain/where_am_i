@@ -243,14 +243,20 @@ fn test_time_hms_milli() {
 fn test_time_invalid() {
     let error = parser::time::<VE>("811118").err().unwrap();
 
-    assert_eq!("Parsing Error: VerboseError { errors: [(\"811118\", Nom(MapOpt))] }", error.to_string());
+    assert_eq!(
+        "Parsing Error: VerboseError { errors: [(\"811118\", Nom(MapOpt))] }",
+        error.to_string()
+    );
 }
 
 #[test]
 fn test_date_invalid() {
     let error = parser::date::<VE>("890620").err().unwrap();
 
-    assert_eq!("Parsing Error: VerboseError { errors: [(\"890620\", Nom(MapOpt))] }", error.to_string());
+    assert_eq!(
+        "Parsing Error: VerboseError { errors: [(\"890620\", Nom(MapOpt))] }",
+        error.to_string()
+    );
 }
 
 #[test]

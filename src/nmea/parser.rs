@@ -569,8 +569,7 @@ pub(crate) fn time<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a st
                 )),
             )),
         )),
-        |(hour, minute, second, subsec)|
-            match subsec {
+        |(hour, minute, second, subsec)| match subsec {
             Some(TimeResolution::Centisecond(subsec)) => {
                 NaiveTime::from_hms_milli_opt(hour, minute, second, subsec * 10)
             }
