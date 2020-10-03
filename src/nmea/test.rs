@@ -1063,10 +1063,34 @@ fn test_zda() {
         .unwrap()
         .1;
 
-    assert_eq!(NaiveTime::from_hms_milli(8, 27, 10, 0), parsed.time);
-    assert_eq!(16, parsed.day);
-    assert_eq!(9, parsed.month);
-    assert_eq!(2002, parsed.year);
+    assert_eq!(Some(NaiveTime::from_hms_milli(8, 27, 10, 0)), parsed.time);
+    assert_eq!(Some(16), parsed.day);
+    assert_eq!(Some(9), parsed.month);
+    assert_eq!(Some(2002), parsed.year);
+    assert_eq!(0, parsed.local_tz_hour);
+    assert_eq!(0, parsed.local_tz_minute);
+}
+
+#[test]
+fn test_zda_empty() {
+    let parsed = parser::zda::<VE>("GPZDA,,,,,00,00").unwrap().1;
+
+    assert_eq!(None, parsed.time);
+    assert_eq!(None, parsed.day);
+    assert_eq!(None, parsed.month);
+    assert_eq!(None, parsed.year);
+    assert_eq!(0, parsed.local_tz_hour);
+    assert_eq!(0, parsed.local_tz_minute);
+}
+
+#[test]
+fn test_zda_time_only() {
+    let parsed = parser::zda::<VE>("GPZDA,233346.00,,,,00,00").unwrap().1;
+
+    assert_eq!(Some(NaiveTime::from_hms_milli(23, 33, 46, 0)), parsed.time);
+    assert_eq!(None, parsed.day);
+    assert_eq!(None, parsed.month);
+    assert_eq!(None, parsed.year);
     assert_eq!(0, parsed.local_tz_hour);
     assert_eq!(0, parsed.local_tz_minute);
 }

@@ -1726,10 +1726,10 @@ pub(crate) fn vtg<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 #[derive(Clone, Debug, PartialEq)]
 pub struct ZDAData {
     pub talker: Talker,
-    pub time: NaiveTime,
-    pub day: u32,
-    pub month: u32,
-    pub year: i32,
+    pub time: Option<NaiveTime>,
+    pub day: Option<u32>,
+    pub month: Option<u32>,
+    pub year: Option<i32>,
     pub local_tz_hour: i32,
     pub local_tz_minute: u32,
 }
@@ -1740,10 +1740,10 @@ pub(crate) fn zda<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
         all_consuming(map(
             tuple((
                 terminated(talker, terminated(tag("ZDA"), comma)),
-                terminated(time, comma),
-                terminated(uint32, comma),
-                terminated(uint32, comma),
-                terminated(int32, comma),
+                terminated(opt(time), comma),
+                terminated(opt(uint32), comma),
+                terminated(opt(uint32), comma),
+                terminated(opt(int32), comma),
                 terminated(int32, comma),
                 uint32,
             )),

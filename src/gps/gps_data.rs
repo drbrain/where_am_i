@@ -104,8 +104,28 @@ impl GPSData {
     }
 
     pub(crate) fn zda(&mut self, zda: ZDAData, name: &str, tx: &JsonSender) {
-        let date = NaiveDate::from_ymd(zda.year, zda.month, zda.day);
-        let time = NaiveDateTime::new(date, zda.time);
+        let year = match zda.year {
+            Some(y) => y,
+            None => return,
+        };
+
+        let month = match zda.month {
+            Some(m) => m,
+            None => return,
+        };
+
+        let day = match zda.day {
+            Some(d) => d,
+            None => return,
+        };
+
+        let time = match zda.time {
+            Some(t) => t,
+            None => return,
+        };
+
+        let date = NaiveDate::from_ymd(year, month, day);
+        let time = NaiveDateTime::new(date, time);
         let time = DateTime::from_utc(time, Utc);
 
         self.time = Some(time);

@@ -232,10 +232,10 @@ fn test_zda() {
 
     let zda = ZDAData {
         talker: Talker::GPS,
-        time: NaiveTime::from_hms_milli(1, 8, 0, 0),
-        day: 26,
-        month: 5,
-        year: 2020,
+        time: Some(NaiveTime::from_hms_milli(1, 8, 0, 0)),
+        day: Some(26),
+        month: Some(5),
+        year: Some(2020),
         local_tz_hour: 0,
         local_tz_minute: 0,
     };
