@@ -48,6 +48,9 @@ pub use parser::message;
 pub use parser::parse;
 
 #[cfg(test)]
+mod test_codec;
+
+#[cfg(test)]
 mod test_parser;
 
 #[cfg(test)]

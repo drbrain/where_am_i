@@ -44,9 +44,13 @@ impl Decoder for Codec {
 
         match parse::<VE>(input, last_received) {
             Ok((input, nmea)) => {
-                buf.extend_from_slice(&Bytes::copy_from_slice(input));
+                if input.is_empty() {
+                    self.last_received = None;
+                } else {
+                    buf.extend_from_slice(&Bytes::copy_from_slice(input));
 
-                self.last_received = None;
+                    self.last_received = Some(last_received);
+                }
 
                 Ok(Some(nmea))
             }
