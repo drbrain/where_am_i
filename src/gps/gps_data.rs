@@ -8,6 +8,7 @@ use serde_json::json;
 use std::time::SystemTime;
 
 use tracing::error;
+use tracing::trace;
 
 #[derive(Debug, Default)]
 pub struct GPSData {
@@ -56,7 +57,20 @@ impl GPSData {
 
             let time = NaiveDateTime::new(date, new_time);
 
-            self.time = Some(DateTime::from_utc(time, Utc));
+            let utc_time = DateTime::from_utc(time, Utc);
+
+            match self.time {
+                Some(stored) => {
+                    if stored == utc_time {
+                        return;
+                    }
+                },
+                None => (),
+            }
+
+            trace!("Time updated to {}", utc_time.format("%Y-%m-%dT%H:%M:%SZ"));
+
+            self.time = Some(utc_time);
         }
     }
 
@@ -123,6 +137,8 @@ impl GPSData {
             Some(t) => t,
             None => return,
         };
+
+        self.update_time(time);
 
         let date = NaiveDate::from_ymd(year, month, day);
         let time = NaiveDateTime::new(date, time);
