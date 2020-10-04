@@ -5,6 +5,7 @@ use crate::JsonSender;
 
 use serde_json::json;
 
+use std::time::Duration;
 use std::time::SystemTime;
 
 use tracing::error;
@@ -138,6 +139,11 @@ impl GPSData {
             None => return,
         };
 
+        let received = match zda.received {
+            Some(d) => d,
+            None => timestamp(),
+        };
+
         self.update_time(time);
 
         let date = NaiveDate::from_ymd(year, month, day);
@@ -147,7 +153,7 @@ impl GPSData {
         self.time = Some(time);
         self.year = time.year();
 
-        report_toff(time, name, tx);
+        report_toff(time, received, name, tx);
         report_tpv(time, self.mode, name, tx);
     }
 }
@@ -160,15 +166,9 @@ fn gpsd_mode(navigation_mode: &NavigationMode) -> u32 {
     }
 }
 
-fn report_toff(date: DateTime<Utc>, name: &str, tx: &JsonSender) {
+fn report_toff(date: DateTime<Utc>, received: Duration, name: &str, tx: &JsonSender) {
     let sec = date.timestamp();
     let nsec = date.timestamp_subsec_nanos();
-
-    // move this up
-    let received = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-        Ok(n) => n,
-        Err(_) => return,
-    };
 
     let toff = json!({
         "class":      "TOFF".to_string(),
@@ -194,4 +194,10 @@ fn report_tpv(time: DateTime<Utc>, mode: Option<u32>, name: &str, tx: &JsonSende
     });
 
     if tx.send(tpv).is_ok() {}
+}
+
+fn timestamp() -> Duration {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or(Duration::from_secs(0))
 }
