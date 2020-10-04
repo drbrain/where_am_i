@@ -14,6 +14,8 @@ use serde::Serialize;
 
 use std::fmt;
 use std::io;
+use std::time::Duration;
+use std::time::SystemTime;
 
 use tokio_util::codec::Decoder;
 use tokio_util::codec::Encoder;
@@ -21,7 +23,9 @@ use tokio_util::codec::Encoder;
 use tracing::debug;
 
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Codec {}
+pub struct Codec {
+    last_received: Option<Duration>,
+}
 
 type VE<'a> = VerboseError<&'a [u8]>;
 
@@ -30,22 +34,39 @@ impl Decoder for Codec {
     type Error = CodecError;
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        let last_received = match self.last_received {
+            Some(r) => r,
+            None => timestamp(),
+        };
+
         let bytes = buf.to_bytes();
         let input = bytes.bytes();
 
-        match parse::<VE>(input) {
+        match parse::<VE>(input, last_received) {
             Ok((input, nmea)) => {
                 buf.extend_from_slice(&Bytes::copy_from_slice(input));
+
+                self.last_received = None;
+
                 Ok(Some(nmea))
             }
             Err(Err::Incomplete(_)) => {
                 buf.extend_from_slice(&Bytes::copy_from_slice(input));
+
+                self.last_received = Some(last_received);
+
                 Ok(None)
             }
             Err(Err::Error(_)) => panic!("impossible error!"),
             Err(Err::Failure(_)) => panic!("impossible failure!"),
         }
     }
+}
+
+fn timestamp() -> Duration {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or(Duration::from_secs(0))
 }
 
 impl<T> Encoder<T> for Codec

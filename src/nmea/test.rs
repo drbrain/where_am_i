@@ -9,6 +9,8 @@ use nom::error::*;
 use nom::Err;
 use nom::Needed;
 
+use std::time::Duration;
+
 type VE<'a> = VerboseError<&'a str>;
 type VEb<'a> = VerboseError<&'a [u8]>;
 
@@ -22,10 +24,16 @@ fn p<'a, D>(input: &'a str, result: nom::IResult<&'a str, D, VE>) -> D {
     }
 }
 
+fn parse<'a>(input: &'a [u8]) -> NMEA {
+    parser::parse::<VEb>(input, timestamp()).unwrap().1
+}
+
 #[test]
 fn test_parse() {
-    let parsed = parser::parse::<VEb>(b"$EIGAQ,RMC*2B\r\n$").unwrap().1;
-    let data = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;
+    let parsed = parse(b"$EIGAQ,RMC*2B\r\n$");
+    let mut data = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;
+
+    data.received = Some(timestamp());
 
     assert_eq!(NMEA::GAQ(data), parsed);
 }
@@ -34,6 +42,7 @@ fn test_parse() {
 fn test_parse_invalid_utf8() {
     let (input, error) = parser::parse::<VEb>(
         b"\x01\x1E$PUBX,40,ZDA,0,1,0,0,0,0*45\r\x1A\x18\x0F\x1F\x0C\xFF\xFF\xFF\xFF\xFF",
+        timestamp(),
     )
     .unwrap();
 
@@ -43,7 +52,7 @@ fn test_parse_invalid_utf8() {
 
 #[test]
 fn test_unknown() {
-    let parsed = parser::parse::<VEb>(b"$GPROT,35.6,A*01\r\n").unwrap().1;
+    let parsed = parse(b"$GPROT,35.6,A*01\r\n");
     let data = "GPROT,35.6,A".to_string();
 
     assert_eq!(NMEA::Unsupported(data), parsed);
@@ -51,7 +60,7 @@ fn test_unknown() {
 
 #[test]
 fn test_error_checksum() {
-    let result = parser::parse::<VEb>(b"$EIGAQ,RMC*2C\r\n").unwrap().1;
+    let result = parse(b"$EIGAQ,RMC*2C\r\n");
 
     let mismatch = ChecksumMismatch {
         message: String::from("EIGAQ,RMC"),
@@ -65,7 +74,7 @@ fn test_error_checksum() {
 #[test]
 fn test_incomplete() {
     let input = b"$EIG";
-    let result = parser::parse::<VEb>(input);
+    let result = parser::parse::<VEb>(input, timestamp());
 
     if let Err(Err::Incomplete(e)) = result {
         assert_eq!(Needed::Size(1), e);
@@ -76,10 +85,10 @@ fn test_incomplete() {
 
 #[test]
 fn test_skip_garbage() {
-    let parsed = parser::parse::<VEb>(b"stuff*AA\r\n$EIGAQ,RMC*2B\r\n$")
-        .unwrap()
-        .1;
-    let data = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;
+    let parsed = parse(b"stuff*AA\r\n$EIGAQ,RMC*2B\r\n$");
+    let mut data = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;
+
+    data.received = Some(timestamp());
 
     assert_eq!(NMEA::GAQ(data), parsed);
 }
@@ -149,13 +158,17 @@ fn test_lon() {
 
 #[test]
 fn test_message() {
-    let parsed = parser::message::<VE>("EIGAQ,RMC").unwrap().1;
-    let data = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;
+    let parsed = parser::message::<VE>("EIGAQ,RMC", timestamp()).unwrap().1;
+    let mut data = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;
+
+    data.received = Some(timestamp());
 
     assert_eq!(NMEA::GAQ(data), parsed);
 
-    let parsed = parser::message::<VE>("EIGNQ,RMC").unwrap().1;
-    let data = parser::gnq::<VE>("EIGNQ,RMC").unwrap().1;
+    let parsed = parser::message::<VE>("EIGNQ,RMC", timestamp()).unwrap().1;
+    let mut data = parser::gnq::<VE>("EIGNQ,RMC").unwrap().1;
+
+    data.received = Some(timestamp());
 
     assert_eq!(NMEA::GNQ(data), parsed);
 }
@@ -1093,4 +1106,8 @@ fn test_zda_time_only() {
     assert_eq!(None, parsed.year);
     assert_eq!(0, parsed.local_tz_hour);
     assert_eq!(0, parsed.local_tz_minute);
+}
+
+fn timestamp() -> Duration {
+    Duration::from_secs(7)
 }

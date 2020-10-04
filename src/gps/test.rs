@@ -58,6 +58,7 @@ fn test_gga() {
     let mut gps = GPSData::default();
 
     let gga = GGAData {
+        received: None,
         talker: Talker::GPS,
         time: NaiveTime::from_hms_milli(1, 8, 2, 0),
         lat_lon: Some(LatLon {
@@ -91,6 +92,7 @@ fn test_gsa() {
     let mut gps = GPSData::default();
 
     let gbgsa = GSAData {
+        received: None,
         talker: Talker::BeiDuo,
         operation_mode: OperationMode::Automatic,
         navigation_mode: NavigationMode::Fix3D,
@@ -102,6 +104,7 @@ fn test_gsa() {
     };
 
     let gagsa = GSAData {
+        received: None,
         talker: Talker::Galileo,
         operation_mode: OperationMode::Automatic,
         navigation_mode: NavigationMode::Fix3D,
@@ -113,6 +116,7 @@ fn test_gsa() {
     };
 
     let glgsa = GSAData {
+        received: None,
         talker: Talker::GLONASS,
         operation_mode: OperationMode::Automatic,
         navigation_mode: NavigationMode::Fix3D,
@@ -124,6 +128,7 @@ fn test_gsa() {
     };
 
     let gpgsa = GSAData {
+        received: None,
         talker: Talker::GPS,
         operation_mode: OperationMode::Automatic,
         navigation_mode: NavigationMode::Fix3D,
@@ -151,6 +156,7 @@ fn test_gsa_beiduo() {
     let mut gps = GPSData::default();
 
     let gbgsa = GSAData {
+        received: None,
         talker: Talker::BeiDuo,
         operation_mode: OperationMode::Automatic,
         navigation_mode: NavigationMode::Fix3D,
@@ -171,6 +177,7 @@ fn test_gsa_galileo() {
     let mut gps = GPSData::default();
 
     let gagsa = GSAData {
+        received: None,
         talker: Talker::Galileo,
         operation_mode: OperationMode::Automatic,
         navigation_mode: NavigationMode::Fix3D,
@@ -191,6 +198,7 @@ fn test_gsa_glonass() {
     let mut gps = GPSData::default();
 
     let glgsa = GSAData {
+        received: None,
         talker: Talker::GLONASS,
         operation_mode: OperationMode::Automatic,
         navigation_mode: NavigationMode::Fix3D,
@@ -211,6 +219,7 @@ fn test_gsa_gps() {
     let mut gps = GPSData::default();
 
     let gpgsa = GSAData {
+        received: None,
         talker: Talker::GPS,
         operation_mode: OperationMode::Automatic,
         navigation_mode: NavigationMode::Fix3D,
@@ -231,6 +240,7 @@ fn test_zda() {
     let mut gps = GPSData::default();
 
     let zda = ZDAData {
+        received: None,
         talker: Talker::GPS,
         time: Some(NaiveTime::from_hms_milli(1, 8, 0, 0)),
         day: Some(26),

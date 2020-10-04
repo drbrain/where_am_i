@@ -64,7 +64,7 @@ impl GPSData {
                     if stored == utc_time {
                         return;
                     }
-                },
+                }
                 None => (),
             }
 
