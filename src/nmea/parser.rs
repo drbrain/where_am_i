@@ -894,11 +894,11 @@ pub(crate) fn gll<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
         "GLL",
         all_consuming(map(
             tuple((
-                terminated(talker, terminated(tag("GLL"), comma)),
-                terminated(latlon, comma),
-                terminated(time, comma),
-                terminated(status, comma),
-                pos_mode,
+                terminated(talker, tag("GLL")),
+                preceded(comma, latlon),
+                preceded(comma, time),
+                preceded(comma, status),
+                preceded(comma, pos_mode),
             )),
             |(talker, lat_lon, time, status, position_mode)| GLLData {
                 received: None,
