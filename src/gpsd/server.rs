@@ -1,3 +1,6 @@
+use anyhow::Context;
+use anyhow::Result;
+
 use crate::gps::GPS;
 use crate::gpsd::client::Client;
 use crate::pps::PPS;
@@ -5,7 +8,6 @@ use crate::JsonReceiver;
 use crate::JsonSender;
 
 use std::collections::HashMap;
-use std::error::Error;
 use std::fmt;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -59,14 +61,23 @@ impl Server {
     }
 
     #[tracing::instrument]
-    pub async fn run(self) -> Result<(), Box<dyn Error>> {
+    pub async fn run(self) -> Result<()> {
         let port = self.port;
 
         let server = Arc::new(Mutex::new(self));
         let address = ("0.0.0.0", port);
 
-        let mut listener = TcpListener::bind(address).await?;
-        info!("listening on {} port {}", listener.local_addr()?.ip(), port);
+        let mut listener = TcpListener::bind(address)
+            .await
+            .with_context(|| format!("Failed to bind to {}:{}", address.0, address.1))?;
+
+        let listen_address = listener.local_addr().with_context(|| {
+            format!(
+                "Unable to determine listen address after binding {}:{}",
+                address.0, address.1
+            )
+        })?;
+        info!("listening on {} port {}", listen_address.ip(), port);
 
         loop {
             let (stream, addr) = listener.accept().await?;

@@ -1,3 +1,6 @@
+use anyhow::Context;
+use anyhow::Result;
+
 use backoff::future::FutureOperation;
 use backoff::ExponentialBackoff;
 use backoff::SystemClock;
@@ -112,9 +115,11 @@ async fn configure_device(serial: &mut SerialCodec, messages: Vec<MessageSetting
     }
 }
 
-async fn open(name: &str, settings: &SerialPortSettings) -> Result<SerialCodec, io::Error> {
+async fn open(name: &str, settings: &SerialPortSettings) -> Result<SerialCodec> {
     (|| async {
-        let serial = Serial::from_path(name.clone(), &settings).map_err(open_error)?;
+        let serial = Serial::from_path(name.clone(), &settings)
+            .map_err(open_error)
+            .with_context(|| format!("Failed to open GPS device {}", name.clone()))?;
 
         debug!("Opened NMEA device {}", name.clone());
 
