@@ -9,7 +9,6 @@ name = "where_am_i"
 path = "src/bin/where_am_i.rs"
 
 [dependencies]
-argh               = "0.1.0"
 assert_approx_eq   = "1.1.0"
 backoff            = { version = "0.2.1", features = ["async-std"] }
 bitflags           = "1.2.0"
