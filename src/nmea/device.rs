@@ -71,7 +71,7 @@ impl Device {
         self.messages.push(setting);
     }
 
-    pub async fn run(&self) -> Result<NMEASender, io::Error> {
+    pub async fn run(&self) -> NMEASender {
         let name = self.name.clone();
         let settings = self.settings.clone();
         let messages = self.messages.clone();
@@ -81,7 +81,7 @@ impl Device {
             start(&name, &settings, messages, reader_tx).await;
         });
 
-        Ok(self.sender.clone())
+        self.sender.clone()
     }
 }
 

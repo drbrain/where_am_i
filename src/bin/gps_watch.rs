@@ -83,13 +83,7 @@ async fn main() {
         }
     }
 
-    let tx = match device.run().await {
-        Ok(t) => t,
-        Err(e) => {
-            error!("failed to read from GPS: {:?}", e);
-            std::process::exit(1);
-        }
-    };
+    let tx = device.run().await;
 
     let mut gps = GPS::new(gps_name, tx.clone());
 

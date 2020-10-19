@@ -104,13 +104,7 @@ async fn start_gps(gps_config: &GpsConfig, server: &mut Server) {
         }
     }
 
-    let gps_tx = match device.run().await {
-        Ok(t) => t,
-        Err(e) => {
-            error!("failed to read from GPS: {:?}", e);
-            std::process::exit(1);
-        }
-    };
+    let gps_tx = device.run().await;
 
     let mut gps = GPS::new(gps_name.clone(), gps_tx.clone());
 
