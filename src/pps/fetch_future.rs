@@ -29,14 +29,14 @@ pub struct FetchTime {
 }
 
 impl FetchTime {
-    fn new(device: String, pps_time: ioctl::data, now: Duration, precision: i32) -> FetchTime {
+    fn new(state: &FetchState, pps_time: ioctl::data, now: Duration) -> Self {
         FetchTime {
-            device: device.clone(),
+            device: state.device.clone(),
             real_sec: pps_time.info.assert_tu.sec,
             real_nsec: pps_time.info.assert_tu.nsec,
             clock_sec: now.as_secs(),
             clock_nsec: now.subsec_nanos(),
-            precision,
+            precision: state.precision,
         }
     }
 }
@@ -44,10 +44,26 @@ impl FetchTime {
 #[derive(Debug)]
 struct FetchState {
     device: String,
+    precision: i32,
+    fd: c_int,
     result: Option<FetchTime>,
     ok: bool,
     completed: bool,
     waker: Option<Waker>,
+}
+
+impl FetchState {
+    fn new(device: String, precision: i32, fd: c_int) -> Self {
+        FetchState {
+            device,
+            precision,
+            fd,
+            result: None,
+            ok: false,
+            completed: false,
+            waker: None,
+        }
+    }
 }
 
 pub struct FetchFuture {
@@ -55,41 +71,36 @@ pub struct FetchFuture {
 }
 
 impl FetchFuture {
-    pub fn new(device: String, fd: c_int) -> Self {
-        let state = FetchState {
-            device: device.into(),
-            result: None,
-            ok: false,
-            completed: false,
-            waker: None,
-        };
+    pub fn new(device: String, precision: i32, fd: c_int) -> Self {
+        let state = FetchState::new(device, precision, fd);
 
         let shared_state = Arc::new(Mutex::new(state));
 
         let thread_shared_state = shared_state.clone();
 
-        thread::spawn(move || {
-            let mut shared_state = thread_shared_state.lock().unwrap();
-
-            let device = shared_state.device.clone();
-
-            fetch_pps(device, fd, &mut shared_state);
-
-            shared_state.completed = true;
-
-            if let Some(waker) = shared_state.waker.take() {
-                waker.wake()
-            }
-        });
+        thread::spawn(move || run(thread_shared_state));
 
         FetchFuture { shared_state }
     }
 }
 
-fn fetch_pps(device: String, fd: c_int, shared_state: &mut FetchState) {
+fn run(shared_state: Arc<Mutex<FetchState>>) {
+    let mut shared_state = shared_state.lock().unwrap();
+
+    // reset shared state
     shared_state.ok = false;
     shared_state.result = None;
 
+    fetch_pps(&mut shared_state);
+
+    shared_state.completed = true;
+
+    if let Some(waker) = shared_state.waker.take() {
+        waker.wake()
+    }
+}
+
+fn fetch_pps(shared_state: &mut FetchState) {
     let mut data = ioctl::data::default();
     data.timeout.flags = ioctl::TIME_INVALID;
 
@@ -97,14 +108,14 @@ fn fetch_pps(device: String, fd: c_int, shared_state: &mut FetchState) {
     let result;
 
     unsafe {
-        result = ioctl::fetch(fd, data_ptr);
+        result = ioctl::fetch(shared_state.fd, data_ptr);
     }
 
     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
 
     match (result, now) {
         (Ok(_), Ok(n)) => {
-            let pps_obj = FetchTime::new(device, data, n, -20);
+            let pps_obj = FetchTime::new(shared_state, data, n);
 
             shared_state.ok = true;
 
@@ -131,12 +142,12 @@ impl Future for FetchFuture {
             if guard.ok {
                 Poll::Ready(Ok(json!({
                     "class":      "PPS".to_string(),
-                    "device":     "".to_string(),
+                    "device":     fetch_time.device,
                     "real_sec":   fetch_time.real_sec,
                     "real_nsec":  fetch_time.real_nsec,
                     "clock_sec":  fetch_time.clock_sec,
                     "clock_nsec": fetch_time.clock_nsec,
-                    "precision":  -20,
+                    "precision":  fetch_time.precision,
                 })))
             } else {
                 Poll::Ready(Err("something went wrong".to_string()))
