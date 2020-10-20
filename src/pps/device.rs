@@ -78,32 +78,36 @@ impl Device {
         let file = self.open()?;
         let pps = self.configure(file)?;
 
-        let name = self.name.clone();
+        let pps_name = self.name.clone();
         let tx = self.tx.clone();
         let gps_name = self.gps_name.clone();
 
         tokio::spawn(async move {
-            let fd = pps.as_raw_fd();
-
-            info!("watching PPS events on {}", name);
-
-            loop {
-                let mut pps_data = match PPS::new(name.clone(), -20, fd).await {
-                    Ok(d) => d,
-                    Err(e) => {
-                        error!("PPS fetch error on {} ({:?})", name, e);
-                        continue;
-                    }
-                };
-
-                pps_data["device"] = gps_name.clone().into();
-
-                if let Err(_e) = tx.send(pps_data) {
-                    // error!("send error: {:?}", e);
-                }
-            }
+            send_pps_events(pps, tx, pps_name, gps_name).await;
         });
 
         Ok(())
+    }
+}
+
+async fn send_pps_events(pps: File, tx: JsonSender, pps_name: String, gps_name: String) {
+    let fd = pps.as_raw_fd();
+
+    info!("watching PPS events on {}", pps_name);
+
+    loop {
+        let mut pps_data = match PPS::new(pps_name.clone(), -20, fd).await {
+            Ok(d) => d,
+            Err(e) => {
+                error!("PPS fetch error on {} ({:?})", pps_name, e);
+                continue;
+            }
+        };
+
+        pps_data["device"] = gps_name.clone().into();
+
+        if let Err(_e) = tx.send(pps_data) {
+            // error!("send error: {:?}", e);
+        }
     }
 }
