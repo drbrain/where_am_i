@@ -1,9 +1,11 @@
 use crate::pps::ioctl;
+use crate::pps::State;
+use crate::pps::Time;
+
+use libc::c_int;
 
 use serde_json::json;
 use serde_json::Value;
-
-use libc::c_int;
 
 use std::future::Future;
 use std::pin::Pin;
@@ -11,68 +13,18 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::task::Context;
 use std::task::Poll;
-use std::task::Waker;
 use std::thread;
-use std::time::Duration;
 use std::time::SystemTime;
 
 use tracing::error;
 
-#[derive(Debug)]
-pub struct FetchTime {
-    pub device: String,
-    pub real_sec: i64,
-    pub real_nsec: i32,
-    pub clock_sec: u64,
-    pub clock_nsec: u32,
-    pub precision: i32,
+pub struct PPS {
+    shared_state: Arc<Mutex<State>>,
 }
 
-impl FetchTime {
-    fn new(state: &FetchState, pps_time: ioctl::data, now: Duration) -> Self {
-        FetchTime {
-            device: state.device.clone(),
-            real_sec: pps_time.info.assert_tu.sec,
-            real_nsec: pps_time.info.assert_tu.nsec,
-            clock_sec: now.as_secs(),
-            clock_nsec: now.subsec_nanos(),
-            precision: state.precision,
-        }
-    }
-}
-
-#[derive(Debug)]
-struct FetchState {
-    device: String,
-    precision: i32,
-    fd: c_int,
-    result: Option<FetchTime>,
-    ok: bool,
-    completed: bool,
-    waker: Option<Waker>,
-}
-
-impl FetchState {
-    fn new(device: String, precision: i32, fd: c_int) -> Self {
-        FetchState {
-            device,
-            precision,
-            fd,
-            result: None,
-            ok: false,
-            completed: false,
-            waker: None,
-        }
-    }
-}
-
-pub struct FetchFuture {
-    shared_state: Arc<Mutex<FetchState>>,
-}
-
-impl FetchFuture {
+impl PPS {
     pub fn new(device: String, precision: i32, fd: c_int) -> Self {
-        let state = FetchState::new(device, precision, fd);
+        let state = State::new(device, precision, fd);
 
         let shared_state = Arc::new(Mutex::new(state));
 
@@ -80,11 +32,11 @@ impl FetchFuture {
 
         thread::spawn(move || run(thread_shared_state));
 
-        FetchFuture { shared_state }
+        PPS { shared_state }
     }
 }
 
-fn run(shared_state: Arc<Mutex<FetchState>>) {
+fn run(shared_state: Arc<Mutex<State>>) {
     let mut shared_state = shared_state.lock().unwrap();
 
     // reset shared state
@@ -100,7 +52,7 @@ fn run(shared_state: Arc<Mutex<FetchState>>) {
     }
 }
 
-fn fetch_pps(shared_state: &mut FetchState) {
+fn fetch_pps(shared_state: &mut State) {
     let mut data = ioctl::data::default();
     data.timeout.flags = ioctl::TIME_INVALID;
 
@@ -115,7 +67,7 @@ fn fetch_pps(shared_state: &mut FetchState) {
 
     match (result, now) {
         (Ok(_), Ok(n)) => {
-            let pps_obj = FetchTime::new(shared_state, data, n);
+            let pps_obj = Time::new(shared_state, data, n);
 
             shared_state.ok = true;
 
@@ -130,7 +82,7 @@ fn fetch_pps(shared_state: &mut FetchState) {
     }
 }
 
-impl Future for FetchFuture {
+impl Future for PPS {
     type Output = Result<Value, String>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {

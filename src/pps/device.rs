@@ -1,6 +1,6 @@
 use crate::pps::ioctl;
 use crate::pps::Error;
-use crate::pps::FetchFuture;
+use crate::pps::PPS;
 use crate::JsonSender;
 
 use std::fs::OpenOptions;
@@ -88,10 +88,10 @@ impl Device {
             info!("watching PPS events on {}", name);
 
             loop {
-                let mut pps_data = match FetchFuture::new(name.clone(), -20, fd).await {
+                let mut pps_data = match PPS::new(name.clone(), -20, fd).await {
                     Ok(d) => d,
                     Err(e) => {
-                        error!("fetch error on {} ({:?})", name, e);
+                        error!("PPS fetch error on {} ({:?})", name, e);
                         continue;
                     }
                 };
