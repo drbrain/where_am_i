@@ -12,9 +12,9 @@ use where_am_i::configuration::Configuration;
 use where_am_i::configuration::GpsConfig;
 use where_am_i::gps::GPS;
 use where_am_i::gpsd::Server;
-use where_am_i::nmea::Device;
+use where_am_i::nmea;
 use where_am_i::nmea::UBX_OUTPUT_MESSAGES;
-use where_am_i::pps::PPS;
+use where_am_i::pps;
 use where_am_i::shm::NtpShm;
 
 fn main() {
@@ -90,7 +90,7 @@ async fn start_gps(gps_config: &GpsConfig, server: &mut Server) {
         }
     };
 
-    let mut device = Device::new(gps_name.clone(), serial_port_settings);
+    let mut device = nmea::Device::new(gps_name.clone(), serial_port_settings);
 
     if messages.is_empty() {
         for message in &UBX_OUTPUT_MESSAGES {
@@ -122,7 +122,7 @@ async fn start_gps(gps_config: &GpsConfig, server: &mut Server) {
         Some(pps_config) => {
             let pps_name = pps_config.device.clone();
 
-            let mut pps = PPS::new(pps_name.clone(), gps_name.clone());
+            let mut pps = pps::Device::new(pps_name.clone(), gps_name.clone());
 
             match pps.run().await {
                 Ok(()) => (),

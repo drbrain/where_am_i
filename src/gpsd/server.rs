@@ -3,7 +3,7 @@ use anyhow::Result;
 
 use crate::gps::GPS;
 use crate::gpsd::client::Client;
-use crate::pps::PPS;
+use crate::pps::Device;
 use crate::JsonReceiver;
 use crate::JsonSender;
 
@@ -39,7 +39,7 @@ impl Server {
         self.gps_tx.insert(gps.name.clone(), gps.tx.clone());
     }
 
-    pub fn add_pps(&mut self, pps: &PPS, name: String) {
+    pub fn add_pps(&mut self, pps: &Device, name: String) {
         self.pps_tx.insert(name, pps.tx.clone());
     }
 

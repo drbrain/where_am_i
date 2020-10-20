@@ -13,17 +13,17 @@ use tracing::error;
 use tracing::info;
 
 #[derive(Debug)]
-pub struct PPS {
+pub struct Device {
     pub name: String,
     pub gps_name: String,
     pub tx: JsonSender,
 }
 
-impl PPS {
+impl Device {
     pub fn new(name: String, gps_name: String) -> Self {
         let (tx, _) = broadcast::channel(5);
 
-        PPS { name, gps_name, tx }
+        Device { name, gps_name, tx }
     }
 
     #[tracing::instrument]
