@@ -18,14 +18,18 @@ use std::time::SystemTime;
 use tracing::error;
 
 #[derive(Debug)]
-struct FetchTime {
-    real_sec: i64,
-    real_nsec: i32,
-    clock_sec: u64,
-    clock_nsec: u32,
+pub struct FetchTime {
+    pub device: String,
+    pub real_sec: i64,
+    pub real_nsec: i32,
+    pub clock_sec: u64,
+    pub clock_nsec: u32,
+    pub precision: i32,
 }
+
 #[derive(Debug)]
 struct FetchState {
+    device: String,
     result: Option<FetchTime>,
     ok: bool,
     completed: bool,
@@ -37,8 +41,9 @@ pub struct FetchFuture {
 }
 
 impl FetchFuture {
-    pub fn new(fd: c_int) -> Self {
+    pub fn new(device: String, fd: c_int) -> Self {
         let state = FetchState {
+            device: device.into(),
             result: None,
             ok: false,
             completed: false,
@@ -51,6 +56,8 @@ impl FetchFuture {
 
         thread::spawn(move || {
             let mut shared_state = thread_shared_state.lock().unwrap();
+
+            let device = shared_state.device.clone();
 
             let mut data = ioctl::data::default();
             data.timeout.flags = ioctl::TIME_INVALID;
@@ -68,10 +75,12 @@ impl FetchFuture {
                     match now {
                         Ok(n) => {
                             let pps_obj = FetchTime {
+                                device: device.clone(),
                                 real_sec: data.info.assert_tu.sec,
                                 real_nsec: data.info.assert_tu.nsec,
                                 clock_sec: n.as_secs(),
                                 clock_nsec: n.subsec_nanos(),
+                                precision: -20,
                             };
 
                             shared_state.ok = true;

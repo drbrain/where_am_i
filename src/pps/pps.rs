@@ -88,7 +88,7 @@ impl PPS {
             info!("watching PPS events on {}", name);
 
             loop {
-                let mut pps_data = match FetchFuture::new(fd).await {
+                let mut pps_data = match FetchFuture::new(name.clone(), fd).await {
                     Ok(d) => d,
                     Err(e) => {
                         error!("fetch error on {} ({:?})", name, e);
