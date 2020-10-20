@@ -1,6 +1,6 @@
 use crate::pps::ioctl;
-use crate::pps::FetchFuture;
 use crate::pps::Error;
+use crate::pps::FetchFuture;
 use crate::JsonSender;
 
 use std::fs::OpenOptions;
@@ -107,4 +107,3 @@ impl PPS {
         Ok(())
     }
 }
-

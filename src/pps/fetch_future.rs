@@ -134,4 +134,3 @@ impl Future for FetchFuture {
         }
     }
 }
-
