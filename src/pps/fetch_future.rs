@@ -13,6 +13,7 @@ use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
 use std::thread;
+use std::time::Duration;
 use std::time::SystemTime;
 
 use tracing::error;
@@ -25,6 +26,19 @@ pub struct FetchTime {
     pub clock_sec: u64,
     pub clock_nsec: u32,
     pub precision: i32,
+}
+
+impl FetchTime {
+    fn new(device: String, pps_time: ioctl::data, now: Duration, precision: i32) -> FetchTime {
+        FetchTime {
+            device: device.clone(),
+            real_sec: pps_time.info.assert_tu.sec,
+            real_nsec: pps_time.info.assert_tu.nsec,
+            clock_sec: now.as_secs(),
+            clock_nsec: now.subsec_nanos(),
+            precision,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -59,49 +73,7 @@ impl FetchFuture {
 
             let device = shared_state.device.clone();
 
-            let mut data = ioctl::data::default();
-            data.timeout.flags = ioctl::TIME_INVALID;
-
-            let data_ptr: *mut ioctl::data = &mut data;
-            let result;
-
-            unsafe {
-                result = ioctl::fetch(fd, data_ptr);
-            }
-
-            shared_state.result = match result {
-                Ok(_) => {
-                    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
-                    match now {
-                        Ok(n) => {
-                            let pps_obj = FetchTime {
-                                device: device.clone(),
-                                real_sec: data.info.assert_tu.sec,
-                                real_nsec: data.info.assert_tu.nsec,
-                                clock_sec: n.as_secs(),
-                                clock_nsec: n.subsec_nanos(),
-                                precision: -20,
-                            };
-
-                            shared_state.ok = true;
-
-                            Some(pps_obj)
-                        }
-                        Err(e) => {
-                            shared_state.ok = false;
-                            error!("unable to get timestamp for PPS event ({:?})", e);
-
-                            None
-                        }
-                    }
-                }
-                Err(e) => {
-                    shared_state.ok = false;
-                    error!("unable to get PPS event ({:?})", e);
-
-                    None
-                }
-            };
+            fetch_pps(device, fd, &mut shared_state);
 
             shared_state.completed = true;
 
@@ -111,6 +83,39 @@ impl FetchFuture {
         });
 
         FetchFuture { shared_state }
+    }
+}
+
+fn fetch_pps(device: String, fd: c_int, shared_state: &mut FetchState) {
+    shared_state.ok = false;
+    shared_state.result = None;
+
+    let mut data = ioctl::data::default();
+    data.timeout.flags = ioctl::TIME_INVALID;
+
+    let data_ptr: *mut ioctl::data = &mut data;
+    let result;
+
+    unsafe {
+        result = ioctl::fetch(fd, data_ptr);
+    }
+
+    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
+
+    match (result, now) {
+        (Ok(_), Ok(n)) => {
+            let pps_obj = FetchTime::new(device, data, n, -20);
+
+            shared_state.ok = true;
+
+            shared_state.result = Some(pps_obj);
+        }
+        (Ok(_), Err(e)) => {
+            error!("unable to get timestamp for PPS event ({:?})", e);
+        }
+        (Err(e), _) => {
+            error!("unable to get PPS event ({:?})", e);
+        }
     }
 }
 
