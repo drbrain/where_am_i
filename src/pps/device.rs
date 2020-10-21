@@ -1,7 +1,7 @@
 use crate::pps::ioctl;
 use crate::pps::Error;
 use crate::pps::PPS;
-use crate::JsonSender;
+use crate::TSSender;
 
 use std::fs::OpenOptions;
 use std::os::unix::io::AsRawFd;
@@ -16,7 +16,7 @@ use tracing::info;
 pub struct Device {
     pub name: String,
     pub gps_name: String,
-    pub tx: JsonSender,
+    pub tx: TSSender,
 }
 
 impl Device {
@@ -90,7 +90,7 @@ impl Device {
     }
 }
 
-async fn send_pps_events(pps: File, tx: JsonSender, pps_name: String, gps_name: String) {
+async fn send_pps_events(pps: File, tx: TSSender, pps_name: String, gps_name: String) {
     let fd = pps.as_raw_fd();
 
     info!("watching PPS events on {}", pps_name);
@@ -104,7 +104,7 @@ async fn send_pps_events(pps: File, tx: JsonSender, pps_name: String, gps_name: 
             }
         };
 
-        pps_data["device"] = gps_name.clone().into();
+        pps_data.device = gps_name.clone().into();
 
         if let Err(_e) = tx.send(pps_data) {
             // error!("send error: {:?}", e);

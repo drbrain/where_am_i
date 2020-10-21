@@ -3,6 +3,7 @@ use crate::gpsd::parser::Command;
 use crate::gpsd::server::Server;
 use crate::gpsd::watch::Watch;
 use crate::JsonReceiver;
+use crate::TSReceiver;
 
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
@@ -195,7 +196,7 @@ impl Client {
         }
 
         if let Some(rx) = pps_rx {
-            relay_messages(self.res.clone(), rx)
+            relay_pps_messages(self.res.clone(), rx)
         }
     }
 
@@ -223,7 +224,36 @@ async fn relay(mut tx: Sender, mut rx: JsonReceiver) {
             }
         };
 
-        match tx.send(value).await {
+        match tx.send(value.into()).await {
+            Ok(_) => (),
+            Err(e) => {
+                error!("error relaying message: {:?}", e);
+                break;
+            }
+        }
+    }
+}
+
+fn relay_pps_messages(tx: Sender, rx: TSReceiver) {
+    tokio::spawn(async move {
+        relay_pps(tx, rx).await;
+    });
+}
+
+#[tracing::instrument]
+async fn relay_pps(mut tx: Sender, mut rx: TSReceiver) {
+    loop {
+        let message = rx.recv().await;
+
+        let value = match message {
+            Ok(v) => v,
+            Err(e) => {
+                error!("error receiving message to relay: {:?}", e);
+                break;
+            }
+        };
+
+        match tx.send(value.into()).await {
             Ok(_) => (),
             Err(e) => {
                 error!("error relaying message: {:?}", e);

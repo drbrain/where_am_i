@@ -1,4 +1,4 @@
-use crate::pps::Time;
+use crate::timestamp::Timestamp;
 
 use libc::c_int;
 
@@ -9,7 +9,7 @@ pub struct State {
     pub device: String,
     pub precision: i32,
     pub fd: c_int,
-    pub result: Option<Time>,
+    pub result: Option<Timestamp>,
     pub ok: bool,
     pub completed: bool,
     pub waker: Option<Waker>,

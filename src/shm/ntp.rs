@@ -1,4 +1,4 @@
-use crate::JsonReceiver;
+use crate::TSReceiver;
 
 use crate::shm::sysv_shm;
 use crate::shm::sysv_shm::ShmTime;
@@ -15,8 +15,8 @@ pub struct NtpShm {}
 const NTPD_BASE: i32 = 0x4e545030;
 
 impl NtpShm {
-    pub async fn run(unit: i32, precision: i32, rx: JsonReceiver) {
-        tokio::spawn(relay_timestamps(unit, precision, rx));
+    pub async fn run(unit: i32, rx: TSReceiver) {
+        tokio::spawn(relay_timestamps(unit, rx));
     }
 }
 
@@ -28,22 +28,20 @@ fn map_ntp_unit(unit: i32) -> io::Result<ShmTime> {
     sysv_shm::map(id)
 }
 
-async fn relay_timestamps(unit: i32, precision: i32, mut rx: JsonReceiver) {
+async fn relay_timestamps(unit: i32, mut rx: TSReceiver) {
     let mut time = map_ntp_unit(unit).unwrap();
 
     while let Ok(ts) = rx.recv().await {
-        let class = &ts["class"];
-
-        if class != "TOFF" && class != "PPS" {
-            continue;
-        }
-
-        let clock_sec = ts["clock_sec"].as_i64().unwrap_or(0).try_into().unwrap();
-        let clock_nsec = ts["clock_nsec"].as_i64().unwrap_or(0).try_into().unwrap();
+        let clock_sec = ts.clock_sec.try_into().unwrap_or(0);
+        let clock_nsec = ts.clock_nsec;
         let clock_usec = (clock_nsec / 1000) as i32;
-        let receive_sec = ts["real_sec"].as_i64().unwrap_or(0).try_into().unwrap();
-        let receive_nsec = ts["real_nsec"].as_i64().unwrap_or(0).try_into().unwrap();
+
+        let receive_sec = ts.real_sec.try_into().unwrap_or(0);
+        let receive_nsec = ts.real_nsec.try_into().unwrap_or(0);
         let receive_usec = (receive_nsec / 1000) as i32;
+
+        let leap = ts.leap;
+        let precision = ts.precision;
 
         time.valid.write(0);
         time.count.update(|c| *c += 1);
@@ -52,10 +50,14 @@ async fn relay_timestamps(unit: i32, precision: i32, mut rx: JsonReceiver) {
 
         time.clock_sec = clock_sec;
         time.clock_usec = clock_usec;
+
         time.receive_sec = receive_sec;
         time.receive_usec = receive_usec;
-        time.leap = 0;
+
+        time.leap = leap;
+
         time.precision = precision;
+
         time.clock_nsec = clock_nsec;
         time.receive_nsec = receive_nsec;
 

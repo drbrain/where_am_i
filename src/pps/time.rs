@@ -3,7 +3,7 @@ use crate::pps::State;
 
 use std::time::Duration;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Time {
     pub device: String,
     pub real_sec: i64,

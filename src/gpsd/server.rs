@@ -6,6 +6,8 @@ use crate::gpsd::client::Client;
 use crate::pps::Device;
 use crate::JsonReceiver;
 use crate::JsonSender;
+use crate::TSReceiver;
+use crate::TSSender;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -22,7 +24,7 @@ pub struct Server {
     port: u16,
     pub clients: HashMap<SocketAddr, ()>,
     gps_tx: HashMap<String, JsonSender>,
-    pps_tx: HashMap<String, JsonSender>,
+    pps_tx: HashMap<String, TSSender>,
 }
 
 impl Server {
@@ -36,7 +38,7 @@ impl Server {
     }
 
     pub fn add_gps(&mut self, gps: &GPS) {
-        self.gps_tx.insert(gps.name.clone(), gps.tx.clone());
+        self.gps_tx.insert(gps.name.clone(), gps.gpsd_tx.clone());
     }
 
     pub fn add_pps(&mut self, pps: &Device, name: String) {
@@ -52,7 +54,7 @@ impl Server {
     }
 
     #[tracing::instrument]
-    pub fn pps_rx_for(&self, device: String) -> Option<JsonReceiver> {
+    pub fn pps_rx_for(&self, device: String) -> Option<TSReceiver> {
         if let Some(tx) = self.pps_tx.get(&device) {
             return Some(tx.subscribe());
         }

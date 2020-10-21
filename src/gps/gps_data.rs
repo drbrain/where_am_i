@@ -2,6 +2,9 @@ use chrono::prelude::*;
 
 use crate::nmea::*;
 use crate::JsonSender;
+use crate::TSSender;
+use crate::Timestamp;
+use crate::TimestampKind;
 
 use serde_json::json;
 
@@ -32,7 +35,7 @@ pub struct GPSData {
 }
 
 impl GPSData {
-    pub fn read_nmea(&mut self, nmea: NMEA, name: &str, tx: &JsonSender) {
+    pub fn read_nmea(&mut self, nmea: NMEA, name: &str, gpsd_tx: &JsonSender, ntp_tx: &TSSender) {
         match nmea {
             NMEA::InvalidChecksum(cm) => error!(
                 "checksum match, given {}, calculated {} on {}",
@@ -41,9 +44,9 @@ impl GPSData {
             NMEA::ParseError(e) => error!("parse error: {}", e),
             NMEA::ParseFailure(f) => error!("parse failure: {}", f),
             NMEA::Unsupported(n) => error!("unsupported: {}", n),
-            NMEA::GGA(nd) => self.gga(nd, name, tx),
-            NMEA::GSA(nd) => self.gsa(nd, name, tx),
-            NMEA::ZDA(nd) => self.zda(nd, name, tx),
+            NMEA::GGA(nd) => self.gga(nd, name, gpsd_tx, ntp_tx),
+            NMEA::GSA(nd) => self.gsa(nd, name, gpsd_tx, ntp_tx),
+            NMEA::ZDA(nd) => self.zda(nd, name, gpsd_tx, ntp_tx),
             _ => (),
         }
     }
@@ -75,13 +78,25 @@ impl GPSData {
         }
     }
 
-    pub(crate) fn gga(&mut self, gga: GGAData, _name: &str, _tx: &JsonSender) {
+    pub(crate) fn gga(
+        &mut self,
+        gga: GGAData,
+        _name: &str,
+        _gpsd_tx: &JsonSender,
+        _ntp_tx: &TSSender,
+    ) {
         self.quality = Some(gga.quality);
         self.lat_lon = gga.lat_lon;
         self.altitude_msl = gga.alt;
     }
 
-    pub(crate) fn gsa(&mut self, gsa: GSAData, _name: &str, _tx: &JsonSender) {
+    pub(crate) fn gsa(
+        &mut self,
+        gsa: GSAData,
+        _name: &str,
+        _gpsd_tx: &JsonSender,
+        _ntp_tx: &TSSender,
+    ) {
         match gsa.system {
             Some(System::BeiDuo) => self.beiduo_navigation_mode = Some(gsa.navigation_mode),
             Some(System::GLONASS) => self.glonass_navigation_mode = Some(gsa.navigation_mode),
@@ -118,7 +133,13 @@ impl GPSData {
         }
     }
 
-    pub(crate) fn zda(&mut self, zda: ZDAData, name: &str, tx: &JsonSender) {
+    pub(crate) fn zda(
+        &mut self,
+        zda: ZDAData,
+        name: &str,
+        gpsd_tx: &JsonSender,
+        ntp_tx: &TSSender,
+    ) {
         let year = match zda.year {
             Some(y) => y,
             None => return,
@@ -153,8 +174,9 @@ impl GPSData {
         self.time = Some(time);
         self.year = time.year();
 
-        report_toff(time, received, name, tx);
-        report_tpv(time, self.mode, name, tx);
+        report_toff(time, received, name, gpsd_tx);
+        report_tpv(time, self.mode, name, gpsd_tx);
+        report_ntp(time, received, name, ntp_tx);
     }
 }
 
@@ -164,6 +186,21 @@ fn gpsd_mode(navigation_mode: &NavigationMode) -> u32 {
         NavigationMode::Fix2D => 2,
         NavigationMode::Fix3D => 3,
     }
+}
+
+fn report_ntp(time: DateTime<Utc>, received: Duration, name: &str, tx: &TSSender) {
+    let ts = Timestamp {
+        device: name.into(),
+        kind: TimestampKind::GPS,
+        precision: -1,
+        leap: 0,
+        real_sec: time.timestamp(),
+        real_nsec: time.timestamp_subsec_nanos() as i32,
+        clock_sec: received.as_secs(),
+        clock_nsec: received.subsec_nanos(),
+    };
+
+    if tx.send(ts).is_ok() {};
 }
 
 fn report_toff(date: DateTime<Utc>, received: Duration, name: &str, tx: &JsonSender) {

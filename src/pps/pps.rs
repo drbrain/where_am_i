@@ -1,11 +1,8 @@
 use crate::pps::ioctl;
 use crate::pps::State;
-use crate::pps::Time;
+use crate::timestamp::Timestamp;
 
 use libc::c_int;
-
-use serde_json::json;
-use serde_json::Value;
 
 use std::future::Future;
 use std::pin::Pin;
@@ -67,7 +64,10 @@ fn fetch_pps(shared_state: &mut State) {
 
     match (result, now) {
         (Ok(_), Ok(n)) => {
-            let pps_obj = Time::new(shared_state, data, n);
+            let device = shared_state.device.clone();
+            let precision = shared_state.precision;
+
+            let pps_obj = Timestamp::from_pps_time(device, precision, data, n);
 
             shared_state.ok = true;
 
@@ -83,24 +83,16 @@ fn fetch_pps(shared_state: &mut State) {
 }
 
 impl Future for PPS {
-    type Output = Result<Value, String>;
+    type Output = Result<Timestamp, String>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut guard = self.shared_state.lock().unwrap();
 
         if guard.completed {
-            let fetch_time = guard.result.as_ref().unwrap();
+            let pps_time = guard.result.as_ref().unwrap();
 
             if guard.ok {
-                Poll::Ready(Ok(json!({
-                    "class":      "PPS".to_string(),
-                    "device":     fetch_time.device,
-                    "real_sec":   fetch_time.real_sec,
-                    "real_nsec":  fetch_time.real_nsec,
-                    "clock_sec":  fetch_time.clock_sec,
-                    "clock_nsec": fetch_time.clock_nsec,
-                    "precision":  fetch_time.precision,
-                })))
+                Poll::Ready(Ok(pps_time.clone()))
             } else {
                 Poll::Ready(Err("something went wrong".to_string()))
             }
