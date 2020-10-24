@@ -205,6 +205,9 @@ impl Client {
     }
 }
 
+// It would be cool to use a trait here, but we can't use async with traits yet.
+// https://smallcultfollowing.com/babysteps/blog/2019/10/26/async-fn-in-traits-are-hard/
+
 fn relay_messages(tx: Sender, rx: JsonReceiver) {
     tokio::spawn(async move {
         relay(tx, rx).await;
