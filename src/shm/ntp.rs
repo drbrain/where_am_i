@@ -15,7 +15,7 @@ pub struct NtpShm {}
 const NTPD_BASE: i32 = 0x4e545030;
 
 impl NtpShm {
-    pub async fn run(unit: i32, rx: TSReceiver) {
+    pub async fn relay(unit: i32, rx: TSReceiver) {
         tokio::spawn(relay_timestamps(unit, rx));
     }
 }
