@@ -88,6 +88,8 @@ impl GPSData {
         self.quality = Some(gga.quality);
         self.lat_lon = gga.lat_lon;
         self.altitude_msl = gga.alt;
+
+        self.update_time(gga.time);
     }
 
     pub(crate) fn gsa(
@@ -164,8 +166,6 @@ impl GPSData {
             Some(d) => d,
             None => timestamp(),
         };
-
-        self.update_time(time);
 
         let date = NaiveDate::from_ymd(year, month, day);
         let time = NaiveDateTime::new(date, time);
