@@ -1,4 +1,7 @@
 use crate::TSReceiver;
+use crate::TSSender;
+use crate::Timestamp;
+use crate::TimestampKind;
 
 use crate::shm::sysv_shm;
 use crate::shm::sysv_shm::ShmTime;
@@ -7,6 +10,9 @@ use std::convert::TryInto;
 use std::io;
 use std::sync::atomic::compiler_fence;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
+
+use tokio::time::delay_for;
 
 use tracing::error;
 
@@ -17,6 +23,10 @@ const NTPD_BASE: i32 = 0x4e545030;
 impl NtpShm {
     pub async fn relay(unit: i32, rx: TSReceiver) {
         tokio::spawn(relay_timestamps(unit, rx));
+    }
+
+    pub async fn watch(unit: i32, device: String, tx: TSSender) {
+        tokio::spawn(watch_timestamps(unit, device, tx));
     }
 }
 
@@ -70,4 +80,69 @@ async fn relay_timestamps(unit: i32, mut rx: TSReceiver) {
     error!("Sending timestamps failed");
 
     sysv_shm::unmap(time);
+}
+
+// NTP reads the shared memory as described at http://doc.ntp.org/4.2.8/drivers/driver28.html
+//
+// In mode 1 it resets valid and bumps count after reading values.  We can't trust valid as it may
+// change while we're reading values.
+//
+// Instead we make a best-effort by tracking count.  If it is different than last go-around and
+// did not change while reading we probably got new values, so we report them.
+async fn watch_timestamps(unit: i32, device: String, tx: TSSender) {
+    let time = map_ntp_unit(unit).unwrap();
+    let mut last_count: i32 = 0;
+
+    loop {
+        let count_before = time.count.read();
+
+        if count_before == last_count {
+            delay_for(Duration::from_millis(10)).await;
+            continue;
+        }
+
+        compiler_fence(Ordering::SeqCst);
+
+        let clock_sec = time.clock_sec;
+        let clock_nsec = time.clock_nsec;
+
+        let real_sec = time.receive_sec;
+        let real_nsec = time.receive_nsec;
+
+        let leap = time.leap;
+        let precision = time.precision;
+
+        compiler_fence(Ordering::SeqCst);
+
+        let count_after = time.count.read();
+
+        if count_before != count_after {
+            // We probably raced a clock write or NTP read.
+            //
+            // If from a write we might bail again if we race an NTP read on our next try.
+            //
+            // If from a read then we'll have stable values on our next try.
+            last_count = count_before;
+
+            delay_for(Duration::from_millis(10)).await;
+            continue;
+        }
+
+        last_count = count_after;
+
+        let timestamp = Timestamp {
+            device: device.clone(),
+            kind: TimestampKind::GPS, // TODO pass in type somewhere
+            precision: precision,
+            leap: leap,
+            real_sec: real_sec.into(),
+            real_nsec: real_nsec.try_into().unwrap_or(0),
+            clock_sec: clock_sec.try_into().unwrap_or(0),
+            clock_nsec: clock_nsec,
+        };
+
+        if tx.send(timestamp).is_ok() {};
+
+        delay_for(Duration::from_millis(1000)).await;
+    }
 }

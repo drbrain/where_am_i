@@ -8,6 +8,14 @@ edition = "2018"
 name = "where_am_i"
 path = "src/bin/where_am_i.rs"
 
+[[bin]]
+name = "gps_watch"
+path = "src/bin/gps_watch.rs"
+
+[[bin]]
+name = "time_watch"
+path = "src/bin/time_watch.rs"
+
 [dependencies]
 assert_approx_eq   = "1.1.0"
 anyhow             = "^1.0"
