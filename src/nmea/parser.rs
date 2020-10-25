@@ -82,12 +82,13 @@ pub fn parse<'a, E: ParseError<&'a [u8]>>(
 
     if given == calculated {
         trace!(
-            "received {:?} parsing \"{}\" (checksum OK)",
+            "received {:?} parsing \"{}\" (checksum OK), {} bytes remaining",
             NaiveDateTime::from_timestamp(
                 received.as_secs().try_into().unwrap_or(0),
                 received.subsec_nanos()
             ),
-            data
+            data,
+            input.len()
         );
 
         match message::<VerboseError<&'a str>>(data, received) {
