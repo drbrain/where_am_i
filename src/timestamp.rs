@@ -11,15 +11,33 @@ pub enum TimestampKind {
     PPS,
 }
 
+/// A timestamp to be sent to (or read from) NTP.
+///
+/// A timestamp includes both a "real" value and a "clock" value.
+///
+/// The "clock" value is the time read from a reference clock.  This is the time the other clock
+/// thinks the current time is.
+///
+/// The "real" value is the time of the system or "wall" clock when the timestamp was read.  It may
+/// be different than the clock time if the system clock and the reference clock are not
+/// synchronized.
 #[derive(Clone, Debug)]
 pub struct Timestamp {
+    /// Device the timestamp was read from
     pub device: String,
+    /// Kind of device the timestamp was read from
     pub kind: TimestampKind,
+    /// Precision of the timestamp.
     pub precision: i32,
+    /// Nonzero if a leap second is coming
     pub leap: i32,
+    /// The system clock seconds this timestamp was received
     pub real_sec: i64,
+    /// The system clock nanoseconds since the last second boundary this timestamp was received
     pub real_nsec: i32,
+    /// The clock seconds of this timestamp
     pub clock_sec: u64,
+    /// The clock nanoseconds since the last second boundary of this timestamp
     pub clock_nsec: u32,
 }
 
