@@ -194,10 +194,10 @@ fn report_ntp(time: DateTime<Utc>, received: Duration, name: &str, tx: &TSSender
         kind: TimestampKind::GPS,
         precision: -1,
         leap: 0,
-        real_sec: time.timestamp(),
-        real_nsec: time.timestamp_subsec_nanos() as i32,
-        clock_sec: received.as_secs(),
-        clock_nsec: received.subsec_nanos(),
+        real_sec: received.as_secs() as i64,
+        real_nsec: received.subsec_nanos() as i32,
+        clock_sec: time.timestamp() as u64,
+        clock_nsec: time.timestamp_subsec_nanos(),
     };
 
     if tx.send(ts).is_ok() {};
@@ -210,10 +210,10 @@ fn report_toff(date: DateTime<Utc>, received: Duration, name: &str, tx: &JsonSen
     let toff = json!({
         "class":      "TOFF".to_string(),
         "device":     name,
-        "real_sec":   sec,
-        "real_nsec":  nsec,
-        "clock_sec":  received.as_secs(),
-        "clock_nsec": received.subsec_nanos(),
+        "real_sec":   received.as_secs(),
+        "real_nsec":  received.subsec_nanos(),
+        "clock_sec":  sec,
+        "clock_nsec": nsec,
     });
 
     if tx.send(toff).is_ok() {}
