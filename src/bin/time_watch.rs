@@ -1,10 +1,13 @@
+use chrono::NaiveDateTime;
+
 use std::convert::TryFrom;
+use std::convert::TryInto;
 
 use tokio::sync::broadcast;
 
+use tracing::debug;
 use tracing::error;
 use tracing::info;
-use tracing::debug;
 use tracing::Level;
 
 use tracing_subscriber::filter::EnvFilter;
@@ -26,9 +29,16 @@ async fn main() {
     }
 
     while let Ok(ts) = rx.recv().await {
+        let real_time =
+            NaiveDateTime::from_timestamp(ts.real_sec, ts.real_nsec.try_into().unwrap_or(0));
+        let clock_time = NaiveDateTime::from_timestamp(
+            ts.clock_sec.try_into().unwrap_or(0),
+            ts.clock_nsec.try_into().unwrap_or(0),
+        );
+
         info!(
-            "device: {} refclock: {}.{} received: {}.{}",
-            ts.device, ts.real_sec, ts.real_nsec, ts.clock_sec, ts.clock_nsec
+            "device: {} refclock: {} received: {}",
+            ts.device, real_time, clock_time
         );
     }
 }
@@ -104,6 +114,10 @@ impl NtpShmWatch {
             NtpShm::watch(ntp_unit, device, tx).await;
         });
 
-        debug!("Watching for NTP SHM messages from {} on unit {}", self.device.clone(), self.ntp_unit);
+        debug!(
+            "Watching for NTP SHM messages from {} on unit {}",
+            self.device.clone(),
+            self.ntp_unit
+        );
     }
 }
