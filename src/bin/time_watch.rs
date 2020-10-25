@@ -1,3 +1,4 @@
+use chrono::Duration;
 use chrono::NaiveDateTime;
 
 use std::convert::TryFrom;
@@ -28,6 +29,8 @@ async fn main() {
         }
     }
 
+    let zero = Duration::seconds(0);
+
     while let Ok(ts) = rx.recv().await {
         let real_time =
             NaiveDateTime::from_timestamp(ts.real_sec, ts.real_nsec.try_into().unwrap_or(0));
@@ -36,9 +39,17 @@ async fn main() {
             ts.clock_nsec.try_into().unwrap_or(0),
         );
 
+        let offset = clock_time.signed_duration_since(real_time);
+
+        let offset_text = if offset > zero {
+            format!("{} after", offset)
+        } else {
+            format!("{} before", offset * -1)
+        };
+
         info!(
-            "device: {} refclock: {} received: {}",
-            ts.device, real_time, clock_time
+            "device {} tick {} received {} system at {}",
+            ts.device, clock_time, offset_text, real_time
         );
     }
 }

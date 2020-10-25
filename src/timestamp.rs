@@ -35,9 +35,9 @@ pub struct Timestamp {
     pub real_sec: i64,
     /// The system clock nanoseconds since the last second boundary this timestamp was received
     pub real_nsec: i32,
-    /// The clock seconds of this timestamp
+    /// The reference clock seconds of this timestamp
     pub clock_sec: u64,
-    /// The clock nanoseconds since the last second boundary of this timestamp
+    /// The reference clock nanoseconds since the last second boundary of this timestamp
     pub clock_nsec: u32,
 }
 
