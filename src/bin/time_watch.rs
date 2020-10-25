@@ -42,13 +42,13 @@ async fn main() {
         let offset = clock_time.signed_duration_since(real_time);
 
         let offset_text = if offset > zero {
-            format!("{} after", offset)
+            format!("{} after ", offset)
         } else {
             format!("{} before", offset * -1)
         };
 
         info!(
-            "device {} tick {} received {} system at {}",
+            "{} tick {} received {} system at {}",
             ts.device, clock_time, offset_text, real_time
         );
     }
