@@ -32,13 +32,13 @@ pub struct Timestamp {
     /// Nonzero if a leap second is coming
     pub leap: i32,
     /// The system clock seconds this timestamp was received
-    pub real_sec: i64,
+    pub received_sec: u64,
     /// The system clock nanoseconds since the last second boundary this timestamp was received
-    pub real_nsec: i32,
+    pub received_nsec: u32,
     /// The reference clock seconds of this timestamp
-    pub clock_sec: u64,
+    pub reference_sec: u64,
     /// The reference clock nanoseconds since the last second boundary of this timestamp
-    pub clock_nsec: u32,
+    pub reference_nsec: u32,
 }
 
 impl Timestamp {
@@ -53,10 +53,10 @@ impl Timestamp {
             kind: TimestampKind::PPS,
             precision: precision,
             leap: 0,
-            real_sec: pps_time.info.assert_tu.sec,
-            real_nsec: pps_time.info.assert_tu.nsec,
-            clock_sec: now.as_secs(),
-            clock_nsec: now.subsec_nanos(),
+            reference_sec: pps_time.info.assert_tu.sec as u64,
+            reference_nsec: pps_time.info.assert_tu.nsec as u32,
+            received_sec: now.as_secs(),
+            received_nsec: now.subsec_nanos(),
         }
     }
 }
@@ -74,10 +74,10 @@ fn from_gps(t: Timestamp) -> Value {
     json!({
         "class":      "GPS".to_string(),
         "device":     t.device,
-        "real_sec":   t.real_sec,
-        "real_nsec":  t.real_nsec,
-        "clock_sec":  t.clock_sec,
-        "clock_nsec": t.clock_nsec,
+        "real_sec":   t.reference_sec,
+        "real_nsec":  t.reference_nsec,
+        "clock_sec":  t.received_sec,
+        "clock_nsec": t.received_nsec,
         "precision":  t.precision,
     })
 }
@@ -86,10 +86,10 @@ fn from_pps(t: Timestamp) -> Value {
     json!({
         "class":      "PPS".to_string(),
         "device":     t.device,
-        "real_sec":   t.real_sec,
-        "real_nsec":  t.real_nsec,
-        "clock_sec":  t.clock_sec,
-        "clock_nsec": t.clock_nsec,
+        "real_sec":   t.reference_sec,
+        "real_nsec":  t.reference_nsec,
+        "clock_sec":  t.received_sec,
+        "clock_nsec": t.received_nsec,
         "precision":  t.precision,
     })
 }

@@ -168,15 +168,15 @@ impl GPSData {
         };
 
         let date = NaiveDate::from_ymd(year, month, day);
-        let time = NaiveDateTime::new(date, time);
-        let time = DateTime::from_utc(time, Utc);
+        let reference = NaiveDateTime::new(date, time);
+        let reference = DateTime::from_utc(reference, Utc);
 
-        self.time = Some(time);
-        self.year = time.year();
+        self.time = Some(reference);
+        self.year = reference.year();
 
-        report_toff(time, received, name, gpsd_tx);
-        report_tpv(time, self.mode, name, gpsd_tx);
-        report_ntp(time, received, name, ntp_tx);
+        report_toff(reference, received, name, gpsd_tx);
+        report_tpv(reference, self.mode, name, gpsd_tx);
+        report_ntp(reference, received, name, ntp_tx);
     }
 }
 
@@ -188,45 +188,45 @@ fn gpsd_mode(navigation_mode: &NavigationMode) -> u32 {
     }
 }
 
-fn report_ntp(time: DateTime<Utc>, received: Duration, name: &str, tx: &TSSender) {
+fn report_ntp(reference: DateTime<Utc>, received: Duration, name: &str, tx: &TSSender) {
     let ts = Timestamp {
         device: name.into(),
         kind: TimestampKind::GPS,
         precision: -1,
         leap: 0,
-        real_sec: received.as_secs() as i64,
-        real_nsec: received.subsec_nanos() as i32,
-        clock_sec: time.timestamp() as u64,
-        clock_nsec: time.timestamp_subsec_nanos(),
+        received_sec: received.as_secs(),
+        received_nsec: received.subsec_nanos(),
+        reference_sec: reference.timestamp() as u64,
+        reference_nsec: reference.timestamp_subsec_nanos(),
     };
 
     if tx.send(ts).is_ok() {};
 }
 
-fn report_toff(date: DateTime<Utc>, received: Duration, name: &str, tx: &JsonSender) {
-    let sec = date.timestamp();
-    let nsec = date.timestamp_subsec_nanos();
+fn report_toff(reference: DateTime<Utc>, received: Duration, name: &str, tx: &JsonSender) {
+    let sec = reference.timestamp();
+    let nsec = reference.timestamp_subsec_nanos();
 
     let toff = json!({
         "class":      "TOFF".to_string(),
         "device":     name,
-        "real_sec":   received.as_secs(),
-        "real_nsec":  received.subsec_nanos(),
-        "clock_sec":  sec,
-        "clock_nsec": nsec,
+        "real_sec":   sec,
+        "real_nsec":  nsec,
+        "clock_sec":  received.as_secs(),
+        "clock_nsec": received.subsec_nanos(),
     });
 
     if tx.send(toff).is_ok() {}
 }
 
-fn report_tpv(time: DateTime<Utc>, mode: Option<u32>, name: &str, tx: &JsonSender) {
-    let time = time.format("%Y-%m-%dT%H:%M:%SZ").to_string();
+fn report_tpv(reference: DateTime<Utc>, mode: Option<u32>, name: &str, tx: &JsonSender) {
+    let reference = reference.format("%Y-%m-%dT%H:%M:%SZ").to_string();
     let mode = mode.unwrap_or(0);
 
     let tpv = json!({
         "class":  "TPV".to_string(),
         "device": name,
-        "time":   time,
+        "time":   reference,
         "mode":   mode,
     });
 

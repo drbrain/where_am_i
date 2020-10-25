@@ -42,13 +42,13 @@ async fn relay_timestamps(unit: i32, mut rx: TSReceiver) {
     let mut time = map_ntp_unit(unit).unwrap();
 
     while let Ok(ts) = rx.recv().await {
-        let clock_sec = ts.clock_sec.try_into().unwrap_or(0);
-        let clock_nsec = ts.clock_nsec;
-        let clock_usec = (clock_nsec / 1000) as i32;
+        let reference_sec = ts.reference_sec.try_into().unwrap_or(0);
+        let reference_nsec = ts.reference_nsec;
+        let reference_usec = (reference_nsec / 1000) as i32;
 
-        let receive_sec = ts.real_sec.try_into().unwrap_or(0);
-        let receive_nsec = ts.real_nsec.try_into().unwrap_or(0);
-        let receive_usec = (receive_nsec / 1000) as i32;
+        let received_sec = ts.received_sec.try_into().unwrap_or(0);
+        let received_nsec = ts.received_nsec.try_into().unwrap_or(0);
+        let received_usec = (received_nsec / 1000) as i32;
 
         let leap = ts.leap;
         let precision = ts.precision;
@@ -58,18 +58,18 @@ async fn relay_timestamps(unit: i32, mut rx: TSReceiver) {
 
         compiler_fence(Ordering::SeqCst);
 
-        time.clock_sec = clock_sec;
-        time.clock_usec = clock_usec;
+        time.clock_sec = reference_sec;
+        time.clock_usec = reference_usec;
 
-        time.receive_sec = receive_sec;
-        time.receive_usec = receive_usec;
+        time.receive_sec = received_sec;
+        time.receive_usec = received_usec;
 
         time.leap = leap;
 
         time.precision = precision;
 
-        time.clock_nsec = clock_nsec;
-        time.receive_nsec = receive_nsec;
+        time.clock_nsec = reference_nsec;
+        time.receive_nsec = received_nsec;
 
         compiler_fence(Ordering::SeqCst);
 
@@ -103,11 +103,11 @@ async fn watch_timestamps(unit: i32, device: String, tx: TSSender) {
 
         compiler_fence(Ordering::SeqCst);
 
-        let clock_sec = time.clock_sec;
-        let clock_nsec = time.clock_nsec;
+        let reference_sec = time.clock_sec;
+        let reference_nsec = time.clock_nsec;
 
-        let real_sec = time.receive_sec;
-        let real_nsec = time.receive_nsec;
+        let received_sec = time.receive_sec;
+        let received_nsec = time.receive_nsec;
 
         let leap = time.leap;
         let precision = time.precision;
@@ -135,10 +135,10 @@ async fn watch_timestamps(unit: i32, device: String, tx: TSSender) {
             kind: TimestampKind::GPS, // TODO pass in type somewhere
             precision: precision,
             leap: leap,
-            real_sec: real_sec.into(),
-            real_nsec: real_nsec.try_into().unwrap_or(0),
-            clock_sec: clock_sec.try_into().unwrap_or(0),
-            clock_nsec: clock_nsec,
+            received_sec: received_sec.try_into().unwrap_or(0),
+            received_nsec: received_nsec,
+            reference_sec: reference_sec.try_into().unwrap_or(0),
+            reference_nsec: reference_nsec,
         };
 
         if tx.send(timestamp).is_ok() {};
