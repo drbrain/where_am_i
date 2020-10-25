@@ -34,6 +34,11 @@ impl Decoder for Codec {
     type Error = CodecError;
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        if buf.is_empty() {
+            self.last_received = None;
+            return Ok(None);
+        }
+
         let last_received = match self.last_received {
             Some(r) => r,
             None => timestamp(),
