@@ -1,5 +1,6 @@
 use chrono::naive::NaiveDate;
 use chrono::naive::NaiveTime;
+use chrono::NaiveDateTime;
 
 use nom::branch::*;
 use nom::bytes::complete::*;
@@ -14,6 +15,7 @@ use nom::IResult;
 
 use serde::Serialize;
 
+use std::convert::TryInto;
 use std::time::Duration;
 
 use tracing::error;
@@ -79,7 +81,14 @@ pub fn parse<'a, E: ParseError<&'a [u8]>>(
     let data = std::str::from_utf8(data).unwrap();
 
     if given == calculated {
-        trace!("parsing \"{}\" (checksum OK)", data);
+        trace!(
+            "received {:?} parsing \"{}\" (checksum OK)",
+            NaiveDateTime::from_timestamp(
+                received.as_secs().try_into().unwrap_or(0),
+                received.subsec_nanos()
+            ),
+            data
+        );
 
         match message::<VerboseError<&'a str>>(data, received) {
             Err(Err::Error(_)) => Ok((input, NMEA::ParseError(String::from(data)))),
