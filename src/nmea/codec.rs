@@ -23,9 +23,7 @@ use tokio_util::codec::Encoder;
 use tracing::debug;
 
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Codec {
-    last_received: Option<Duration>,
-}
+pub struct Codec {}
 
 type VE<'a> = VerboseError<&'a [u8]>;
 
@@ -33,36 +31,26 @@ impl Decoder for Codec {
     type Item = NMEA;
     type Error = CodecError;
 
+    /// Decodes an NMEA stream into messages and attaches a received timestamp.
+    ///
+    /// The received timestamp is set based on when an entire message is received, validated, and
+    /// parsed.  The first byte in a message would probably be more accurate because that is the
+    /// time when the NMEA information is known to the GPS receiver.  By using the time the message
+    /// is complete is more consistent and results in less jitter ensuring that ntpd likes the
+    /// timestamps we produce.
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        if buf.is_empty() {
-            self.last_received = None;
-            return Ok(None);
-        }
-
-        let last_received = match self.last_received {
-            Some(r) => r,
-            None => timestamp(),
-        };
-
+        let now = timestamp();
         let bytes = buf.to_bytes();
         let input = bytes.bytes();
 
-        match parse::<VE>(input, last_received) {
+        match parse::<VE>(input, now) {
             Ok((input, nmea)) => {
-                if input.is_empty() {
-                    self.last_received = None;
-                } else {
-                    buf.extend_from_slice(&Bytes::copy_from_slice(input));
-
-                    self.last_received = Some(last_received);
-                }
+                buf.extend_from_slice(&Bytes::copy_from_slice(input));
 
                 Ok(Some(nmea))
             }
             Err(Err::Incomplete(_)) => {
                 buf.extend_from_slice(&Bytes::copy_from_slice(input));
-
-                self.last_received = Some(last_received);
 
                 Ok(None)
             }
