@@ -53,28 +53,28 @@ async fn relay_timestamps(unit: i32, mut rx: TSReceiver) {
         let leap = ts.leap;
         let precision = ts.precision;
 
-        time.valid.write(0);
-        time.count.update(|c| *c += 1);
+        time.map_mut(|t| &mut t.valid).write(0);
+        time.map_mut(|t| &mut t.count).update(|c| *c += 1);
 
         compiler_fence(Ordering::SeqCst);
 
-        time.clock_sec = reference_sec;
-        time.clock_usec = reference_usec;
+        time.map_mut(|t| &mut t.clock_sec).write(reference_sec);
+        time.map_mut(|t| &mut t.clock_usec).write(reference_usec);
 
-        time.receive_sec = received_sec;
-        time.receive_usec = received_usec;
+        time.map_mut(|t| &mut t.receive_sec).write(received_sec);
+        time.map_mut(|t| &mut t.receive_usec).write(received_usec);
 
-        time.leap = leap;
+        time.map_mut(|t| &mut t.leap).write(leap);
 
-        time.precision = precision;
+        time.map_mut(|t| &mut t.precision).write(precision);
 
-        time.clock_nsec = reference_nsec;
-        time.receive_nsec = received_nsec;
+        time.map_mut(|t| &mut t.clock_nsec).write(reference_nsec);
+        time.map_mut(|t| &mut t.receive_nsec).write(received_nsec);
 
         compiler_fence(Ordering::SeqCst);
 
-        time.count.update(|c| *c += 1);
-        time.valid.write(1);
+        time.map_mut(|t| &mut t.count).update(|c| *c += 1);
+        time.map_mut(|t| &mut t.valid).write(1);
     }
 
     error!("Sending timestamps failed");
@@ -94,7 +94,7 @@ async fn watch_timestamps(unit: i32, device: String, tx: TSSender) {
     let mut last_count: i32 = 0;
 
     loop {
-        let count_before = time.count.read();
+        let count_before = time.map(|t| &t.count).read();
 
         if count_before == last_count {
             delay_for(Duration::from_millis(10)).await;
@@ -103,18 +103,18 @@ async fn watch_timestamps(unit: i32, device: String, tx: TSSender) {
 
         compiler_fence(Ordering::SeqCst);
 
-        let reference_sec = time.clock_sec;
-        let reference_nsec = time.clock_nsec;
+        let reference_sec = time.map(|t| &t.clock_sec).read();
+        let reference_nsec = time.map(|t| &t.clock_nsec).read();
 
-        let received_sec = time.receive_sec;
-        let received_nsec = time.receive_nsec;
+        let received_sec = time.map(|t| &t.receive_sec).read();
+        let received_nsec = time.map(|t| &t.receive_nsec).read();
 
-        let leap = time.leap;
-        let precision = time.precision;
+        let leap = time.map(|t| &t.leap).read();
+        let precision = time.map(|t| &t.precision).read();
 
         compiler_fence(Ordering::SeqCst);
 
-        let count_after = time.count.read();
+        let count_after = time.map(|t| &t.count).read();
 
         if count_before != count_after {
             // We probably raced a clock write or NTP read.

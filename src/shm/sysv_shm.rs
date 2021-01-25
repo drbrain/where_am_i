@@ -5,13 +5,12 @@ use std::ptr;
 
 use volatile::Volatile;
 
-pub type ShmTime = ManuallyDrop<Box<time>>;
+pub type ShmTime = ManuallyDrop<Volatile<Box<time>>>;
 
-#[derive(Debug, Default)]
 #[repr(C)]
 pub struct time {
     pub mode: i32,
-    pub count: Volatile<i32>,
+    pub count: i32,
     pub clock_sec: i32,
     pub clock_usec: i32,
     pub receive_sec: i32,
@@ -19,7 +18,7 @@ pub struct time {
     pub leap: i32,
     pub precision: i32,
     pub nsamples: i32,
-    pub valid: Volatile<i32>,
+    pub valid: i32,
     pub clock_nsec: u32,
     pub receive_nsec: u32,
     _dummy: [u8; 8],
@@ -58,7 +57,7 @@ pub fn map(id: i32) -> io::Result<ShmTime> {
             box_time = Box::from_raw(ptr as *mut time);
         }
 
-        Ok(ManuallyDrop::new(box_time))
+        Ok(ManuallyDrop::new(Volatile::new(box_time)))
     }
 }
 
@@ -67,7 +66,7 @@ pub fn unmap(time: ShmTime) {
     let ok;
 
     unsafe {
-        let ptr: *mut time = Box::into_raw(time);
+        let ptr: *mut time = Box::into_raw(time.extract_inner());
 
         ok = libc::shmdt(ptr as *const libc::c_void);
     }

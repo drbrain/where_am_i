@@ -39,5 +39,5 @@ toml               = "0.5.8"
 tracing            = "0.1.22"
 tracing-futures    = "0.2.4"
 tracing-subscriber = "0.2.15"
-volatile           = "0.3.0"
+volatile           = "0.4.3"
 
