@@ -27,7 +27,7 @@ futures            = "0.3.12"
 futures-util       = "0.3.12"
 instant            = "0.1"
 libc               = "0.2.82"
-nix                = "0.17.0"
+nix                = "0.19.1"
 nom                = "5.1.0"
 serde              = { version = "1.0.0", features = ["derive"] }
 serde_json         = "1.0.0"
