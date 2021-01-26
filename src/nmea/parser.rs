@@ -16,6 +16,8 @@ use nom::IResult;
 use serde::Serialize;
 
 use std::convert::TryInto;
+use std::num::ParseFloatError;
+use std::num::ParseIntError;
 use std::time::Duration;
 
 use tracing::error;
@@ -57,7 +59,13 @@ pub struct ChecksumMismatch {
     pub calculated: u8,
 }
 
-pub fn parse<'a, E: ParseError<&'a [u8]>>(
+pub fn parse<
+    'a,
+    E: ParseError<&'a [u8]>
+        + ContextError<&'a [u8]>
+        + FromExternalError<&'a [u8], ParseFloatError>
+        + FromExternalError<&'a [u8], ParseIntError>,
+>(
     input: &'a [u8],
     received: Duration,
 ) -> IResult<&'a [u8], NMEA, E> {
@@ -142,7 +150,13 @@ fn parse_error<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8]
     }
 }
 
-pub fn message<'a, E: ParseError<&'a str>>(
+pub fn message<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
     input: &'a str,
     received: Duration,
 ) -> IResult<&'a str, NMEA, E> {
@@ -227,7 +241,13 @@ pub fn message<'a, E: ParseError<&'a str>>(
     ))(input)
 }
 
-pub(crate) fn private_message<'a, E: ParseError<&'a str>>(
+pub(crate) fn private_message<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
     input: &'a str,
 ) -> IResult<&'a str, NMEA, E> {
     alt((
@@ -268,7 +288,9 @@ pub(crate) fn comma<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a s
     tag(",")(input)
 }
 
-pub(crate) fn date<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NaiveDate, E> {
+pub(crate) fn date<'a, E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>>(
+    input: &'a str,
+) -> IResult<&'a str, NaiveDate, E> {
     map_opt(
         tuple((two_digit, two_digit, two_digit_i)),
         |(day, month, year)| NaiveDate::from_ymd_opt(year, month, day),
@@ -295,11 +317,18 @@ pub(crate) fn east_west<'a, E: ParseError<&'a str>>(
     })(input)
 }
 
-pub(crate) fn flt32<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, f32, E> {
+pub(crate) fn flt32<
+    'a,
+    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseFloatError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, f32, E> {
     map_res(recognize_float, |s: &str| s.parse())(input)
 }
 
-pub(crate) fn garbage<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], usize, E> {
+pub(crate) fn garbage<'a, E: ParseError<&'a [u8]> + ContextError<&'a [u8]>>(
+    input: &'a [u8],
+) -> IResult<&'a [u8], usize, E> {
     use nom::bytes::streaming::tag;
     use nom::bytes::streaming::take_while_m_n;
 
@@ -312,7 +341,9 @@ pub(crate) fn garbage<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&
     )(input)
 }
 
-pub(crate) fn int32<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, i32, E> {
+pub(crate) fn int32<'a, E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>>(
+    input: &'a str,
+) -> IResult<&'a str, i32, E> {
     map_res(
         recognize(preceded(opt(char('-')), take_while(is_digit))),
         |s: &str| s.parse(),
@@ -333,11 +364,27 @@ pub enum NorthSouth {
     South,
 }
 
-pub(crate) fn lat<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, f32, E> {
+pub(crate) fn lat<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseIntError>
+        + FromExternalError<&'a str, ParseFloatError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, f32, E> {
     map(tuple((two_digit, flt32)), |(d, m)| d as f32 + m / 60.0)(input)
 }
 
-pub(crate) fn lon<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, f32, E> {
+pub(crate) fn lon<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, f32, E> {
     map(tuple((three_digit, flt32)), |(d, m)| d as f32 + m / 60.0)(input)
 }
 
@@ -347,7 +394,13 @@ pub struct LatLon {
     pub longitude: f32,
 }
 
-pub(crate) fn latlon<'a, E: ParseError<&'a str>>(
+pub(crate) fn latlon<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
     input: &'a str,
 ) -> IResult<&'a str, Option<LatLon>, E> {
     map(
@@ -389,7 +442,7 @@ pub enum MessageType {
     Unknown(u32),
 }
 
-pub(crate) fn msg_type<'a, E: ParseError<&'a str>>(
+pub(crate) fn msg_type<'a, E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>>(
     input: &'a str,
 ) -> IResult<&'a str, MessageType, E> {
     map(two_digit, |t| match t {
@@ -538,7 +591,9 @@ pub enum Signal {
     Unknown,
 }
 
-pub(crate) fn signal<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Signal, E> {
+pub(crate) fn signal<'a, E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>>(
+    input: &'a str,
+) -> IResult<&'a str, Signal, E> {
     map(uint32, |c| match c {
         1 => Signal::L1,
         2 => Signal::E5,
@@ -576,7 +631,9 @@ pub enum System {
     Unknown,
 }
 
-pub(crate) fn system<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, System, E> {
+pub(crate) fn system<'a, E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>>(
+    input: &'a str,
+) -> IResult<&'a str, System, E> {
     map(uint32, |c| match c {
         1 => System::GPS,
         2 => System::GLONASS,
@@ -615,7 +672,12 @@ pub(crate) fn talker<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a 
     )(input)
 }
 
-pub(crate) fn three_digit<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
+pub(crate) fn three_digit<
+    'a,
+    E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, u32, E> {
     map_res(take_while_m_n(3, 3, is_digit), |i: &str| i.parse())(input)
 }
 
@@ -630,7 +692,15 @@ enum TimeResolution {
 //
 // with milliseconds: 010203.456
 
-pub(crate) fn time<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, NaiveTime, E> {
+pub(crate) fn time<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, NaiveTime, E> {
     map_opt(
         tuple((
             two_digit,
@@ -656,15 +726,24 @@ pub(crate) fn time<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a st
     )(input)
 }
 
-pub(crate) fn two_digit<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
+pub(crate) fn two_digit<'a, E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>>(
+    input: &'a str,
+) -> IResult<&'a str, u32, E> {
     map_res(take_while_m_n(2, 2, is_digit), |i: &str| i.parse())(input)
 }
 
-pub(crate) fn two_digit_i<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, i32, E> {
+pub(crate) fn two_digit_i<
+    'a,
+    E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, i32, E> {
     map_res(take_while_m_n(2, 2, is_digit), |i: &str| i.parse())(input)
 }
 
-pub(crate) fn uint32<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
+pub(crate) fn uint32<'a, E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>>(
+    input: &'a str,
+) -> IResult<&'a str, u32, E> {
     map_res(take_while(is_digit), |s: &str| s.parse())(input)
 }
 
@@ -682,7 +761,12 @@ pub struct DTMData {
     pub ref_datum: String,
 }
 
-pub(crate) fn dtm<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, DTMData, E> {
+pub(crate) fn dtm<
+    'a,
+    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseFloatError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, DTMData, E> {
     context(
         "DTM",
         all_consuming(map(
@@ -722,7 +806,9 @@ pub struct GAQData {
     pub message_id: String,
 }
 
-pub(crate) fn gaq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GAQData, E> {
+pub(crate) fn gaq<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, GAQData, E> {
     context(
         "GAQ",
         all_consuming(map(
@@ -743,7 +829,9 @@ pub struct GBQData {
     pub message_id: String,
 }
 
-pub(crate) fn gbq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GBQData, E> {
+pub(crate) fn gbq<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, GBQData, E> {
     context(
         "GBQ",
         all_consuming(map(
@@ -773,7 +861,15 @@ pub struct GBSData {
     pub signal: Option<Signal>,
 }
 
-pub(crate) fn gbs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GBSData, E> {
+pub(crate) fn gbs<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, GBSData, E> {
     context(
         "GBS",
         all_consuming(map(
@@ -839,7 +935,15 @@ pub struct GGAData {
     pub diff_station: Option<u32>,
 }
 
-pub(crate) fn gga<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GGAData, E> {
+pub(crate) fn gga<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, GGAData, E> {
     context(
         "GGA",
         all_consuming(map(
@@ -899,7 +1003,15 @@ pub struct GLLData {
     pub position_mode: PositionMode,
 }
 
-pub(crate) fn gll<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GLLData, E> {
+pub(crate) fn gll<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, GLLData, E> {
     context(
         "GLL",
         all_consuming(map(
@@ -929,7 +1041,9 @@ pub struct GLQData {
     pub message_id: String,
 }
 
-pub(crate) fn glq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GLQData, E> {
+pub(crate) fn glq<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, GLQData, E> {
     context(
         "GLQ",
         all_consuming(map(
@@ -950,7 +1064,9 @@ pub struct GNQData {
     pub message_id: String,
 }
 
-pub(crate) fn gnq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GNQData, E> {
+pub(crate) fn gnq<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, GNQData, E> {
     context(
         "GNQ",
         all_consuming(map(
@@ -983,7 +1099,15 @@ pub struct GNSData {
     pub nav_status: Status,
 }
 
-pub(crate) fn gns<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GNSData, E> {
+pub(crate) fn gns<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, GNSData, E> {
     context(
         "GNS",
         all_consuming(map(
@@ -1046,7 +1170,9 @@ pub struct GPQData {
     pub message_id: String,
 }
 
-pub(crate) fn gpq<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GPQData, E> {
+pub(crate) fn gpq<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, GPQData, E> {
     context(
         "GPQ",
         all_consuming(map(
@@ -1071,7 +1197,15 @@ pub struct GRSData {
     pub signal: Option<Signal>,
 }
 
-pub(crate) fn grs<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GRSData, E> {
+pub(crate) fn grs<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, GRSData, E> {
     context(
         "GRS",
         all_consuming(map(
@@ -1109,7 +1243,15 @@ pub struct GSAData {
     pub system: Option<System>,
 }
 
-pub(crate) fn gsa<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSAData, E> {
+pub(crate) fn gsa<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, GSAData, E> {
     context(
         "GSA",
         all_consuming(map(
@@ -1154,7 +1296,15 @@ pub struct GSTData {
     pub std_alt: Option<f32>,
 }
 
-pub(crate) fn gst<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSTData, E> {
+pub(crate) fn gst<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, GSTData, E> {
     context(
         "GST",
         all_consuming(map(
@@ -1203,7 +1353,10 @@ pub struct GSVsatellite {
     pub cno: Option<u32>,
 }
 
-pub(crate) fn gsv_sat<'a, E: ParseError<&'a str>>(
+pub(crate) fn gsv_sat<
+    'a,
+    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
+>(
     input: &'a str,
 ) -> IResult<&'a str, GSVsatellite, E> {
     context(
@@ -1236,7 +1389,12 @@ pub struct GSVData {
     pub signal: Option<Signal>,
 }
 
-pub(crate) fn gsv<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, GSVData, E> {
+pub(crate) fn gsv<
+    'a,
+    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, GSVData, E> {
     context(
         "GSV",
         all_consuming(map(
@@ -1267,7 +1425,12 @@ pub enum MKTData {
     TextMessage(MKTTextMessage),
 }
 
-pub(crate) fn pmkt<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, MKTData, E> {
+pub(crate) fn pmkt<
+    'a,
+    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, MKTData, E> {
     context(
         "PMKT",
         alt((
@@ -1286,7 +1449,10 @@ pub enum MKTSystemMessage {
     Unhandled(u32),
 }
 
-pub(crate) fn mkt_010<'a, E: ParseError<&'a str>>(
+pub(crate) fn mkt_010<
+    'a,
+    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
+>(
     input: &'a str,
 ) -> IResult<&'a str, MKTSystemMessage, E> {
     context(
@@ -1309,7 +1475,7 @@ pub struct MKTTextMessage {
     pub message: String,
 }
 
-pub(crate) fn mkt_011<'a, E: ParseError<&'a str>>(
+pub(crate) fn mkt_011<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, MKTTextMessage, E> {
     context(
@@ -1338,7 +1504,15 @@ pub struct RMCData {
     pub nav_status: Option<Status>,
 }
 
-pub(crate) fn rmc<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, RMCData, E> {
+pub(crate) fn rmc<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseIntError>
+        + FromExternalError<&'a str, ParseFloatError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, RMCData, E> {
     context(
         "RMC",
         all_consuming(map(
@@ -1395,7 +1569,12 @@ pub struct TXTData {
     pub text: String,
 }
 
-pub(crate) fn txt<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, TXTData, E> {
+pub(crate) fn txt<
+    'a,
+    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, TXTData, E> {
     context(
         "TXT",
         all_consuming(map(
@@ -1425,7 +1604,15 @@ pub enum UBXData {
     Time(UBXTime),
 }
 
-pub(crate) fn pubx<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, UBXData, E> {
+pub(crate) fn pubx<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, UBXData, E> {
     context(
         "PUBX",
         alt((
@@ -1480,7 +1667,7 @@ pub enum UBXNavigationStatus {
     Unknown(String),
 }
 
-pub(crate) fn ubx_nav_stat<'a, E: ParseError<&'a str>>(
+pub(crate) fn ubx_nav_stat<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, UBXNavigationStatus, E> {
     context(
@@ -1519,7 +1706,13 @@ pub struct UBXPosition {
     pub dead_reckoning: bool,
 }
 
-pub(crate) fn ubx_00<'a, E: ParseError<&'a str>>(
+pub(crate) fn ubx_00<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
     input: &'a str,
 ) -> IResult<&'a str, UBXPosition, E> {
     context(
@@ -1627,7 +1820,10 @@ pub struct UBXSatellite {
     pub lock_time: u32,
 }
 
-pub(crate) fn ubx_satellite<'a, E: ParseError<&'a str>>(
+pub(crate) fn ubx_satellite<
+    'a,
+    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
+>(
     input: &'a str,
 ) -> IResult<&'a str, UBXSatellite, E> {
     context(
@@ -1658,7 +1854,10 @@ pub struct UBXSatellites {
     pub satellites: Vec<UBXSatellite>,
 }
 
-pub(crate) fn ubx_03<'a, E: ParseError<&'a str>>(
+pub(crate) fn ubx_03<
+    'a,
+    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
+>(
     input: &'a str,
 ) -> IResult<&'a str, UBXSatellites, E> {
     context(
@@ -1692,7 +1891,15 @@ pub struct UBXTime {
     pub time_pulse_granularity: u32,
 }
 
-pub(crate) fn ubx_04<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, UBXTime, E> {
+pub(crate) fn ubx_04<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, UBXTime, E> {
     context(
         "UBX 04",
         all_consuming(map(
@@ -1749,7 +1956,12 @@ pub struct VLWData {
     pub ground_distance_unit: String,
 }
 
-pub(crate) fn vlw<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, VLWData, E> {
+pub(crate) fn vlw<
+    'a,
+    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseFloatError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, VLWData, E> {
     context(
         "VLW",
         all_consuming(map(
@@ -1805,7 +2017,12 @@ pub struct VTGData {
     pub position_mode: PositionMode,
 }
 
-pub(crate) fn vtg<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, VTGData, E> {
+pub(crate) fn vtg<
+    'a,
+    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseFloatError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, VTGData, E> {
     context(
         "VTG",
         all_consuming(map(
@@ -1861,7 +2078,15 @@ pub struct ZDAData {
     pub local_tz_minute: u32,
 }
 
-pub(crate) fn zda<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, ZDAData, E> {
+pub(crate) fn zda<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
+    input: &'a str,
+) -> IResult<&'a str, ZDAData, E> {
     context(
         "ZDA",
         all_consuming(map(

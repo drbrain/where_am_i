@@ -7,6 +7,7 @@ use nom::character::complete::char;
 use nom::combinator::map_res;
 use nom::combinator::opt;
 use nom::combinator::recognize;
+use nom::error::FromExternalError;
 use nom::error::ParseError;
 use nom::error::VerboseError;
 use nom::sequence::delimited;
@@ -49,7 +50,9 @@ fn eol<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, char, E> 
     preceded(char(';'), preceded(opt(char('\r')), char('\n')))(input)
 }
 
-fn json_blob<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Value, E> {
+fn json_blob<'a, E: ParseError<&'a str> + FromExternalError<&'a str, serde_json::Error>>(
+    input: &'a str,
+) -> IResult<&'a str, Value, E> {
     let innards = take_while1(|c| c != '}');
 
     let blob = recognize(delimited(char('{'), innards, char('}')));
@@ -57,7 +60,9 @@ fn json_blob<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Val
     map_res(blob, serde_json::from_str)(input)
 }
 
-fn device<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
+fn device<'a, E: ParseError<&'a str> + FromExternalError<&'a str, serde_json::Error>>(
+    input: &'a str,
+) -> IResult<&'a str, Command, E> {
     let (input, json) = preceded(
         tag("?DEVICE"),
         terminated(opt(preceded(equal, json_blob)), eol),
@@ -95,7 +100,9 @@ fn version<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Comma
     Ok((input, Command::Version))
 }
 
-fn watch<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
+fn watch<'a, E: ParseError<&'a str> + FromExternalError<&'a str, serde_json::Error>>(
+    input: &'a str,
+) -> IResult<&'a str, Command, E> {
     let (input, json) = preceded(
         tag("?WATCH"),
         terminated(opt(preceded(equal, json_blob)), eol),
@@ -104,7 +111,9 @@ fn watch<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command
     Ok((input, Command::Watch(json)))
 }
 
-fn command<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
+fn command<'a, E: ParseError<&'a str> + FromExternalError<&'a str, serde_json::Error>>(
+    input: &'a str,
+) -> IResult<&'a str, Command, E> {
     let (_, command) = alt((devices, device, poll, version, watch))(input)?;
 
     Ok((input, command))
