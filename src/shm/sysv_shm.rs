@@ -8,6 +8,7 @@ use volatile::Volatile;
 pub type ShmTime = ManuallyDrop<Volatile<Box<time>>>;
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct time {
     pub mode: i32,
     pub count: i32,

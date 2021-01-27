@@ -16,6 +16,8 @@ use std::str;
 use tokio_util::codec::Decoder;
 use tokio_util::codec::Encoder;
 
+use tracing::trace;
+
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Codec {
     next_index: usize,
@@ -70,7 +72,9 @@ impl Decoder for Codec {
                     let line = buf.split_to(newline_index + 1);
                     let line = &line[..line.len()];
                     let line = utf8(line)?;
-                    return Ok(Some(parser::parse(line)));
+                    let command = parser::parse(line);
+                    trace!("GPSD received command {:?}", command);
+                    return Ok(Some(command));
                 }
                 (false, None) if buf.len() > self.max_length => {
                     // Reached the maximum length without finding a
@@ -113,6 +117,8 @@ where
         buf.reserve(out.len() + 1);
         buf.put(out.as_bytes());
         buf.put_u8(b'\n');
+
+        trace!("GPSD sent {:?}", out);
 
         Ok(())
     }

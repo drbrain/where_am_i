@@ -15,6 +15,7 @@ use std::time::Duration;
 use tokio::time::delay_for;
 
 use tracing::error;
+use tracing::trace;
 
 pub struct NtpShm {}
 
@@ -40,6 +41,7 @@ fn map_ntp_unit(unit: i32) -> io::Result<ShmTime> {
 
 async fn relay_timestamps(unit: i32, mut rx: TSReceiver) {
     let mut time = map_ntp_unit(unit).unwrap();
+    let mut last_count: i32;
 
     while let Ok(ts) = rx.recv().await {
         let reference_sec = ts.reference_sec.try_into().unwrap_or(0);
@@ -75,6 +77,9 @@ async fn relay_timestamps(unit: i32, mut rx: TSReceiver) {
 
         time.map_mut(|t| &mut t.count).update(|c| *c += 1);
         time.map_mut(|t| &mut t.valid).write(1);
+        last_count = time.map(|t| &t.count).read();
+
+        trace!("set NTP timestamp on unit {} count {}", unit, last_count);
     }
 
     error!("Sending timestamps failed");
@@ -140,6 +145,13 @@ async fn watch_timestamps(unit: i32, device: String, tx: TSSender) {
             reference_sec: reference_sec.try_into().unwrap_or(0),
             reference_nsec: reference_nsec,
         };
+
+        trace!(
+            "detected NTP timestamp on unit {} count {}: {:?}",
+            unit,
+            last_count,
+            timestamp
+        );
 
         if tx.send(timestamp).is_ok() {};
 
