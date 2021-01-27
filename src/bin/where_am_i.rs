@@ -37,7 +37,13 @@ fn main() {
 }
 
 async fn run() {
-    let config = load_config();
+    let config = match Configuration::load_from_next_arg() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("failed to load configuration file: {:?}", e);
+            std::process::exit(1);
+        }
+    };
 
     start_tracing(&config);
 
@@ -72,27 +78,6 @@ fn start_tracing(config: &Configuration) {
     let subscriber = tracing_subscriber::fmt().with_env_filter(filter).finish();
 
     tracing::subscriber::set_global_default(subscriber).expect("no global subscriber has been set");
-}
-
-fn load_config() -> Configuration {
-    let file = match std::env::args().nth(1) {
-        None => {
-            error!("You must provide a configuration file");
-            std::process::exit(1);
-        }
-        Some(f) => f,
-    };
-
-    match Configuration::load(file.clone()) {
-        Ok(c) => {
-            info!("Loaded configuration from {}", file);
-            c
-        }
-        Err(e) => {
-            error!("failed to load configuration file: {:?}", e);
-            std::process::exit(1);
-        }
-    }
 }
 
 async fn start_gps(gps_config: &GpsConfig, server: &mut Server) {

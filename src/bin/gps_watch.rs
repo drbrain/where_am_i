@@ -2,7 +2,6 @@ use std::convert::TryFrom;
 
 use tracing::error;
 use tracing::info;
-use tracing::Level;
 
 use tracing_subscriber::filter::EnvFilter;
 
@@ -16,41 +15,25 @@ use tokio_serial::SerialPortSettings;
 
 #[tokio::main]
 async fn main() {
-    let subscriber = tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .finish();
+    let config = match Configuration::load_from_next_arg() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("failed to load configuration file: {:?}", e);
+            std::process::exit(1);
+        }
+    };
 
-    let (config, filter) = tracing::subscriber::with_default(subscriber, || {
-        let file = match std::env::args().nth(1) {
-            None => {
-                error!("You must provide a configuration file");
-                std::process::exit(1);
-            }
-            Some(f) => f,
-        };
+    let filter = match EnvFilter::try_from(config.clone()) {
+        Ok(f) => f,
+        Err(e) => {
+            match config.log_filter {
+                Some(f) => error!("invalid log_filter \"{}\": {:?}", f, e),
+                None => unreachable!(),
+            };
 
-        let config = match Configuration::load(file) {
-            Ok(c) => c,
-            Err(e) => {
-                error!("failed to load configuration file: {:?}", e);
-                std::process::exit(1);
-            }
-        };
-
-        let filter = match EnvFilter::try_from(config.clone()) {
-            Ok(f) => f,
-            Err(e) => {
-                match config.log_filter {
-                    Some(f) => error!("invalid log_filter \"{}\": {:?}", f, e),
-                    None => unreachable!(),
-                };
-
-                std::process::exit(1);
-            }
-        };
-
-        (config, filter)
-    });
+            std::process::exit(1);
+        }
+    };
 
     let subscriber = tracing_subscriber::fmt().with_env_filter(filter).finish();
 

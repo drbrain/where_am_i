@@ -21,6 +21,18 @@ impl Configuration {
 
         parse(source)
     }
+
+    pub fn load_from_next_arg() -> Result<Configuration, ConfigurationError> {
+        let file = match std::env::args().nth(1) {
+            None => {
+                eprintln!("You must provide a configuration file");
+                std::process::exit(1);
+            }
+            Some(f) => f,
+        };
+
+        Configuration::load(file)
+    }
 }
 
 fn parse(source: String) -> Result<Configuration, ConfigurationError> {
