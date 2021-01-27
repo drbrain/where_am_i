@@ -8,6 +8,8 @@ use tracing::error;
 use tracing::info;
 use tracing::Level;
 
+use tracing_subscriber::filter::EnvFilter;
+
 use where_am_i::configuration::Configuration;
 use where_am_i::configuration::GpsConfig;
 use where_am_i::gps::GPS;
@@ -35,11 +37,11 @@ fn main() {
 }
 
 async fn run() {
-    start_tracing();
+    let config = load_config();
+
+    start_tracing(&config);
 
     let mut server = Server::new(2947);
-
-    let config = load_config();
 
     for gps_config in config.gps.iter() {
         start_gps(gps_config, &mut server).await;
@@ -48,10 +50,26 @@ async fn run() {
     server.run().await.unwrap();
 }
 
-fn start_tracing() {
+fn start_tracing(config: &Configuration) {
     let subscriber = tracing_subscriber::fmt()
         .with_max_level(Level::TRACE)
         .finish();
+
+    let filter = tracing::subscriber::with_default(subscriber, || {
+        match EnvFilter::try_from(config.clone()) {
+            Ok(f) => f,
+            Err(e) => {
+                match &config.log_filter {
+                    Some(f) => error!("invalid log_filter \"{}\": {:?}", f, e),
+                    None => unreachable!(),
+                };
+
+                std::process::exit(1);
+            }
+        }
+    });
+
+    let subscriber = tracing_subscriber::fmt().with_env_filter(filter).finish();
 
     tracing::subscriber::set_global_default(subscriber).expect("no global subscriber has been set");
 }
