@@ -1,5 +1,6 @@
 use crate::configuration::ConfigurationError;
 use crate::configuration::PpsConfig;
+use crate::gps::GpsType;
 
 use serde::Deserialize;
 
@@ -16,6 +17,7 @@ use tokio_serial::StopBits;
 pub struct GpsConfig {
     pub name: String,
     pub device: String,
+    pub gps_type: GpsType,
     pub pps: Option<PpsConfig>,
     pub baud_rate: Option<u32>,
     pub framing: Option<String>,

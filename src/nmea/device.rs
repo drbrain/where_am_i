@@ -6,6 +6,7 @@ use backoff::ExponentialBackoff;
 use backoff::SystemClock;
 
 use crate::gps::ublox;
+use crate::gps::GpsType;
 use crate::nmea::Codec;
 use crate::nmea::NMEA;
 
@@ -46,21 +47,23 @@ pub const UBX_OUTPUT_MESSAGES: [&str; 15] = [
 pub struct Device {
     pub name: String,
     pub sender: NMEASender,
+    gps_type: GpsType,
     settings: SerialPortSettings,
     messages: Vec<MessageSetting>,
 }
 
 impl Device {
-    pub fn new(name: String, settings: SerialPortSettings) -> Self {
+    pub fn new(name: String, gps_type: GpsType, settings: SerialPortSettings) -> Self {
         let messages = vec![];
 
         let (sender, _) = broadcast::channel(20);
 
         Device {
             name,
+            sender,
+            gps_type,
             settings,
             messages,
-            sender,
         }
     }
 
@@ -76,11 +79,12 @@ impl Device {
     pub async fn run(&self) -> NMEASender {
         let name = self.name.clone();
         let settings = self.settings.clone();
+        let gps_type = self.gps_type.clone();
         let messages = self.messages.clone();
         let reader_tx = self.sender.clone();
 
         tokio::spawn(async move {
-            start(&name, &settings, messages, reader_tx).await;
+            start(&name, &gps_type, &settings, messages, reader_tx).await;
         });
 
         self.sender.clone()
@@ -100,7 +104,11 @@ fn backoff() -> ExponentialBackoff {
     }
 }
 
-async fn open(name: &str, settings: &SerialPortSettings) -> Result<SerialCodec> {
+async fn open(
+    name: &str,
+    gps_type: &GpsType,
+    settings: &SerialPortSettings,
+) -> Result<SerialCodec> {
     (|| async {
         let serial = Serial::from_path(name.clone(), &settings)
             .map_err(open_error)
@@ -108,7 +116,7 @@ async fn open(name: &str, settings: &SerialPortSettings) -> Result<SerialCodec> 
 
         debug!("Opened NMEA device {}", name.clone());
 
-        Ok(Framed::new(serial, Codec::default()))
+        Ok(Framed::new(serial, Codec::new(gps_type.clone())))
     })
     .retry(backoff())
     .await
@@ -160,6 +168,7 @@ async fn send_messages(reader_tx: NMEASender, serial: SerialCodec, restarter: Re
 
 async fn start(
     name: &str,
+    gps_type: &GpsType,
     settings: &SerialPortSettings,
     messages: Vec<MessageSetting>,
     reader_tx: NMEASender,
@@ -167,7 +176,7 @@ async fn start(
     loop {
         let (restarter, waiter) = oneshot::channel();
 
-        let mut serial = match open(&name, &settings).await {
+        let mut serial = match open(&name, &gps_type, &settings).await {
             Ok(s) => s,
             Err(_) => unreachable!("open retries opening the device forever"),
         };

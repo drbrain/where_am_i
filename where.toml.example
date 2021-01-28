@@ -19,6 +19,8 @@ log_filter = "info"
 # name:      For human readability
 # device:    Serial port-type device where the GPS lives
 #            This may be a symlink created using your device manager
+# gps_type:  Type of GPS chipset
+#            Used for changing GPS settings like messages to send
 # baud_rate: The baud the GPS is configured to send data at
 # messages:  Messages the GPS should enable
 # ntp_unit:  ntpd shared memory driver unit number for GPS timing
@@ -26,6 +28,7 @@ log_filter = "info"
 [[gps]]
 name = "GPS0"
 device = "/dev/gps0"
+gps_type = "Generic"
 baud_rate = 38400
 messages = [ "GSA", "ZDA" ]
 ntp_unit = 2

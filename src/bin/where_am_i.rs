@@ -93,7 +93,11 @@ async fn start_gps(gps_config: &GpsConfig, server: &mut Server) {
         }
     };
 
-    let mut device = nmea::Device::new(gps_name.clone(), serial_port_settings);
+    let mut device = nmea::Device::new(
+        gps_name.clone(),
+        gps_config.gps_type.clone(),
+        serial_port_settings,
+    );
 
     if messages.is_empty() {
         for message in &UBX_OUTPUT_MESSAGES {

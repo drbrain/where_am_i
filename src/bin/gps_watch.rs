@@ -44,7 +44,7 @@ async fn main() {
     let gps_name = device.clone().device;
     let messages = device.clone().messages.unwrap_or(vec![]);
 
-    let serial_port_settings = match SerialPortSettings::try_from(device) {
+    let serial_port_settings = match SerialPortSettings::try_from(device.clone()) {
         Ok(s) => s,
         Err(e) => {
             error!("{}", e);
@@ -52,7 +52,7 @@ async fn main() {
         }
     };
 
-    let mut device = Device::new(gps_name.clone(), serial_port_settings);
+    let mut device = Device::new(gps_name.clone(), device.gps_type, serial_port_settings);
 
     if messages.is_empty() {
         for message in &UBX_OUTPUT_MESSAGES {

@@ -1,3 +1,4 @@
+use crate::gps::GpsType;
 use crate::nmea::parser::Parser;
 use crate::nmea::parser::NMEA;
 use crate::nmea::ser;
@@ -24,6 +25,14 @@ use tracing::debug;
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Codec {
     parser: Parser,
+}
+
+impl Codec {
+    pub fn new(gps_type: GpsType) -> Self {
+        let parser = Parser::new(gps_type);
+
+        Codec { parser }
+    }
 }
 
 impl Decoder for Codec {

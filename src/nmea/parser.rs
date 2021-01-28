@@ -6,6 +6,7 @@ use crate::gps::mkt::pmkt;
 use crate::gps::mkt::MKTData;
 use crate::gps::ublox::pubx;
 use crate::gps::ublox::UBXData;
+use crate::gps::GpsType;
 
 use nom::branch::*;
 use nom::bytes::complete::*;
@@ -29,11 +30,13 @@ use tracing::trace;
 type VE<'a> = VerboseError<&'a [u8]>;
 
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Parser {}
+pub struct Parser {
+    gps_type: GpsType,
+}
 
 impl Parser {
-    pub fn new() -> Self {
-        Parser {}
+    pub fn new(gps_type: GpsType) -> Self {
+        Parser { gps_type }
     }
 
     pub fn parse<'a>(&'a self, input: &'a [u8], received: Duration) -> IResult<&'a [u8], NMEA, VE> {
