@@ -28,7 +28,7 @@ log_filter = "info"
 [[gps]]
 name = "GPS0"
 device = "/dev/gps0"
-gps_type = "Generic"
+gps_type = "generic"
 baud_rate = 38400
 messages = [ "GSA", "ZDA" ]
 ntp_unit = 2
