@@ -1,0 +1,45 @@
+# Log Filtering
+#
+# Filters logging output from the tracing and tracing-subscriber crates.
+#
+# See the EnvFilter documentation from tracing-subscriber
+# (https://docs.rs/tracing-subscriber) for details
+#
+# Show only info and and higher
+log_filter = "info"
+
+# Show info and higher for the NMEA parser, trace and higher for other events.
+# log_filter = "where_am_i::nmea::parser=info,trace"
+
+# GPS Device
+#
+# Defines a GPS and PPS device to monitor.
+#
+# A GPS device has:
+# name:      For human readability
+# device:    Serial port-type device where the GPS lives
+#            This may be a symlink created using your device manager
+# baud_rate: The baud the GPS is configured to send data at
+# messages:  Messages the GPS should enable
+# ntp_unit:  ntpd shared memory driver unit number for GPS timing
+#            See http://doc.ntp.org/4.2.8/drivers/driver28.html
+[[gps]]
+name = "GPS0"
+device = "/dev/gps0"
+baud_rate = 38400
+messages = [ "GSA", "ZDA" ]
+ntp_unit = 2
+
+# PPS Device
+#
+# A GPS may be associated with a PPS device being fed by a separate PPS signal.
+#
+# A PPS device has:
+# device:   The PPS device associated with this GPS
+#           For Raspberry Pi this is enabled with the pps-gpio overlay
+# ntp_unit: ntpd shared memory driver unit number for PPS timing
+#            See http://doc.ntp.org/4.2.8/drivers/driver28.html
+[gps.pps]
+device = "/dev/pps0"
+ntp_unit = 3
+
