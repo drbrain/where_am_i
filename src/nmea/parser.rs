@@ -26,6 +26,21 @@ use std::time::Duration;
 use tracing::error;
 use tracing::trace;
 
+type VE<'a> = VerboseError<&'a [u8]>;
+
+#[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Parser {}
+
+impl Parser {
+    pub fn new() -> Self {
+        Parser {}
+    }
+
+    pub fn parse<'a>(&'a self, input: &'a [u8], received: Duration) -> IResult<&'a [u8], NMEA, VE> {
+        parse::<VE>(input, received)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum NMEA {
     DTM(DTMData),
@@ -62,7 +77,7 @@ pub struct ChecksumMismatch {
     pub calculated: u8,
 }
 
-pub fn parse<
+fn parse<
     'a,
     E: ParseError<&'a [u8]>
         + ContextError<&'a [u8]>

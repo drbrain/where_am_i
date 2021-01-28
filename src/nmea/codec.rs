@@ -1,4 +1,4 @@
-use crate::nmea::parser::parse;
+use crate::nmea::parser::Parser;
 use crate::nmea::parser::NMEA;
 use crate::nmea::ser;
 
@@ -7,7 +7,6 @@ use bytes::BufMut;
 use bytes::Bytes;
 use bytes::BytesMut;
 
-use nom::error::VerboseError;
 use nom::Err;
 
 use serde::Serialize;
@@ -23,9 +22,9 @@ use tokio_util::codec::Encoder;
 use tracing::debug;
 
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Codec {}
-
-type VE<'a> = VerboseError<&'a [u8]>;
+pub struct Codec {
+    parser: Parser,
+}
 
 impl Decoder for Codec {
     type Item = NMEA;
@@ -43,7 +42,7 @@ impl Decoder for Codec {
         let bytes = buf.to_bytes();
         let input = bytes.bytes();
 
-        match parse::<VE>(input, now) {
+        match self.parser.parse(input, now) {
             Ok((input, nmea)) => {
                 buf.extend_from_slice(&Bytes::copy_from_slice(input));
 

@@ -38,7 +38,6 @@ pub use parser::VTGData;
 pub use parser::ZDAData;
 
 pub use parser::message;
-pub use parser::parse;
 
 pub use ser::ToNMEA;
 
