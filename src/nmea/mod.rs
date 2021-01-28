@@ -1,12 +1,13 @@
 mod codec;
-mod device;
-mod parser;
+pub mod device;
+pub mod parser;
 mod ser;
 
 pub use codec::Codec;
+
 pub use device::Device;
+pub use device::SerialCodec;
 pub use device::UBX_OUTPUT_MESSAGES;
-pub use ser::ToNMEA;
 
 pub use parser::LatLon;
 pub use parser::NavigationMode;
@@ -36,16 +37,10 @@ pub use parser::VLWData;
 pub use parser::VTGData;
 pub use parser::ZDAData;
 
-pub use parser::UBXConfig;
-pub use parser::UBXPort;
-pub use parser::UBXPortMask;
-pub use parser::UBXPositionPoll;
-pub use parser::UBXRate;
-pub use parser::UBXSvsPoll;
-pub use parser::UBXTimePoll;
-
 pub use parser::message;
 pub use parser::parse;
+
+pub use ser::ToNMEA;
 
 #[cfg(test)]
 mod test_codec;

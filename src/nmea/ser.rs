@@ -1,9 +1,5 @@
-use crate::nmea::*;
-
 use serde::ser;
 use serde::ser::Serialize;
-use serde::ser::SerializeStruct;
-use serde::ser::Serializer;
 
 use std::fmt;
 
@@ -48,36 +44,6 @@ where
 
     value.serialize(&mut serializer)?;
     Ok(serializer.output)
-}
-
-impl Serialize for UBXPort {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut state = serializer.serialize_struct("UBXPort", 1)?;
-        let value: u32 = match self {
-            UBXPort::I2C => 0,
-            UBXPort::USART1 => 1,
-            UBXPort::USART2 => 2,
-            UBXPort::USB => 3,
-            UBXPort::SPI => 4,
-        };
-
-        state.serialize_field("no comma", &value)?;
-        state.end()
-    }
-}
-
-impl Serialize for UBXPortMask {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut state = serializer.serialize_struct("UBXPortMask", 1)?;
-        state.serialize_field("no comma", &self.bits())?;
-        state.end()
-    }
 }
 
 impl<'a> ser::Serializer for &'a mut ToNMEA {

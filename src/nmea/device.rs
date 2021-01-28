@@ -5,13 +5,12 @@ use backoff::future::FutureOperation;
 use backoff::ExponentialBackoff;
 use backoff::SystemClock;
 
+use crate::gps::ublox;
 use crate::nmea::Codec;
-use crate::nmea::UBXRate;
 use crate::nmea::NMEA;
 
 use instant::Instant;
 
-use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 
 use std::io;
@@ -31,12 +30,12 @@ use tracing::info;
 
 type NMEASender = broadcast::Sender<NMEA>;
 type RestartWaiter = oneshot::Sender<()>;
-type SerialCodec = Framed<Serial, Codec>;
+pub type SerialCodec = Framed<Serial, Codec>;
 
 #[derive(Clone, Debug)]
-struct MessageSetting {
-    id: String,
-    enabled: bool,
+pub struct MessageSetting {
+    pub id: String,
+    pub enabled: bool,
 }
 
 pub const UBX_OUTPUT_MESSAGES: [&str; 15] = [
@@ -101,20 +100,6 @@ fn backoff() -> ExponentialBackoff {
     }
 }
 
-async fn configure_device(serial: &mut SerialCodec, messages: Vec<MessageSetting>) {
-    for message in messages {
-        let rate = rate_for(message.id.clone(), message.enabled);
-
-        match serial.send(rate).await {
-            Ok(_) => info!("set {} to {}", message.id, message.enabled),
-            Err(e) => error!(
-                "unable to set {} to {}: {:?}",
-                message.id, message.enabled, e
-            ),
-        }
-    }
-}
-
 async fn open(name: &str, settings: &SerialPortSettings) -> Result<SerialCodec> {
     (|| async {
         let serial = Serial::from_path(name.clone(), &settings)
@@ -133,20 +118,6 @@ fn open_error(e: io::Error) -> io::Error {
     error!("Opening failed: {}", e.to_string());
 
     e
-}
-
-fn rate_for(msg_id: String, enabled: bool) -> UBXRate {
-    let rus1 = if enabled { 1 } else { 0 };
-
-    UBXRate {
-        message: msg_id,
-        rddc: 0,
-        rus1,
-        rus2: 0,
-        rusb: 0,
-        rspi: 0,
-        reserved: 0,
-    }
 }
 
 async fn read_nmea(mut reader: SerialCodec, tx: NMEASender, restarter: RestartWaiter) {
@@ -201,7 +172,7 @@ async fn start(
             Err(_) => unreachable!("open retries opening the device forever"),
         };
 
-        configure_device(&mut serial, messages.clone()).await;
+        ublox::configure_device(&mut serial, messages.clone()).await;
 
         send_messages(reader_tx.clone(), serial, restarter).await;
 
