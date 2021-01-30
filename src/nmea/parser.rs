@@ -40,7 +40,7 @@ impl Parser {
     }
 
     pub fn parse<'a>(&'a self, input: &'a [u8], received: Duration) -> IResult<&'a [u8], NMEA, VE> {
-        parse::<VE>(input, received)
+        parse::<VE>(&self.gps_type, input, received)
     }
 }
 
@@ -87,6 +87,7 @@ fn parse<
         + FromExternalError<&'a [u8], ParseFloatError>
         + FromExternalError<&'a [u8], ParseIntError>,
 >(
+    gps_type: &GpsType,
     input: &'a [u8],
     received: Duration,
 ) -> IResult<&'a [u8], NMEA, E> {
@@ -120,7 +121,7 @@ fn parse<
             input.len()
         );
 
-        match message::<VerboseError<&'a str>>(data, received) {
+        match message::<VerboseError<&'a str>>(gps_type, data, received) {
             Err(Err::Error(_)) => Ok((input, NMEA::ParseError(String::from(data)))),
             Err(Err::Failure(_)) => Ok((input, NMEA::ParseFailure(String::from(data)))),
             Err(Err::Incomplete(_)) => unreachable!(
@@ -172,6 +173,23 @@ fn parse_error<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8]
 }
 
 pub fn message<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, ParseFloatError>
+        + FromExternalError<&'a str, ParseIntError>,
+>(
+    gps_type: &GpsType,
+    input: &'a str,
+    received: Duration,
+) -> IResult<&'a str, NMEA, E> {
+    match nmea_message::<E>(input, received) {
+        Ok(r) => Ok(r),
+        Err(_) => private_message(input, gps_type),
+    }
+}
+
+pub fn nmea_message<
     'a,
     E: ParseError<&'a str>
         + ContextError<&'a str>
@@ -258,7 +276,6 @@ pub fn message<
             msg.received = Some(received);
             NMEA::ZDA(msg)
         }),
-        private_message,
     ))(input)
 }
 
@@ -270,12 +287,13 @@ pub(crate) fn private_message<
         + FromExternalError<&'a str, ParseIntError>,
 >(
     input: &'a str,
+    gps_type: &GpsType
 ) -> IResult<&'a str, NMEA, E> {
-    alt((
-        map(pmkt, NMEA::PMKT),
-        map(pubx, NMEA::PUBX),
-        map(rest, |m: &str| NMEA::Unsupported(m.to_string())),
-    ))(input)
+    match gps_type {
+        GpsType::MKT => map(pmkt, NMEA::PMKT)(input),
+        GpsType::UBlox => map(pubx, NMEA::PUBX)(input),
+        GpsType::Generic => map(rest, |m: &str| NMEA::Unsupported(m.to_string()))(input),
+    }
 }
 
 pub(crate) fn any<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, String, E> {
