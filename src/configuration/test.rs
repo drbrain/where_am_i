@@ -1,4 +1,5 @@
 use crate::configuration::*;
+use crate::gps::GpsType;
 
 use std::convert::TryFrom;
 use std::fs;
@@ -37,6 +38,7 @@ log_filter = "debug"
 [[gps]]
 name = "GPS0"
 device = "/dev/gps0"
+gps_type = "ublox"
 baud_rate = 38400
 messages = [ "ZDA" ]
 ntp_unit = 2
@@ -48,6 +50,7 @@ ntp_unit = 3
 [[gps]]
 name = "GPS1"
 device = "/dev/gps1"
+gps_type = "generic"
 
 [gps.pps]
 device = "/dev/pps1"
@@ -66,6 +69,7 @@ device = "/dev/pps1"
     let gps0 = GpsConfig {
         name: "GPS0".to_string(),
         device: "/dev/gps0".to_string(),
+        gps_type: GpsType::UBlox,
         pps: Some(pps0),
         baud_rate: Some(38400),
         framing: None,
@@ -83,6 +87,7 @@ device = "/dev/pps1"
     let gps1 = GpsConfig {
         name: "GPS1".to_string(),
         device: "/dev/gps1".to_string(),
+        gps_type: GpsType::Generic,
         pps: Some(pps1),
         baud_rate: None,
         framing: None,
@@ -105,6 +110,7 @@ fn test_try_from_serial_port_settings() {
     let gps = GpsConfig {
         name: "GPS".to_string(),
         device: "/dev/gps0".to_string(),
+        gps_type: GpsType::Generic,
         pps: None,
         baud_rate: Some(38400),
         framing: Some("7O2".to_string()),
@@ -129,6 +135,7 @@ fn test_try_from_serial_port_settings_default() {
     let gps = GpsConfig {
         name: "GPS".to_string(),
         device: "/dev/gps0".to_string(),
+        gps_type: GpsType::Generic,
         pps: None,
         baud_rate: None,
         framing: None,
@@ -153,6 +160,7 @@ fn test_try_from_serial_port_settings_error() {
     let gps = GpsConfig {
         name: "GPS".to_string(),
         device: "/dev/gps0".to_string(),
+        gps_type: GpsType::Generic,
         pps: None,
         baud_rate: Some(38400),
         framing: Some("9N1".to_string()),

@@ -1,3 +1,4 @@
+use crate::gps::ublox::*;
 use crate::nmea::*;
 
 #[test]
@@ -62,8 +63,8 @@ fn test_rate() {
 fn test_config() {
     let config = UBXConfig {
         port: UBXPort::USART1,
-        in_proto: parser::UBXPortMask::USB | parser::UBXPortMask::SPI,
-        out_proto: parser::UBXPortMask::USB,
+        in_proto: UBXPortMask::USB | UBXPortMask::SPI,
+        out_proto: UBXPortMask::USB,
         baudrate: 19200,
         autobauding: false,
     };

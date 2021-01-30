@@ -40,7 +40,7 @@ impl Parser {
     }
 
     pub fn parse<'a>(&'a self, input: &'a [u8], received: Duration) -> IResult<&'a [u8], NMEA, VE> {
-        parse::<VE>(&self.gps_type, input, received)
+        parse::<VE>(input, &self.gps_type, received)
     }
 }
 
@@ -80,15 +80,15 @@ pub struct ChecksumMismatch {
     pub calculated: u8,
 }
 
-fn parse<
+pub(crate) fn parse<
     'a,
     E: ParseError<&'a [u8]>
         + ContextError<&'a [u8]>
         + FromExternalError<&'a [u8], ParseFloatError>
         + FromExternalError<&'a [u8], ParseIntError>,
 >(
-    gps_type: &GpsType,
     input: &'a [u8],
+    gps_type: &GpsType,
     received: Duration,
 ) -> IResult<&'a [u8], NMEA, E> {
     use nom::bytes::streaming::tag;
@@ -121,7 +121,7 @@ fn parse<
             input.len()
         );
 
-        match message::<VerboseError<&'a str>>(gps_type, data, received) {
+        match message::<VerboseError<&'a str>>(data, gps_type, received) {
             Err(Err::Error(_)) => Ok((input, NMEA::ParseError(String::from(data)))),
             Err(Err::Failure(_)) => Ok((input, NMEA::ParseFailure(String::from(data)))),
             Err(Err::Incomplete(_)) => unreachable!(
@@ -179,8 +179,8 @@ pub fn message<
         + FromExternalError<&'a str, ParseFloatError>
         + FromExternalError<&'a str, ParseIntError>,
 >(
-    gps_type: &GpsType,
     input: &'a str,
+    gps_type: &GpsType,
     received: Duration,
 ) -> IResult<&'a str, NMEA, E> {
     match nmea_message::<E>(input, received) {
@@ -287,7 +287,7 @@ pub(crate) fn private_message<
         + FromExternalError<&'a str, ParseIntError>,
 >(
     input: &'a str,
-    gps_type: &GpsType
+    gps_type: &GpsType,
 ) -> IResult<&'a str, NMEA, E> {
     match gps_type {
         GpsType::MKT => map(pmkt, NMEA::PMKT)(input),

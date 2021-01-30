@@ -10,3 +10,5 @@ pub use gps_type::GpsType;
 
 #[cfg(test)]
 mod test;
+mod test_mkt;
+mod test_ublox;

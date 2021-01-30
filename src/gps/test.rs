@@ -54,7 +54,8 @@ fn test_update_time_day_boundary() {
 
 #[test]
 fn test_gga() {
-    let (tx, _) = broadcast::channel(1);
+    let (gpsd_tx, _) = broadcast::channel(1);
+    let (ntp_tx, _) = broadcast::channel(1);
     let mut gps = GPSData::default();
 
     let gga = GGAData {
@@ -76,7 +77,7 @@ fn test_gga() {
         diff_station: None,
     };
 
-    gps.gga(gga, "name", &tx);
+    gps.gga(gga, "name", &gpsd_tx, &ntp_tx);
 
     let lat_lon = gps.lat_lon.unwrap();
 
@@ -88,7 +89,8 @@ fn test_gga() {
 
 #[test]
 fn test_gsa() {
-    let (tx, _) = broadcast::channel(1);
+    let (gpsd_tx, _) = broadcast::channel(1);
+    let (ntp_tx, _) = broadcast::channel(1);
     let mut gps = GPSData::default();
 
     let gbgsa = GSAData {
@@ -139,10 +141,10 @@ fn test_gsa() {
         system: Some(System::GPS),
     };
 
-    gps.gsa(gagsa, "name", &tx);
-    gps.gsa(gbgsa, "name", &tx);
-    gps.gsa(glgsa, "name", &tx);
-    gps.gsa(gpgsa, "name", &tx);
+    gps.gsa(gagsa, "name", &gpsd_tx, &ntp_tx);
+    gps.gsa(gbgsa, "name", &gpsd_tx, &ntp_tx);
+    gps.gsa(glgsa, "name", &gpsd_tx, &ntp_tx);
+    gps.gsa(gpgsa, "name", &gpsd_tx, &ntp_tx);
 
     assert_eq!(None, gps.beiduo_navigation_mode);
     assert_eq!(None, gps.galileo_navigation_mode);
@@ -152,7 +154,8 @@ fn test_gsa() {
 
 #[test]
 fn test_gsa_beiduo() {
-    let (tx, _) = broadcast::channel(1);
+    let (gpsd_tx, _) = broadcast::channel(1);
+    let (ntp_tx, _) = broadcast::channel(1);
     let mut gps = GPSData::default();
 
     let gbgsa = GSAData {
@@ -167,13 +170,14 @@ fn test_gsa_beiduo() {
         system: Some(System::BeiDuo),
     };
 
-    gps.gsa(gbgsa, "name", &tx);
+    gps.gsa(gbgsa, "name", &gpsd_tx, &ntp_tx);
     assert_eq!(NavigationMode::Fix3D, gps.beiduo_navigation_mode.unwrap());
 }
 
 #[test]
 fn test_gsa_galileo() {
-    let (tx, _) = broadcast::channel(1);
+    let (gpsd_tx, _) = broadcast::channel(1);
+    let (ntp_tx, _) = broadcast::channel(1);
     let mut gps = GPSData::default();
 
     let gagsa = GSAData {
@@ -188,13 +192,14 @@ fn test_gsa_galileo() {
         system: Some(System::Galileo),
     };
 
-    gps.gsa(gagsa, "name", &tx);
+    gps.gsa(gagsa, "name", &gpsd_tx, &ntp_tx);
     assert_eq!(NavigationMode::Fix3D, gps.galileo_navigation_mode.unwrap());
 }
 
 #[test]
 fn test_gsa_glonass() {
-    let (tx, _) = broadcast::channel(1);
+    let (gpsd_tx, _) = broadcast::channel(1);
+    let (ntp_tx, _) = broadcast::channel(1);
     let mut gps = GPSData::default();
 
     let glgsa = GSAData {
@@ -209,13 +214,14 @@ fn test_gsa_glonass() {
         system: Some(System::GLONASS),
     };
 
-    gps.gsa(glgsa, "name", &tx);
+    gps.gsa(glgsa, "name", &gpsd_tx, &ntp_tx);
     assert_eq!(NavigationMode::Fix3D, gps.glonass_navigation_mode.unwrap());
 }
 
 #[test]
 fn test_gsa_gps() {
-    let (tx, _) = broadcast::channel(1);
+    let (gpsd_tx, _) = broadcast::channel(1);
+    let (ntp_tx, _) = broadcast::channel(1);
     let mut gps = GPSData::default();
 
     let gpgsa = GSAData {
@@ -230,13 +236,14 @@ fn test_gsa_gps() {
         system: Some(System::GPS),
     };
 
-    gps.gsa(gpgsa, "name", &tx);
+    gps.gsa(gpgsa, "name", &gpsd_tx, &ntp_tx);
     assert_eq!(NavigationMode::Fix3D, gps.gps_navigation_mode.unwrap());
 }
 
 #[test]
 fn test_zda() {
-    let (tx, _) = broadcast::channel(1);
+    let (gpsd_tx, _) = broadcast::channel(1);
+    let (ntp_tx, _) = broadcast::channel(1);
     let mut gps = GPSData::default();
 
     let zda = ZDAData {
@@ -252,7 +259,7 @@ fn test_zda() {
 
     let expected_time = build_time(2020, 5, 26, 1, 8, 0, 0);
 
-    gps.zda(zda, "name", &tx);
+    gps.zda(zda, "name", &gpsd_tx, &ntp_tx);
 
     assert_eq!(2020, gps.year);
     assert_eq!(expected_time, gps.time.unwrap());

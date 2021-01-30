@@ -79,7 +79,7 @@ pub fn unmap(time: ShmTime) {
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
 
     #[test]
@@ -100,7 +100,7 @@ mod tests {
         let id = get_id(2, 0o600).unwrap();
         let time = map(id).unwrap();
 
-        assert_eq!(0, time.mode);
+        assert_eq!(0, time.map(|t| &t.mode).read());
 
         assert_eq!((), unmap(time));
     }
