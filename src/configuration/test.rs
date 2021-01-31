@@ -113,7 +113,7 @@ fn test_config_gpsd() {
 log_filter = "debug"
 
 [gpsd]
-bind_address = ["127.0.0.1"]
+bind_addresses = ["127.0.0.1"]
 port = 2947
 
 [[gps]]
@@ -145,7 +145,7 @@ ntp_unit = 2
     };
 
     let gpsd = GpsdConfig {
-        bind_address: vec!["127.0.0.1".to_string()],
+        bind_addresses: vec!["127.0.0.1".to_string()],
         port: 2947,
     };
 

@@ -23,6 +23,7 @@ use tracing::info;
 
 pub struct Server {
     port: u16,
+    bind_addresses: Vec<String>,
     pub clients: HashMap<SocketAddr, ()>,
     gps_tx: HashMap<String, JsonSender>,
     pps_tx: HashMap<String, TSSender>,
@@ -32,6 +33,7 @@ impl Server {
     pub fn new(config: &GpsdConfig) -> Self {
         Server {
             port: config.port,
+            bind_addresses: config.bind_addresses.clone(),
             clients: HashMap::new(),
             gps_tx: HashMap::new(),
             pps_tx: HashMap::new(),
@@ -63,34 +65,43 @@ impl Server {
         None
     }
 
-    #[tracing::instrument]
     pub async fn run(self) -> Result<()> {
         let port = self.port;
-
+        let addresses = self.bind_addresses.clone();
         let server = Arc::new(Mutex::new(self));
-        let address = ("0.0.0.0", port);
 
-        let mut listener = TcpListener::bind(address)
-            .await
-            .with_context(|| format!("Failed to bind to {}:{}", address.0, address.1))?;
+        for address in &addresses {
+            run_listener(address, port, Arc::clone(&server)).await?;
+        }
 
-        let listen_address = listener.local_addr().with_context(|| {
-            format!(
-                "Unable to determine listen address after binding {}:{}",
-                address.0, address.1
-            )
-        })?;
-        info!("listening on {} port {}", listen_address.ip(), port);
+        Ok(())
+    }
+}
 
-        loop {
-            let (stream, addr) = listener.accept().await?;
+#[tracing::instrument]
+async fn run_listener(address: &String, port: u16, server: Arc<Mutex<Server>>) -> Result<()> {
+    let address = (address.as_str(), port);
 
-            let server = Arc::clone(&server);
+    let mut listener = TcpListener::bind(address)
+        .await
+        .with_context(|| format!("Failed to bind to {}:{}", address.0, address.1))?;
 
-            match Client::start(server, addr, stream).await {
-                Ok(()) => (),
-                Err(e) => error!("failed to start client: {:?}", e),
-            }
+    let listen_address = listener.local_addr().with_context(|| {
+        format!(
+            "Unable to determine listen address after binding {}:{}",
+            address.0, address.1
+        )
+    })?;
+    info!("listening on {} port {}", listen_address.ip(), port);
+
+    loop {
+        let (stream, addr) = listener.accept().await?;
+
+        let server = Arc::clone(&server);
+
+        match Client::start(server, addr, stream).await {
+            Ok(()) => (),
+            Err(e) => error!("failed to start client: {:?}", e),
         }
     }
 }
