@@ -1,6 +1,7 @@
 use anyhow::Context;
 use anyhow::Result;
 
+use crate::configuration::GpsdConfig;
 use crate::gps::GPS;
 use crate::gpsd::client::Client;
 use crate::pps::Device;
@@ -28,9 +29,9 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(port: u16) -> Self {
+    pub fn new(config: &GpsdConfig) -> Self {
         Server {
-            port,
+            port: config.port,
             clients: HashMap::new(),
             gps_tx: HashMap::new(),
             pps_tx: HashMap::new(),

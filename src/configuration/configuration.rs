@@ -1,5 +1,6 @@
 use crate::configuration::ConfigurationError;
 use crate::configuration::GpsConfig;
+use crate::configuration::GpsdConfig;
 
 use serde::Deserialize;
 
@@ -13,6 +14,7 @@ use tracing_subscriber::filter::EnvFilter;
 pub struct Configuration {
     pub log_filter: Option<String>,
     pub gps: Vec<GpsConfig>,
+    pub gpsd: Option<GpsdConfig>
 }
 
 impl Configuration {

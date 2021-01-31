@@ -46,3 +46,13 @@ ntp_unit = 2
 device = "/dev/pps0"
 ntp_unit = 3
 
+# GPSD configuration
+#
+# Enables the gpsd protocol server when present.
+#
+# The GPSD configuration has:
+# bind_address: List of addresses to bind to
+# port:         Port to bind to
+[gpsd]
+bind_address = ["127.0.0.1"]
+port = 2947

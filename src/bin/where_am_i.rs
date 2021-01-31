@@ -47,13 +47,18 @@ async fn run() {
 
     start_tracing(&config);
 
-    let mut server = Server::new(2947);
+    let mut server = match &config.gpsd {
+        Some(c) => Some(Server::new(c)),
+        None => None
+    };
 
     for gps_config in config.gps.iter() {
         start_gps(gps_config, &mut server).await;
     }
 
-    server.run().await.unwrap();
+    if let Some(s) = server {
+        s.run().await.unwrap();
+    }
 }
 
 fn start_tracing(config: &Configuration) {
@@ -80,7 +85,7 @@ fn start_tracing(config: &Configuration) {
     tracing::subscriber::set_global_default(subscriber).expect("no global subscriber has been set");
 }
 
-async fn start_gps(gps_config: &GpsConfig, server: &mut Server) {
+async fn start_gps(gps_config: &GpsConfig, server: &mut Option<Server>) {
     let name = gps_config.name.clone();
     let gps_name = gps_config.device.clone();
     let messages = gps_config.messages.clone().unwrap_or(vec![]);
@@ -117,7 +122,10 @@ async fn start_gps(gps_config: &GpsConfig, server: &mut Server) {
 
     gps.read().await;
 
-    server.add_gps(&gps);
+    if let Some(s) = server {
+        s.add_gps(&gps);
+    }
+
     info!("registered GPS {}", name.clone());
 
     if let Some(ntp_unit) = gps_config.ntp_unit {
@@ -139,7 +147,10 @@ async fn start_gps(gps_config: &GpsConfig, server: &mut Server) {
                 }
             };
 
-            server.add_pps(&pps, gps_name.clone());
+            if let Some(s) = server {
+                s.add_pps(&pps, gps_name.clone());
+            }
+
             info!("registered PPS {} under {}", pps_name, gps_name);
 
             if let Some(ntp_unit) = pps_config.ntp_unit {

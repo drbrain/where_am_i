@@ -100,6 +100,59 @@ device = "/dev/pps1"
     let expected = Configuration {
         log_filter: Some(String::from("debug")),
         gps: vec![gps0, gps1],
+        gpsd: None,
+    };
+
+    assert_eq!(expected, config);
+}
+
+#[test]
+fn test_config_gpsd() {
+    let (_, dir) = write(
+        r#"
+log_filter = "debug"
+
+[gpsd]
+bind_address = ["127.0.0.1"]
+port = 2947
+
+[[gps]]
+name = "GPS0"
+device = "/dev/gps0"
+gps_type = "generic"
+baud_rate = 38400
+messages = [ "ZDA" ]
+ntp_unit = 2
+
+    "#,
+    )
+    .unwrap();
+
+    let path = dir.path().join("where.toml");
+    let config = Configuration::load(path).unwrap();
+
+    let gps0 = GpsConfig {
+        name: "GPS0".to_string(),
+        device: "/dev/gps0".to_string(),
+        gps_type: GpsType::Generic,
+        pps: None,
+        baud_rate: Some(38400),
+        framing: None,
+        flow_control: None,
+        timeout: None,
+        messages: Some(vec!["ZDA".to_string()]),
+        ntp_unit: Some(2),
+    };
+
+    let gpsd = GpsdConfig {
+        bind_address: vec!["127.0.0.1".to_string()],
+        port: 2947,
+    };
+
+    let expected = Configuration {
+        log_filter: Some(String::from("debug")),
+        gps: vec![gps0],
+        gpsd: Some(gpsd),
     };
 
     assert_eq!(expected, config);
@@ -181,6 +234,7 @@ fn test_try_from_log_filter_default() {
     let config = Configuration {
         log_filter: None,
         gps: vec![],
+        gpsd: None,
     };
 
     let filter = EnvFilter::try_from(config).unwrap();
@@ -195,6 +249,7 @@ fn test_try_from_log_filter_set() {
     let config = Configuration {
         log_filter: Some(String::from("trace")),
         gps: vec![],
+        gpsd: None,
     };
 
     let filter = EnvFilter::try_from(config).unwrap();
@@ -209,6 +264,7 @@ fn test_try_from_log_filter_error() {
     let config = Configuration {
         log_filter: Some(String::from("=garbage")),
         gps: vec![],
+        gpsd: None,
     };
 
     match EnvFilter::try_from(config).err().unwrap() {
