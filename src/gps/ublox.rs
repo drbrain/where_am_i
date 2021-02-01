@@ -78,6 +78,17 @@ pub enum UBXData {
     Time(UBXTime),
 }
 
+#[derive(Clone, Eq, Debug, PartialEq, Serialize)]
+pub struct UBXRate {
+    pub message: String,
+    pub rddc: u32,
+    pub rus1: u32,
+    pub rus2: u32,
+    pub rusb: u32,
+    pub rspi: u32,
+    pub reserved: u32,
+}
+
 fn rate_for(msg_id: String, enabled: bool) -> UBXRate {
     let rus1 = if enabled { 1 } else { 0 };
 
@@ -275,17 +286,6 @@ pub(crate) fn ubx_00<
             },
         )),
     )(input)
-}
-
-#[derive(Clone, Eq, Debug, PartialEq, Serialize)]
-pub struct UBXRate {
-    pub message: String,
-    pub rddc: u32,
-    pub rus1: u32,
-    pub rus2: u32,
-    pub rusb: u32,
-    pub rspi: u32,
-    pub reserved: u32,
 }
 
 #[derive(Clone, Eq, Debug, PartialEq, Serialize)]
