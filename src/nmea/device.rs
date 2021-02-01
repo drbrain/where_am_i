@@ -74,6 +74,10 @@ impl Device {
         self.messages.push(setting);
     }
 
+    pub async fn open(&self) -> Result<(Serial, Driver)> {
+        open(&self.name, &self.gps_type, &self.settings).await
+    }
+
     pub async fn run(&self) -> NMEASender {
         let name = self.name.clone();
         let settings = self.settings.clone();
