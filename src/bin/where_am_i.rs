@@ -49,7 +49,7 @@ async fn run() {
 
     let mut server = match &config.gpsd {
         Some(c) => Some(Server::new(c)),
-        None => None
+        None => None,
     };
 
     for gps_config in config.gps.iter() {

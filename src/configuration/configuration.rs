@@ -14,7 +14,7 @@ use tracing_subscriber::filter::EnvFilter;
 pub struct Configuration {
     pub log_filter: Option<String>,
     pub gps: Vec<GpsConfig>,
-    pub gpsd: Option<GpsdConfig>
+    pub gpsd: Option<GpsdConfig>,
 }
 
 impl Configuration {
