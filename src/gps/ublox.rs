@@ -6,6 +6,7 @@ use chrono::naive::NaiveTime;
 use crate::nmea::device::MessageSetting;
 use crate::nmea::device::SerialCodec;
 use crate::nmea::parser::*;
+use crate::nmea::NMEA;
 
 use futures_util::sink::SinkExt;
 
@@ -27,6 +28,41 @@ use std::num::ParseIntError;
 
 use tracing::error;
 use tracing::info;
+
+#[derive(Clone, Default, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct UBloxNMEA {}
+
+impl UBloxNMEA {
+    pub fn parse_private<
+        'a,
+        E: ParseError<&'a str>
+            + ContextError<&'a str>
+            + FromExternalError<&'a str, ParseFloatError>
+            + FromExternalError<&'a str, ParseIntError>,
+    >(
+        &self,
+        input: &'a str,
+    ) -> IResult<&'a str, NMEA, E> {
+        context(
+            "PUBX",
+            map(
+                alt((
+                    map(ubx_00, UBXData::Position),
+                    map(ubx_03, UBXData::Satellites),
+                    map(ubx_04, UBXData::Time),
+                )),
+                NMEA::PUBX,
+            ),
+        )(input)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum UBXData {
+    Position(UBXPosition),
+    Satellites(UBXSatellites),
+    Time(UBXTime),
+}
 
 pub async fn configure_device(serial: &mut SerialCodec, messages: Vec<MessageSetting>) {
     for message in messages {
@@ -54,32 +90,6 @@ fn rate_for(msg_id: String, enabled: bool) -> UBXRate {
         rspi: 0,
         reserved: 0,
     }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum UBXData {
-    Position(UBXPosition),
-    Satellites(UBXSatellites),
-    Time(UBXTime),
-}
-
-pub(crate) fn pubx<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, UBXData, E> {
-    context(
-        "PUBX",
-        alt((
-            map(ubx_00, UBXData::Position),
-            map(ubx_03, UBXData::Satellites),
-            map(ubx_04, UBXData::Time),
-        )),
-    )(input)
 }
 
 #[derive(Clone, Eq, Debug, PartialEq)]

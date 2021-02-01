@@ -6,7 +6,11 @@ use backoff::ExponentialBackoff;
 use backoff::SystemClock;
 
 use crate::gps::ublox;
+use crate::gps::Driver;
+use crate::gps::Generic;
 use crate::gps::GpsType;
+use crate::gps::UBloxNMEA;
+use crate::gps::MKT;
 use crate::nmea::Codec;
 use crate::nmea::NMEA;
 
@@ -109,6 +113,12 @@ async fn open(
     gps_type: &GpsType,
     settings: &SerialPortSettings,
 ) -> Result<SerialCodec> {
+    let driver = match gps_type {
+        GpsType::UBlox => Driver::UBloxNMEA(UBloxNMEA::default()),
+        GpsType::MKT => Driver::MKT(MKT::default()),
+        GpsType::Generic => Driver::Generic(Generic::default()),
+    };
+
     (|| async {
         let serial = Serial::from_path(name.clone(), &settings)
             .map_err(open_error)
@@ -116,7 +126,7 @@ async fn open(
 
         debug!("Opened NMEA device {}", name.clone());
 
-        Ok(Framed::new(serial, Codec::new(gps_type.clone())))
+        Ok(Framed::new(serial, Codec::new(driver.clone())))
     })
     .retry(backoff())
     .await

@@ -1,4 +1,4 @@
-use crate::gps::GpsType;
+use crate::gps::Driver;
 use crate::nmea::parser::Parser;
 use crate::nmea::parser::NMEA;
 use crate::nmea::ser;
@@ -28,8 +28,8 @@ pub struct Codec {
 }
 
 impl Codec {
-    pub fn new(gps_type: GpsType) -> Self {
-        let parser = Parser::new(gps_type);
+    pub fn new(driver: Driver) -> Self {
+        let parser = Parser::new(driver);
 
         Codec { parser }
     }

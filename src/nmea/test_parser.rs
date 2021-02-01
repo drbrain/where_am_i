@@ -1,11 +1,12 @@
-use crate::gps::GpsType;
-use crate::nmea::parser;
-use crate::nmea::parser::*;
-
 use chrono::naive::NaiveDate;
 use chrono::naive::NaiveTime;
 
 use core::num::NonZeroUsize;
+
+use crate::gps::Driver;
+use crate::gps::Generic;
+use crate::nmea::parser;
+use crate::nmea::parser::*;
 
 use nom::error::VerboseErrorKind::Context;
 use nom::error::*;
@@ -27,10 +28,14 @@ fn p<'a, D>(input: &'a str, result: nom::IResult<&'a str, D, VE>) -> D {
     }
 }
 
+fn driver() -> Driver {
+    Driver::Generic(Generic::default())
+}
+
 fn parse<'a>(input: &'a [u8]) -> NMEA {
-    parser::parse::<VEb>(input, &GpsType::Generic, timestamp())
-        .unwrap()
-        .1
+    let driver = driver();
+
+    parser::parse::<VEb>(input, &driver, timestamp()).unwrap().1
 }
 
 #[test]
@@ -47,7 +52,7 @@ fn test_parse() {
 fn test_parse_invalid_utf8() {
     let (input, error) = parser::parse::<VEb>(
         b"\x01\x1E$PUBX,40,ZDA,0,1,0,0,0,0*45\r\x1A\x18\x0F\x1F\x0C\xFF\xFF\xFF\xFF\xFF",
-        &GpsType::Generic,
+        &driver(),
         timestamp(),
     )
     .unwrap();
@@ -80,7 +85,7 @@ fn test_error_checksum() {
 #[test]
 fn test_incomplete() {
     let input = b"$EIG";
-    let result = parser::parse::<VEb>(input, &GpsType::Generic, timestamp());
+    let result = parser::parse::<VEb>(input, &driver(), timestamp());
 
     if let Err(Err::Incomplete(e)) = result {
         assert_eq!(Needed::Size(NonZeroUsize::new(1).unwrap()), e);

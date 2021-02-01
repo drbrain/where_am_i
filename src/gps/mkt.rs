@@ -1,6 +1,7 @@
 // For GlobalTop MKT devices
 
 use crate::nmea::parser::*;
+use crate::nmea::NMEA;
 
 use nom::branch::*;
 use nom::bytes::complete::*;
@@ -11,19 +12,28 @@ use nom::IResult;
 
 use std::num::ParseIntError;
 
-pub(crate) fn pmkt<
-    'a,
-    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, MKTData, E> {
-    context(
-        "PMKT",
-        alt((
-            map(mkt_010, MKTData::SystemMessage),
-            map(mkt_011, MKTData::TextMessage),
-        )),
-    )(input)
+#[derive(Clone, Default, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct MKT {}
+
+impl MKT {
+    pub fn parse_private<
+        'a,
+        E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
+    >(
+        &self,
+        input: &'a str,
+    ) -> IResult<&'a str, NMEA, E> {
+        context(
+            "PMKT",
+            map(
+                alt((
+                    map(mkt_010, MKTData::SystemMessage),
+                    map(mkt_011, MKTData::TextMessage),
+                )),
+                NMEA::PMKT,
+            ),
+        )(input)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

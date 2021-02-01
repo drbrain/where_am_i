@@ -2,11 +2,9 @@ use chrono::naive::NaiveDate;
 use chrono::naive::NaiveTime;
 use chrono::NaiveDateTime;
 
-use crate::gps::mkt::pmkt;
-use crate::gps::mkt::MKTData;
-use crate::gps::ublox::pubx;
-use crate::gps::ublox::UBXData;
-use crate::gps::GpsType;
+use crate::gps::Driver;
+use crate::gps::MKTData;
+use crate::gps::UBXData;
 
 use nom::branch::*;
 use nom::bytes::complete::*;
@@ -31,16 +29,16 @@ type VE<'a> = VerboseError<&'a [u8]>;
 
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Parser {
-    gps_type: GpsType,
+    driver: Driver,
 }
 
 impl Parser {
-    pub fn new(gps_type: GpsType) -> Self {
-        Parser { gps_type }
+    pub fn new(driver: Driver) -> Self {
+        Parser { driver }
     }
 
     pub fn parse<'a>(&'a self, input: &'a [u8], received: Duration) -> IResult<&'a [u8], NMEA, VE> {
-        parse::<VE>(input, &self.gps_type, received)
+        parse::<VE>(input, &self.driver, received)
     }
 }
 
@@ -88,7 +86,7 @@ pub(crate) fn parse<
         + FromExternalError<&'a [u8], ParseIntError>,
 >(
     input: &'a [u8],
-    gps_type: &GpsType,
+    driver: &Driver,
     received: Duration,
 ) -> IResult<&'a [u8], NMEA, E> {
     use nom::bytes::streaming::tag;
@@ -121,7 +119,7 @@ pub(crate) fn parse<
             input.len()
         );
 
-        match message::<VerboseError<&'a str>>(data, gps_type, received) {
+        match message::<VerboseError<&'a str>>(data, driver, received) {
             Err(Err::Error(_)) => Ok((input, NMEA::ParseError(String::from(data)))),
             Err(Err::Failure(_)) => Ok((input, NMEA::ParseFailure(String::from(data)))),
             Err(Err::Incomplete(_)) => unreachable!(
@@ -180,12 +178,12 @@ pub fn message<
         + FromExternalError<&'a str, ParseIntError>,
 >(
     input: &'a str,
-    gps_type: &GpsType,
+    driver: &Driver,
     received: Duration,
 ) -> IResult<&'a str, NMEA, E> {
     match nmea_message::<E>(input, received) {
         Ok(r) => Ok(r),
-        Err(_) => private_message(input, gps_type),
+        Err(_) => private_message(input, driver),
     }
 }
 
@@ -287,13 +285,9 @@ pub(crate) fn private_message<
         + FromExternalError<&'a str, ParseIntError>,
 >(
     input: &'a str,
-    gps_type: &GpsType,
+    driver: &Driver,
 ) -> IResult<&'a str, NMEA, E> {
-    match gps_type {
-        GpsType::MKT => map(pmkt, NMEA::PMKT)(input),
-        GpsType::UBlox => map(pubx, NMEA::PUBX)(input),
-        GpsType::Generic => map(rest, |m: &str| NMEA::Unsupported(m.to_string()))(input),
-    }
+    driver.parse_private(input)
 }
 
 pub(crate) fn any<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, String, E> {
