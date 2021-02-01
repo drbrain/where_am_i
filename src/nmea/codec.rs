@@ -24,7 +24,7 @@ use tracing::debug;
 
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Codec {
-    parser: Parser,
+    pub parser: Parser,
 }
 
 impl Codec {

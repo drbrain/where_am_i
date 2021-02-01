@@ -29,7 +29,7 @@ type VE<'a> = VerboseError<&'a [u8]>;
 
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Parser {
-    driver: Driver,
+    pub driver: Driver,
 }
 
 impl Parser {

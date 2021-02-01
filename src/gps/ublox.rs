@@ -33,6 +33,20 @@ use tracing::info;
 pub struct UBloxNMEA {}
 
 impl UBloxNMEA {
+    pub async fn configure(&self, serial: &mut SerialCodec, messages: Vec<MessageSetting>) {
+        for message in messages {
+            let rate = rate_for(message.id.clone(), message.enabled);
+
+            match serial.send(rate).await {
+                Ok(_) => info!("set {} to {}", message.id, message.enabled),
+                Err(e) => error!(
+                    "unable to set {} to {}: {:?}",
+                    message.id, message.enabled, e
+                ),
+            }
+        }
+    }
+
     pub fn parse_private<
         'a,
         E: ParseError<&'a str>
@@ -62,20 +76,6 @@ pub enum UBXData {
     Position(UBXPosition),
     Satellites(UBXSatellites),
     Time(UBXTime),
-}
-
-pub async fn configure_device(serial: &mut SerialCodec, messages: Vec<MessageSetting>) {
-    for message in messages {
-        let rate = rate_for(message.id.clone(), message.enabled);
-
-        match serial.send(rate).await {
-            Ok(_) => info!("set {} to {}", message.id, message.enabled),
-            Err(e) => error!(
-                "unable to set {} to {}: {:?}",
-                message.id, message.enabled, e
-            ),
-        }
-    }
 }
 
 fn rate_for(msg_id: String, enabled: bool) -> UBXRate {

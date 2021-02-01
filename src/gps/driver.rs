@@ -1,6 +1,8 @@
 use crate::gps::Generic;
 use crate::gps::UBloxNMEA;
 use crate::gps::MKT;
+use crate::nmea::device::MessageSetting;
+use crate::nmea::SerialCodec;
 use crate::nmea::NMEA;
 
 use nom::error::ContextError;
@@ -19,6 +21,14 @@ pub enum Driver {
 }
 
 impl Driver {
+    pub async fn configure(&self, serial: &mut SerialCodec, messages: Vec<MessageSetting>) {
+        match self {
+            Driver::Generic(_) => (),
+            Driver::MKT(_) => (),
+            Driver::UBloxNMEA(d) => d.configure(serial, messages).await,
+        }
+    }
+
     pub fn parse_private<
         'a,
         E: ParseError<&'a str>

@@ -5,7 +5,6 @@ use backoff::future::FutureOperation;
 use backoff::ExponentialBackoff;
 use backoff::SystemClock;
 
-use crate::gps::ublox;
 use crate::gps::Driver;
 use crate::gps::Generic;
 use crate::gps::GpsType;
@@ -112,7 +111,7 @@ async fn open(
     name: &str,
     gps_type: &GpsType,
     settings: &SerialPortSettings,
-) -> Result<SerialCodec> {
+) -> Result<(Serial, Driver)> {
     let driver = match gps_type {
         GpsType::UBlox => Driver::UBloxNMEA(UBloxNMEA::default()),
         GpsType::MKT => Driver::MKT(MKT::default()),
@@ -126,7 +125,7 @@ async fn open(
 
         debug!("Opened NMEA device {}", name.clone());
 
-        Ok(Framed::new(serial, Codec::new(driver.clone())))
+        Ok((serial, driver.clone()))
     })
     .retry(backoff())
     .await
@@ -186,14 +185,16 @@ async fn start(
     loop {
         let (restarter, waiter) = oneshot::channel();
 
-        let mut serial = match open(&name, &gps_type, &settings).await {
-            Ok(s) => s,
+        let (serial, driver) = match open(&name, &gps_type, &settings).await {
+            Ok(t) => t,
             Err(_) => unreachable!("open retries opening the device forever"),
         };
 
-        ublox::configure_device(&mut serial, messages.clone()).await;
+        let mut framed = Framed::new(serial, Codec::new(driver.clone()));
 
-        send_messages(reader_tx.clone(), serial, restarter).await;
+        driver.configure(&mut framed, messages.clone()).await;
+
+        send_messages(reader_tx.clone(), framed, restarter).await;
 
         waiter.await.unwrap_or_default();
 
