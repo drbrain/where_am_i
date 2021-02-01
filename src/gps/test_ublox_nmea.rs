@@ -1,6 +1,9 @@
 #[cfg(test)]
 mod test {
-    use crate::gps::ublox::*;
+    use crate::gps::ublox_nmea::ubx_00;
+    use crate::gps::ublox_nmea::ubx_03;
+    use crate::gps::ublox_nmea::ubx_04;
+    use crate::gps::*;
 
     use chrono::NaiveDate;
     use chrono::NaiveTime;

@@ -1,4 +1,4 @@
-use crate::gps::ublox::*;
+use crate::gps::*;
 use crate::nmea::*;
 
 #[test]
