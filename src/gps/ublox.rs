@@ -38,7 +38,7 @@ impl UBloxNMEA {
             let rate = rate_for(message.id.clone(), message.enabled);
 
             match serial.send(rate).await {
-                Ok(_) => info!("set {} to {}", message.id, message.enabled),
+                Ok(_) => info!("setting {} to {}", message.id, message.enabled),
                 Err(e) => error!(
                     "unable to set {} to {}: {:?}",
                     message.id, message.enabled, e

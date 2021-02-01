@@ -70,7 +70,7 @@ impl MKT {
             .join(", ");
 
         match serial.send(set).await {
-            Ok(_) => info!("enabled messages {}", summary),
+            Ok(_) => info!("enabling messages {}", summary),
             Err(e) => error!("unable to enable messages {}, {:?}", summary, e),
         }
     }
@@ -118,7 +118,7 @@ pub(crate) fn mkt_001<
 >(
     input: &'a str,
 ) -> IResult<&'a str, MKTAcknowledge, E> {
-    context(
+    let result = context(
         "MKT 001",
         all_consuming(map(
             preceded(preceded(tag("PMTK001"), comma), uint32),
@@ -130,7 +130,29 @@ pub(crate) fn mkt_001<
                 u => MKTAcknowledge::Unhandled(u),
             },
         )),
-    )(input)
+    )(input);
+
+    if let Ok((_, ref acknowledgement)) = result {
+        match acknowledgement {
+            MKTAcknowledge::Invalid => {
+                error!("Invalid PMKT command");
+            }
+            MKTAcknowledge::Unsupported => {
+                error!("Unsupported PMKT command");
+            }
+            MKTAcknowledge::Failed => {
+                error!("Failed (but valid) PMKT command");
+            }
+            MKTAcknowledge::Succeeded => {
+                info!("Successful PMKT command");
+            }
+            MKTAcknowledge::Unhandled(u) => {
+                error!("Unhandled PMKT acknowledgement {}", u);
+            }
+        };
+    }
+
+    result
 }
 
 #[derive(Clone, Debug, PartialEq)]
