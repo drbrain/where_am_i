@@ -10,13 +10,22 @@ use crate::nmea::NMEA;
 
 use futures_util::sink::SinkExt;
 
-use nom::branch::*;
-use nom::bytes::complete::*;
-use nom::character::complete::*;
-use nom::combinator::*;
-use nom::error::*;
-use nom::multi::*;
-use nom::sequence::*;
+use nom::branch::alt;
+use nom::bytes::complete::tag;
+use nom::bytes::complete::take_while_m_n;
+use nom::character::complete::char;
+use nom::character::complete::one_of;
+use nom::combinator::all_consuming;
+use nom::combinator::map;
+use nom::combinator::opt;
+use nom::error::context;
+use nom::error::ContextError;
+use nom::error::FromExternalError;
+use nom::error::ParseError;
+use nom::multi::many0;
+use nom::sequence::preceded;
+use nom::sequence::terminated;
+use nom::sequence::tuple;
 use nom::IResult;
 
 use serde::ser::SerializeStruct;
