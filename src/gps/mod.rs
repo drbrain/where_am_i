@@ -28,6 +28,7 @@ pub use ublox_nmea::UBXSvsPoll;
 pub use ublox_nmea::UBXTime;
 pub use ublox_nmea::UBXTimePoll;
 pub use ublox_nmea::UBloxNMEA;
+pub use ublox_nmea::UBX_OUTPUT_MESSAGES;
 
 #[cfg(test)]
 mod test;

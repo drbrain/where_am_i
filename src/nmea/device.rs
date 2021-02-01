@@ -42,11 +42,6 @@ pub struct MessageSetting {
     pub enabled: bool,
 }
 
-pub const UBX_OUTPUT_MESSAGES: [&str; 15] = [
-    "DTM", "GBS", "GGA", "GLL", "GNS", "GRS", "GSA", "GST", "GSV", "RLM", "RMC", "TXT", "VLW",
-    "VTG", "ZDA",
-];
-
 pub struct Device {
     pub name: String,
     pub sender: NMEASender,

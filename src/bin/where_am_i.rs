@@ -13,9 +13,9 @@ use tracing_subscriber::filter::EnvFilter;
 use where_am_i::configuration::Configuration;
 use where_am_i::configuration::GpsConfig;
 use where_am_i::gps::GPS;
+use where_am_i::gps::UBX_OUTPUT_MESSAGES;
 use where_am_i::gpsd::Server;
 use where_am_i::nmea;
-use where_am_i::nmea::UBX_OUTPUT_MESSAGES;
 use where_am_i::pps;
 use where_am_i::shm::NtpShm;
 

@@ -38,6 +38,11 @@ use std::num::ParseIntError;
 use tracing::error;
 use tracing::info;
 
+pub const UBX_OUTPUT_MESSAGES: [&str; 15] = [
+    "DTM", "GBS", "GGA", "GLL", "GNS", "GRS", "GSA", "GST", "GSV", "RLM", "RMC", "TXT", "VLW",
+    "VTG", "ZDA",
+];
+
 #[derive(Clone, Default, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct UBloxNMEA {}
 

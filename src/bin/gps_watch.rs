@@ -7,9 +7,9 @@ use tracing_subscriber::filter::EnvFilter;
 
 use where_am_i::configuration::Configuration;
 use where_am_i::gps::GPS;
+use where_am_i::gps::UBX_OUTPUT_MESSAGES;
 use where_am_i::nmea::Device;
 use where_am_i::nmea::NMEA;
-use where_am_i::nmea::UBX_OUTPUT_MESSAGES;
 
 use tokio_serial::SerialPortSettings;
 
