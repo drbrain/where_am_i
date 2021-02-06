@@ -2,7 +2,7 @@
 
 use crate::nmea::device::MessageSetting;
 use crate::nmea::device::SerialCodec;
-use crate::nmea::parser::*;
+use crate::nmea::parser_util::*;
 use crate::nmea::NMEA;
 
 use futures_util::sink::SinkExt;

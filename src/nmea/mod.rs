@@ -1,6 +1,7 @@
 mod codec;
 pub mod device;
 pub mod parser;
+pub mod parser_util;
 mod ser;
 
 pub use codec::Codec;
@@ -8,13 +9,16 @@ pub use codec::Codec;
 pub use device::Device;
 pub use device::SerialCodec;
 
-pub use parser::LatLon;
 pub use parser::NavigationMode;
 pub use parser::OperationMode;
 pub use parser::Quality;
 pub use parser::System;
 pub use parser::Talker;
 pub use parser::NMEA;
+
+pub use parser_util::EastWest;
+pub use parser_util::LatLon;
+pub use parser_util::NorthSouth;
 
 pub use parser::DTMData;
 pub use parser::GAQData;
