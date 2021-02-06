@@ -5,6 +5,7 @@ use nom::branch::alt;
 use nom::bytes::complete::*;
 use nom::character::complete::*;
 use nom::combinator::*;
+use nom::error::context;
 use nom::error::ContextError;
 use nom::error::FromExternalError;
 use nom::error::ParseError;
@@ -163,6 +164,20 @@ pub(crate) fn north_south<'a, E: ParseError<&'a str>>(
         'S' => NorthSouth::South,
         _ => panic!("Unhandled direction {:?}", ns),
     })(input)
+}
+
+pub fn parse_message<I, O1, O2, E, F, G>(
+    message: &'static str,
+    first: F,
+    second: G,
+) -> impl FnMut(I) -> IResult<I, O2, E>
+where
+    E: ParseError<I> + ContextError<I>,
+    F: nom::Parser<I, O1, E>,
+    G: FnMut(O1) -> O2,
+    I: Clone + nom::InputLength,
+{
+    context(message, all_consuming(map(first, second)))
 }
 
 pub(crate) fn three_digit<

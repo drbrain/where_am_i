@@ -579,35 +579,31 @@ pub(crate) fn dtm<
 >(
     input: &'a str,
 ) -> IResult<&'a str, DTMData, E> {
-    context(
+    parse_message(
         "DTM",
-        all_consuming(map(
-            tuple((
-                terminated(talker, terminated(tag("DTM"), comma)),
-                terminated(any, comma),
-                terminated(any, comma),
-                terminated(flt32, comma),
-                terminated(north_south, comma),
-                terminated(flt32, comma),
-                terminated(east_west, comma),
-                terminated(flt32, comma),
-                any,
-            )),
-            |(talker, datum, sub_datum, lat, north_south, lon, east_west, alt, ref_datum)| {
-                DTMData {
-                    received: None,
-                    talker,
-                    datum,
-                    sub_datum,
-                    lat,
-                    north_south,
-                    lon,
-                    east_west,
-                    alt,
-                    ref_datum,
-                }
-            },
+        tuple((
+            terminated(talker, terminated(tag("DTM"), comma)),
+            terminated(any, comma),
+            terminated(any, comma),
+            terminated(flt32, comma),
+            terminated(north_south, comma),
+            terminated(flt32, comma),
+            terminated(east_west, comma),
+            terminated(flt32, comma),
+            any,
         )),
+        |(talker, datum, sub_datum, lat, north_south, lon, east_west, alt, ref_datum)| DTMData {
+            received: None,
+            talker,
+            datum,
+            sub_datum,
+            lat,
+            north_south,
+            lon,
+            east_west,
+            alt,
+            ref_datum,
+        },
     )(input)
 }
 
@@ -644,16 +640,14 @@ pub struct GBQData {
 pub(crate) fn gbq<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, GBQData, E> {
-    context(
+    parse_message(
         "GBQ",
-        all_consuming(map(
-            tuple((talker, preceded(tag("GBQ"), preceded(comma, any)))),
-            |(talker, message_id)| GBQData {
-                received: None,
-                talker,
-                message_id,
-            },
-        )),
+        tuple((talker, preceded(tag("GBQ"), preceded(comma, any)))),
+        |(talker, message_id)| GBQData {
+            received: None,
+            talker,
+            message_id,
+        },
     )(input)
 }
 
@@ -682,23 +676,24 @@ pub(crate) fn gbs<
 >(
     input: &'a str,
 ) -> IResult<&'a str, GBSData, E> {
-    context(
+    parse_message(
         "GBS",
-        all_consuming(map(
-            tuple((
-                terminated(talker, terminated(tag("GBS"), comma)),
-                terminated(time, comma),
-                terminated(flt32, comma),
-                terminated(flt32, comma),
-                terminated(flt32, comma),
-                terminated(opt(uint32), comma),
-                terminated(opt(flt32), comma),
-                terminated(opt(flt32), comma),
-                terminated(opt(flt32), comma),
-                terminated(opt(system), comma),
-                opt(signal),
-            )),
-            |(
+        tuple((
+            terminated(talker, terminated(tag("GBS"), comma)),
+            terminated(time, comma),
+            terminated(flt32, comma),
+            terminated(flt32, comma),
+            terminated(flt32, comma),
+            terminated(opt(uint32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(system), comma),
+            opt(signal),
+        )),
+        |(talker, time, err_lat, err_lon, err_alt, svid, prob, bias, stddev, system, signal)| {
+            GBSData {
+                received: None,
                 talker,
                 time,
                 err_lat,
@@ -710,23 +705,8 @@ pub(crate) fn gbs<
                 stddev,
                 system,
                 signal,
-            )| {
-                GBSData {
-                    received: None,
-                    talker,
-                    time,
-                    err_lat,
-                    err_lon,
-                    err_alt,
-                    svid,
-                    prob,
-                    bias,
-                    stddev,
-                    system,
-                    signal,
-                }
-            },
-        )),
+            }
+        },
     )(input)
 }
 
@@ -756,52 +736,50 @@ pub(crate) fn gga<
 >(
     input: &'a str,
 ) -> IResult<&'a str, GGAData, E> {
-    context(
+    parse_message(
         "GGA",
-        all_consuming(map(
-            tuple((
-                terminated(talker, terminated(tag("GGA"), comma)),
-                terminated(time, comma),
-                terminated(latlon, comma),
-                terminated(quality, comma),
-                terminated(uint32, comma),
-                terminated(opt(flt32), comma),
-                terminated(opt(flt32), comma),
-                terminated(any, comma),
-                terminated(opt(flt32), comma),
-                terminated(any, comma),
-                terminated(opt(uint32), comma),
-                opt(uint32),
-            )),
-            |(
-                talker,
-                time,
-                lat_lon,
-                quality,
-                num_satellites,
-                hdop,
-                alt,
-                alt_unit,
-                sep,
-                sep_unit,
-                diff_age,
-                diff_station,
-            )| GGAData {
-                received: None,
-                talker,
-                time,
-                lat_lon,
-                quality,
-                num_satellites,
-                hdop,
-                alt,
-                alt_unit,
-                sep,
-                sep_unit,
-                diff_age,
-                diff_station,
-            },
+        tuple((
+            terminated(talker, terminated(tag("GGA"), comma)),
+            terminated(time, comma),
+            terminated(latlon, comma),
+            terminated(quality, comma),
+            terminated(uint32, comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(any, comma),
+            terminated(opt(flt32), comma),
+            terminated(any, comma),
+            terminated(opt(uint32), comma),
+            opt(uint32),
         )),
+        |(
+            talker,
+            time,
+            lat_lon,
+            quality,
+            num_satellites,
+            hdop,
+            alt,
+            alt_unit,
+            sep,
+            sep_unit,
+            diff_age,
+            diff_station,
+        )| GGAData {
+            received: None,
+            talker,
+            time,
+            lat_lon,
+            quality,
+            num_satellites,
+            hdop,
+            alt,
+            alt_unit,
+            sep,
+            sep_unit,
+            diff_age,
+            diff_station,
+        },
     )(input)
 }
 
@@ -824,25 +802,23 @@ pub(crate) fn gll<
 >(
     input: &'a str,
 ) -> IResult<&'a str, GLLData, E> {
-    context(
+    parse_message(
         "GLL",
-        all_consuming(map(
-            tuple((
-                terminated(talker, tag("GLL")),
-                preceded(comma, latlon),
-                preceded(comma, time),
-                preceded(comma, status),
-                preceded(comma, pos_mode),
-            )),
-            |(talker, lat_lon, time, status, position_mode)| GLLData {
-                received: None,
-                talker,
-                lat_lon,
-                time,
-                status,
-                position_mode,
-            },
+        tuple((
+            terminated(talker, tag("GLL")),
+            preceded(comma, latlon),
+            preceded(comma, time),
+            preceded(comma, status),
+            preceded(comma, pos_mode),
         )),
+        |(talker, lat_lon, time, status, position_mode)| GLLData {
+            received: None,
+            talker,
+            lat_lon,
+            time,
+            status,
+            position_mode,
+        },
     )(input)
 }
 
@@ -856,16 +832,14 @@ pub struct GLQData {
 pub(crate) fn glq<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, GLQData, E> {
-    context(
+    parse_message(
         "GLQ",
-        all_consuming(map(
-            tuple((talker, preceded(tag("GLQ"), preceded(comma, any)))),
-            |(talker, message_id)| GLQData {
-                received: None,
-                talker,
-                message_id,
-            },
-        )),
+        tuple((talker, preceded(tag("GLQ"), preceded(comma, any)))),
+        |(talker, message_id)| GLQData {
+            received: None,
+            talker,
+            message_id,
+        },
     )(input)
 }
 
@@ -879,16 +853,14 @@ pub struct GNQData {
 pub(crate) fn gnq<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, GNQData, E> {
-    context(
+    parse_message(
         "GNQ",
-        all_consuming(map(
-            tuple((talker, preceded(tag("GNQ"), preceded(comma, any)))),
-            |(talker, message_id)| GNQData {
-                received: None,
-                talker,
-                message_id,
-            },
-        )),
+        tuple((talker, preceded(tag("GNQ"), preceded(comma, any)))),
+        |(talker, message_id)| GNQData {
+            received: None,
+            talker,
+            message_id,
+        },
     )(input)
 }
 
@@ -920,58 +892,56 @@ pub(crate) fn gns<
 >(
     input: &'a str,
 ) -> IResult<&'a str, GNSData, E> {
-    context(
+    parse_message(
         "GNS",
-        all_consuming(map(
-            tuple((
-                terminated(talker, terminated(tag("GNS"), comma)),
-                terminated(time, comma),
-                terminated(latlon, comma),
-                pos_mode,
-                pos_mode,
-                pos_mode,
-                terminated(pos_mode, comma),
-                terminated(uint32, comma),
-                terminated(flt32, comma),
-                terminated(flt32, comma),
-                terminated(flt32, comma),
-                terminated(opt(uint32), comma),
-                terminated(opt(uint32), comma),
-                status,
-            )),
-            |(
-                talker,
-                time,
-                lat_lon,
-                gps_position_mode,
-                glonass_position_mode,
-                galileo_position_mode,
-                beiduo_position_mode,
-                num_satellites,
-                hdop,
-                alt,
-                sep,
-                diff_age,
-                diff_station,
-                nav_status,
-            )| GNSData {
-                received: None,
-                talker,
-                time,
-                lat_lon,
-                gps_position_mode,
-                glonass_position_mode,
-                galileo_position_mode,
-                beiduo_position_mode,
-                num_satellites,
-                hdop,
-                alt,
-                sep,
-                diff_age,
-                diff_station,
-                nav_status,
-            },
+        tuple((
+            terminated(talker, terminated(tag("GNS"), comma)),
+            terminated(time, comma),
+            terminated(latlon, comma),
+            pos_mode,
+            pos_mode,
+            pos_mode,
+            terminated(pos_mode, comma),
+            terminated(uint32, comma),
+            terminated(flt32, comma),
+            terminated(flt32, comma),
+            terminated(flt32, comma),
+            terminated(opt(uint32), comma),
+            terminated(opt(uint32), comma),
+            status,
         )),
+        |(
+            talker,
+            time,
+            lat_lon,
+            gps_position_mode,
+            glonass_position_mode,
+            galileo_position_mode,
+            beiduo_position_mode,
+            num_satellites,
+            hdop,
+            alt,
+            sep,
+            diff_age,
+            diff_station,
+            nav_status,
+        )| GNSData {
+            received: None,
+            talker,
+            time,
+            lat_lon,
+            gps_position_mode,
+            glonass_position_mode,
+            galileo_position_mode,
+            beiduo_position_mode,
+            num_satellites,
+            hdop,
+            alt,
+            sep,
+            diff_age,
+            diff_station,
+            nav_status,
+        },
     )(input)
 }
 
@@ -985,16 +955,14 @@ pub struct GPQData {
 pub(crate) fn gpq<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, GPQData, E> {
-    context(
+    parse_message(
         "GPQ",
-        all_consuming(map(
-            tuple((talker, preceded(tag("GPQ"), preceded(comma, any)))),
-            |(talker, message_id)| GPQData {
-                received: None,
-                talker,
-                message_id,
-            },
-        )),
+        tuple((talker, preceded(tag("GPQ"), preceded(comma, any)))),
+        |(talker, message_id)| GPQData {
+            received: None,
+            talker,
+            message_id,
+        },
     )(input)
 }
 
@@ -1018,27 +986,25 @@ pub(crate) fn grs<
 >(
     input: &'a str,
 ) -> IResult<&'a str, GRSData, E> {
-    context(
+    parse_message(
         "GRS",
-        all_consuming(map(
-            tuple((
-                terminated(talker, tag("GRS")),
-                preceded(comma, time),
-                preceded(comma, map(one_of("10"), |c| c == '1')),
-                map(many_m_n(12, 12, preceded(comma, opt(flt32))), Vec::from),
-                preceded(comma, system),
-                preceded(comma, opt(signal)),
-            )),
-            |(talker, time, gga_includes_residuals, residuals, system, signal)| GRSData {
-                received: None,
-                talker,
-                time,
-                gga_includes_residuals,
-                residuals,
-                system,
-                signal,
-            },
+        tuple((
+            terminated(talker, tag("GRS")),
+            preceded(comma, time),
+            preceded(comma, map(one_of("10"), |c| c == '1')),
+            map(many_m_n(12, 12, preceded(comma, opt(flt32))), Vec::from),
+            preceded(comma, system),
+            preceded(comma, opt(signal)),
         )),
+        |(talker, time, gga_includes_residuals, residuals, system, signal)| GRSData {
+            received: None,
+            talker,
+            time,
+            gga_includes_residuals,
+            residuals,
+            system,
+            signal,
+        },
     )(input)
 }
 
@@ -1064,33 +1030,31 @@ pub(crate) fn gsa<
 >(
     input: &'a str,
 ) -> IResult<&'a str, GSAData, E> {
-    context(
+    parse_message(
         "GSA",
-        all_consuming(map(
-            tuple((
-                terminated(talker, terminated(tag("GSA"), comma)),
-                terminated(op_mode, comma),
-                terminated(nav_mode, comma),
-                map(many_m_n(12, 12, terminated(opt(uint32), comma)), Vec::from),
-                terminated(opt(flt32), comma),
-                terminated(opt(flt32), comma),
-                opt(flt32),
-                opt(preceded(comma, system)),
-            )),
-            |(talker, operation_mode, navigation_mode, satellite_ids, pdop, hdop, vdop, system)| {
-                GSAData {
-                    received: None,
-                    talker,
-                    operation_mode,
-                    navigation_mode,
-                    satellite_ids,
-                    pdop,
-                    hdop,
-                    vdop,
-                    system,
-                }
-            },
+        tuple((
+            terminated(talker, terminated(tag("GSA"), comma)),
+            terminated(op_mode, comma),
+            terminated(nav_mode, comma),
+            map(many_m_n(12, 12, terminated(opt(uint32), comma)), Vec::from),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            opt(flt32),
+            opt(preceded(comma, system)),
         )),
+        |(talker, operation_mode, navigation_mode, satellite_ids, pdop, hdop, vdop, system)| {
+            GSAData {
+                received: None,
+                talker,
+                operation_mode,
+                navigation_mode,
+                satellite_ids,
+                pdop,
+                hdop,
+                vdop,
+                system,
+            }
+        },
     )(input)
 }
 
@@ -1117,43 +1081,41 @@ pub(crate) fn gst<
 >(
     input: &'a str,
 ) -> IResult<&'a str, GSTData, E> {
-    context(
+    parse_message(
         "GST",
-        all_consuming(map(
-            tuple((
-                terminated(talker, terminated(tag("GST"), comma)),
-                terminated(time, comma),
-                terminated(opt(flt32), comma),
-                terminated(opt(flt32), comma),
-                terminated(opt(flt32), comma),
-                terminated(opt(flt32), comma),
-                terminated(opt(flt32), comma),
-                terminated(opt(flt32), comma),
-                opt(flt32),
-            )),
-            |(
-                talker,
-                time,
-                range_rms,
-                std_major,
-                std_minor,
-                orientation,
-                std_lat,
-                std_lon,
-                std_alt,
-            )| GSTData {
-                received: None,
-                talker,
-                time,
-                range_rms,
-                std_major,
-                std_minor,
-                orientation,
-                std_lat,
-                std_lon,
-                std_alt,
-            },
+        tuple((
+            terminated(talker, terminated(tag("GST"), comma)),
+            terminated(time, comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            terminated(opt(flt32), comma),
+            opt(flt32),
         )),
+        |(
+            talker,
+            time,
+            range_rms,
+            std_major,
+            std_minor,
+            orientation,
+            std_lat,
+            std_lon,
+            std_alt,
+        )| GSTData {
+            received: None,
+            talker,
+            time,
+            range_rms,
+            std_major,
+            std_minor,
+            orientation,
+            std_lat,
+            std_lon,
+            std_alt,
+        },
     )(input)
 }
 
@@ -1207,27 +1169,25 @@ pub(crate) fn gsv<
 >(
     input: &'a str,
 ) -> IResult<&'a str, GSVData, E> {
-    context(
+    parse_message(
         "GSV",
-        all_consuming(map(
-            tuple((
-                terminated(talker, tag("GSV")),
-                preceded(comma, uint32),
-                preceded(comma, uint32),
-                preceded(comma, uint32),
-                many_m_n(0, 4, gsv_sat),
-                opt(preceded(comma, opt(signal))),
-            )),
-            |(talker, num_msgs, msg, num_satellites, satellites, signal)| GSVData {
-                received: None,
-                talker,
-                num_msgs,
-                msg,
-                num_satellites,
-                satellites,
-                signal: signal.unwrap_or(None),
-            },
+        tuple((
+            terminated(talker, tag("GSV")),
+            preceded(comma, uint32),
+            preceded(comma, uint32),
+            preceded(comma, uint32),
+            many_m_n(0, 4, gsv_sat),
+            opt(preceded(comma, opt(signal))),
         )),
+        |(talker, num_msgs, msg, num_satellites, satellites, signal)| GSVData {
+            received: None,
+            talker,
+            num_msgs,
+            msg,
+            num_satellites,
+            satellites,
+            signal: signal.unwrap_or(None),
+        },
     )(input)
 }
 
@@ -1256,49 +1216,47 @@ pub(crate) fn rmc<
 >(
     input: &'a str,
 ) -> IResult<&'a str, RMCData, E> {
-    context(
+    parse_message(
         "RMC",
-        all_consuming(map(
-            tuple((
-                terminated(talker, tag("RMC")),
-                preceded(comma, time),
-                preceded(comma, status),
-                preceded(comma, latlon),
-                preceded(comma, flt32),
-                preceded(comma, opt(flt32)),
-                preceded(comma, date),
-                preceded(comma, opt(flt32)),
-                preceded(comma, opt(east_west)),
-                preceded(comma, pos_mode),
-                opt(preceded(comma, status)),
-            )),
-            |(
-                talker,
-                time,
-                status,
-                lat_lon,
-                speed,
-                course_over_ground,
-                date,
-                magnetic_variation,
-                magnetic_variation_east_west,
-                position_mode,
-                nav_status,
-            )| RMCData {
-                received: None,
-                talker,
-                time,
-                status,
-                lat_lon,
-                speed,
-                course_over_ground,
-                date,
-                magnetic_variation,
-                magnetic_variation_east_west,
-                position_mode,
-                nav_status,
-            },
+        tuple((
+            terminated(talker, tag("RMC")),
+            preceded(comma, time),
+            preceded(comma, status),
+            preceded(comma, latlon),
+            preceded(comma, flt32),
+            preceded(comma, opt(flt32)),
+            preceded(comma, date),
+            preceded(comma, opt(flt32)),
+            preceded(comma, opt(east_west)),
+            preceded(comma, pos_mode),
+            opt(preceded(comma, status)),
         )),
+        |(
+            talker,
+            time,
+            status,
+            lat_lon,
+            speed,
+            course_over_ground,
+            date,
+            magnetic_variation,
+            magnetic_variation_east_west,
+            position_mode,
+            nav_status,
+        )| RMCData {
+            received: None,
+            talker,
+            time,
+            status,
+            lat_lon,
+            speed,
+            course_over_ground,
+            date,
+            magnetic_variation,
+            magnetic_variation_east_west,
+            position_mode,
+            nav_status,
+        },
     )(input)
 }
 
@@ -1318,25 +1276,23 @@ pub(crate) fn txt<
 >(
     input: &'a str,
 ) -> IResult<&'a str, TXTData, E> {
-    context(
+    parse_message(
         "TXT",
-        all_consuming(map(
-            tuple((
-                terminated(talker, terminated(tag("TXT"), comma)),
-                terminated(uint32, comma),
-                terminated(uint32, comma),
-                terminated(msg_type, comma),
-                any,
-            )),
-            |(talker, num_msgs, msg, msg_type, text)| TXTData {
-                received: None,
-                talker,
-                num_msgs,
-                msg,
-                msg_type,
-                text,
-            },
+        tuple((
+            terminated(talker, terminated(tag("TXT"), comma)),
+            terminated(uint32, comma),
+            terminated(uint32, comma),
+            terminated(msg_type, comma),
+            any,
         )),
+        |(talker, num_msgs, msg, msg_type, text)| TXTData {
+            received: None,
+            talker,
+            num_msgs,
+            msg,
+            msg_type,
+            text,
+        },
     )(input)
 }
 
@@ -1360,43 +1316,41 @@ pub(crate) fn vlw<
 >(
     input: &'a str,
 ) -> IResult<&'a str, VLWData, E> {
-    context(
+    parse_message(
         "VLW",
-        all_consuming(map(
-            tuple((
-                terminated(talker, terminated(tag("VLW"), comma)),
-                terminated(opt(flt32), comma),
-                terminated(any, comma),
-                terminated(opt(flt32), comma),
-                terminated(any, comma),
-                terminated(flt32, comma),
-                terminated(any, comma),
-                terminated(flt32, comma),
-                any,
-            )),
-            |(
-                talker,
-                total_water_distance,
-                total_water_distance_unit,
-                water_distance,
-                water_distance_unit,
-                total_ground_distance,
-                total_ground_distance_unit,
-                ground_distance,
-                ground_distance_unit,
-            )| VLWData {
-                received: None,
-                talker,
-                total_water_distance,
-                total_water_distance_unit,
-                water_distance,
-                water_distance_unit,
-                total_ground_distance,
-                total_ground_distance_unit,
-                ground_distance,
-                ground_distance_unit,
-            },
+        tuple((
+            terminated(talker, terminated(tag("VLW"), comma)),
+            terminated(opt(flt32), comma),
+            terminated(any, comma),
+            terminated(opt(flt32), comma),
+            terminated(any, comma),
+            terminated(flt32, comma),
+            terminated(any, comma),
+            terminated(flt32, comma),
+            any,
         )),
+        |(
+            talker,
+            total_water_distance,
+            total_water_distance_unit,
+            water_distance,
+            water_distance_unit,
+            total_ground_distance,
+            total_ground_distance_unit,
+            ground_distance,
+            ground_distance_unit,
+        )| VLWData {
+            received: None,
+            talker,
+            total_water_distance,
+            total_water_distance_unit,
+            water_distance,
+            water_distance_unit,
+            total_ground_distance,
+            total_ground_distance_unit,
+            ground_distance,
+            ground_distance_unit,
+        },
     )(input)
 }
 
@@ -1421,46 +1375,44 @@ pub(crate) fn vtg<
 >(
     input: &'a str,
 ) -> IResult<&'a str, VTGData, E> {
-    context(
+    parse_message(
         "VTG",
-        all_consuming(map(
-            tuple((
-                terminated(talker, tag("VTG")),
-                preceded(comma, opt(flt32)),
-                preceded(comma, any),
-                preceded(comma, opt(flt32)),
-                preceded(comma, any),
-                preceded(comma, flt32),
-                preceded(comma, any),
-                preceded(comma, flt32),
-                preceded(comma, any),
-                preceded(comma, pos_mode),
-            )),
-            |(
-                talker,
-                course_over_ground_true,
-                course_over_ground_true_unit,
-                course_over_ground_magnetic,
-                course_over_ground_magnetic_unit,
-                speed_over_ground_knots,
-                speed_over_ground_knots_unit,
-                speed_over_ground_km,
-                speed_over_ground_km_unit,
-                position_mode,
-            )| VTGData {
-                received: None,
-                talker,
-                course_over_ground_true,
-                course_over_ground_true_unit,
-                course_over_ground_magnetic,
-                course_over_ground_magnetic_unit,
-                speed_over_ground_knots,
-                speed_over_ground_knots_unit,
-                speed_over_ground_km,
-                speed_over_ground_km_unit,
-                position_mode,
-            },
+        tuple((
+            terminated(talker, tag("VTG")),
+            preceded(comma, opt(flt32)),
+            preceded(comma, any),
+            preceded(comma, opt(flt32)),
+            preceded(comma, any),
+            preceded(comma, flt32),
+            preceded(comma, any),
+            preceded(comma, flt32),
+            preceded(comma, any),
+            preceded(comma, pos_mode),
         )),
+        |(
+            talker,
+            course_over_ground_true,
+            course_over_ground_true_unit,
+            course_over_ground_magnetic,
+            course_over_ground_magnetic_unit,
+            speed_over_ground_knots,
+            speed_over_ground_knots_unit,
+            speed_over_ground_km,
+            speed_over_ground_km_unit,
+            position_mode,
+        )| VTGData {
+            received: None,
+            talker,
+            course_over_ground_true,
+            course_over_ground_true_unit,
+            course_over_ground_magnetic,
+            course_over_ground_magnetic_unit,
+            speed_over_ground_knots,
+            speed_over_ground_knots_unit,
+            speed_over_ground_km,
+            speed_over_ground_km_unit,
+            position_mode,
+        },
     )(input)
 }
 
@@ -1485,28 +1437,26 @@ pub(crate) fn zda<
 >(
     input: &'a str,
 ) -> IResult<&'a str, ZDAData, E> {
-    context(
+    parse_message(
         "ZDA",
-        all_consuming(map(
-            tuple((
-                terminated(talker, terminated(tag("ZDA"), comma)),
-                terminated(opt(time), comma),
-                terminated(opt(uint32), comma),
-                terminated(opt(uint32), comma),
-                terminated(opt(int32), comma),
-                terminated(int32, comma),
-                uint32,
-            )),
-            |(talker, time, day, month, year, local_tz_hour, local_tz_minute)| ZDAData {
-                received: None,
-                talker,
-                time,
-                day,
-                month,
-                year,
-                local_tz_hour,
-                local_tz_minute,
-            },
+        tuple((
+            terminated(talker, terminated(tag("ZDA"), comma)),
+            terminated(opt(time), comma),
+            terminated(opt(uint32), comma),
+            terminated(opt(uint32), comma),
+            terminated(opt(int32), comma),
+            terminated(int32, comma),
+            uint32,
         )),
+        |(talker, time, day, month, year, local_tz_hour, local_tz_minute)| ZDAData {
+            received: None,
+            talker,
+            time,
+            day,
+            month,
+            year,
+            local_tz_hour,
+            local_tz_minute,
+        },
     )(input)
 }

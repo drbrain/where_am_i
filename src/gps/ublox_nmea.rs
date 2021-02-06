@@ -15,7 +15,6 @@ use nom::bytes::complete::tag;
 use nom::bytes::complete::take_while_m_n;
 use nom::character::complete::char;
 use nom::character::complete::one_of;
-use nom::combinator::all_consuming;
 use nom::combinator::map;
 use nom::combinator::opt;
 use nom::error::context;
@@ -239,66 +238,64 @@ pub(crate) fn ubx_00<
 >(
     input: &'a str,
 ) -> IResult<&'a str, UBXPosition, E> {
-    context(
+    parse_message(
         "UBX 00",
-        all_consuming(map(
-            tuple((
-                preceded(
-                    tag("PUBX"),
-                    preceded(comma, preceded(tag("00"), preceded(comma, time))),
-                ),
-                preceded(comma, latlon),
-                preceded(comma, flt32),
-                preceded(comma, ubx_nav_stat),
-                preceded(comma, flt32),
-                preceded(comma, flt32),
-                preceded(comma, flt32),
-                preceded(comma, flt32),
-                preceded(comma, flt32),
-                preceded(comma, opt(uint32)),
-                preceded(comma, flt32),
-                preceded(comma, flt32),
-                preceded(comma, flt32),
-                preceded(comma, uint32),
-                preceded(comma, uint32),
-                preceded(comma, map(uint32, |dr| dr == 1)),
-            )),
-            |(
-                time,
-                lat_lon,
-                alt_ref,
-                nav_status,
-                horizontal_accuracy,
-                vertical_accuracy,
-                speed_over_ground,
-                course_over_ground,
-                vertical_velocity,
-                diff_age,
-                hdop,
-                vdop,
-                tdop,
-                num_satellites,
-                reserved,
-                dead_reckoning,
-            )| UBXPosition {
-                time,
-                lat_lon,
-                alt_ref,
-                nav_status,
-                horizontal_accuracy,
-                vertical_accuracy,
-                speed_over_ground,
-                course_over_ground,
-                vertical_velocity,
-                diff_age,
-                hdop,
-                vdop,
-                tdop,
-                num_satellites,
-                reserved,
-                dead_reckoning,
-            },
+        tuple((
+            preceded(
+                tag("PUBX"),
+                preceded(comma, preceded(tag("00"), preceded(comma, time))),
+            ),
+            preceded(comma, latlon),
+            preceded(comma, flt32),
+            preceded(comma, ubx_nav_stat),
+            preceded(comma, flt32),
+            preceded(comma, flt32),
+            preceded(comma, flt32),
+            preceded(comma, flt32),
+            preceded(comma, flt32),
+            preceded(comma, opt(uint32)),
+            preceded(comma, flt32),
+            preceded(comma, flt32),
+            preceded(comma, flt32),
+            preceded(comma, uint32),
+            preceded(comma, uint32),
+            preceded(comma, map(uint32, |dr| dr == 1)),
         )),
+        |(
+            time,
+            lat_lon,
+            alt_ref,
+            nav_status,
+            horizontal_accuracy,
+            vertical_accuracy,
+            speed_over_ground,
+            course_over_ground,
+            vertical_velocity,
+            diff_age,
+            hdop,
+            vdop,
+            tdop,
+            num_satellites,
+            reserved,
+            dead_reckoning,
+        )| UBXPosition {
+            time,
+            lat_lon,
+            alt_ref,
+            nav_status,
+            horizontal_accuracy,
+            vertical_accuracy,
+            speed_over_ground,
+            course_over_ground,
+            vertical_velocity,
+            diff_age,
+            hdop,
+            vdop,
+            tdop,
+            num_satellites,
+            reserved,
+            dead_reckoning,
+        },
     )(input)
 }
 
@@ -373,18 +370,16 @@ pub(crate) fn ubx_03<
 >(
     input: &'a str,
 ) -> IResult<&'a str, UBXSatellites, E> {
-    context(
+    parse_message(
         "UBX 03",
-        all_consuming(map(
+        preceded(
             preceded(
-                preceded(
-                    tag("PUBX"),
-                    preceded(comma, preceded(tag("03"), preceded(comma, uint32))),
-                ),
-                many0(ubx_satellite),
+                tag("PUBX"),
+                preceded(comma, preceded(tag("03"), preceded(comma, uint32))),
             ),
-            |satellites| UBXSatellites { satellites },
-        )),
+            many0(ubx_satellite),
+        ),
+        |satellites| UBXSatellites { satellites },
     )(input)
 }
 
@@ -413,44 +408,42 @@ pub(crate) fn ubx_04<
 >(
     input: &'a str,
 ) -> IResult<&'a str, UBXTime, E> {
-    context(
+    parse_message(
         "UBX 04",
-        all_consuming(map(
-            tuple((
-                preceded(
-                    tag("PUBX"),
-                    preceded(comma, preceded(tag("04"), preceded(comma, time))),
-                ),
-                preceded(comma, date),
-                preceded(comma, flt32),
-                preceded(comma, uint32),
-                preceded(comma, uint32),
-                map(opt(char('D')), |c| c.is_some()),
-                preceded(comma, uint32),
-                preceded(comma, flt32),
-                preceded(comma, terminated(uint32, comma)),
-            )),
-            |(
-                time,
-                date,
-                time_of_week,
-                week,
-                leap_seconds,
-                leap_second_default,
-                clock_bias,
-                clock_drift,
-                time_pulse_granularity,
-            )| UBXTime {
-                time,
-                date,
-                time_of_week,
-                week,
-                leap_seconds,
-                leap_second_default,
-                clock_bias,
-                clock_drift,
-                time_pulse_granularity,
-            },
+        tuple((
+            preceded(
+                tag("PUBX"),
+                preceded(comma, preceded(tag("04"), preceded(comma, time))),
+            ),
+            preceded(comma, date),
+            preceded(comma, flt32),
+            preceded(comma, uint32),
+            preceded(comma, uint32),
+            map(opt(char('D')), |c| c.is_some()),
+            preceded(comma, uint32),
+            preceded(comma, flt32),
+            preceded(comma, terminated(uint32, comma)),
         )),
+        |(
+            time,
+            date,
+            time_of_week,
+            week,
+            leap_seconds,
+            leap_second_default,
+            clock_bias,
+            clock_drift,
+            time_pulse_granularity,
+        )| UBXTime {
+            time,
+            date,
+            time_of_week,
+            week,
+            leap_seconds,
+            leap_second_default,
+            clock_bias,
+            clock_drift,
+            time_pulse_granularity,
+        },
     )(input)
 }
