@@ -1,8 +1,6 @@
 use chrono::naive::NaiveDate;
 use chrono::naive::NaiveTime;
 
-use core::num::NonZeroUsize;
-
 use crate::gps::Driver;
 use crate::gps::Generic;
 use crate::nmea::parser;
@@ -10,10 +8,7 @@ use crate::nmea::parser::*;
 use crate::nmea::EastWest;
 use crate::nmea::NorthSouth;
 
-use nom::error::VerboseErrorKind::Context;
 use nom::error::*;
-use nom::Err;
-use nom::Needed;
 
 use std::time::Duration;
 
@@ -38,6 +33,10 @@ fn parse<'a>(input: &'a [u8]) -> NMEA {
     let driver = driver();
 
     parser::parse::<VEb>(input, &driver, timestamp()).unwrap().1
+}
+
+fn timestamp() -> Duration {
+    Duration::from_secs(7)
 }
 
 #[test]
@@ -89,50 +88,12 @@ fn test_incomplete() {
     let input = b"$EIG";
     let result = parser::parse::<VEb>(input, &driver(), timestamp());
 
-    if let Err(Err::Incomplete(e)) = result {
-        assert_eq!(Needed::Size(NonZeroUsize::new(1).unwrap()), e);
-    } else {
-        assert!(false, "Was complete")
-    }
-}
-
-#[test]
-fn test_skip_garbage() {
-    let parsed = parse(b"stuff*AA\r\n$EIGAQ,RMC*2B\r\n$");
-    let mut data = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;
-
-    data.received = Some(timestamp());
-
-    assert_eq!(NMEA::GAQ(data), parsed);
-}
-
-#[test]
-fn test_garbage() {
-    let input = b"$";
-    let (input, count) = parser::garbage::<VEb>(input).unwrap();
-
-    assert_eq!(0, count);
-    assert_eq!(b"$", input);
-
-    let input = b"x$";
-    let (input, count) = parser::garbage::<VEb>(input).unwrap();
-
-    assert_eq!(1, count);
-    assert_eq!(b"$", input);
-
-    let input = b"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx$";
-    let (input, count) = parser::garbage::<VEb>(input).unwrap();
-
-    assert_eq!(164, count);
-    assert_eq!(b"$", input);
-
-    let input = b"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx$";
-    let result = parser::garbage::<VEb>(input);
-
-    if let Err(Err::Failure(mut f)) = result {
-        assert_eq!(Context("garbage"), f.errors.pop().unwrap().1);
-    } else {
-        assert!(false, "Garbage limit not reached");
+    match result {
+        Ok((input, nmea)) => {
+            assert_eq!(NMEA::ParseError(String::from("incomplete, need 1")), nmea);
+            assert_eq!(b"$EIG", input);
+        }
+        r => assert!(false, "Not incomplete: {:?}", r),
     }
 }
 
@@ -870,8 +831,4 @@ fn test_zda_time_only() {
     assert_eq!(None, parsed.year);
     assert_eq!(0, parsed.local_tz_hour);
     assert_eq!(0, parsed.local_tz_minute);
-}
-
-fn timestamp() -> Duration {
-    Duration::from_secs(7)
 }

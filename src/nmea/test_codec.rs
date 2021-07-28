@@ -20,12 +20,12 @@ mod test {
 
         let first = match codec.decode(&mut bytes_mut).unwrap().unwrap() {
             NMEA::GGA(gga) => gga.received,
-            _ => unreachable!("first message is GGA"),
+            error => unreachable!("first message must be GGA, was {:?}", error),
         };
 
         let second = match codec.decode(&mut bytes_mut).unwrap().unwrap() {
             NMEA::GLL(gll) => gll.received,
-            _ => unreachable!("second message is GLL"),
+            error => unreachable!("second message must be GLL, was {:?}", error),
         };
 
         assert_ne!(first, second);
@@ -43,14 +43,14 @@ mod test {
 
         let first = match codec.decode(&mut bytes_mut).unwrap().unwrap() {
             NMEA::GGA(gga) => gga.received,
-            _ => unreachable!("first message is GGA"),
+            error => unreachable!("first message must be GGA, was {:?}", error),
         };
 
         bytes_mut.extend_from_slice(b"$GPGLL,4735.2887,N,12217.9631,W,025134.000,A,A*40\r\n");
 
         let second = match codec.decode(&mut bytes_mut).unwrap().unwrap() {
             NMEA::GLL(gll) => gll.received,
-            _ => unreachable!("second message is GLL"),
+            error => unreachable!("second message must be GLL, was {:?}", error),
         };
 
         assert_ne!(first, second);

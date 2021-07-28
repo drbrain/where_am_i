@@ -2,6 +2,7 @@ mod codec;
 pub mod device;
 pub mod parser;
 pub mod parser_util;
+mod sentence_parser;
 mod ser;
 
 pub use codec::Codec;
@@ -49,6 +50,9 @@ mod test_codec;
 
 #[cfg(test)]
 mod test_parser;
+
+#[cfg(test)]
+mod test_sentence_parser;
 
 #[cfg(test)]
 mod test_ser;

@@ -1,11 +1,12 @@
 use chrono::naive::NaiveDate;
 use chrono::naive::NaiveTime;
-use chrono::NaiveDateTime;
 
 use crate::gps::Driver;
 use crate::gps::MKTData;
 use crate::gps::UBXData;
 use crate::nmea::parser_util::*;
+use crate::nmea::sentence_parser::parse_sentence;
+use crate::nmea::sentence_parser::NMEASentence;
 use crate::nmea::EastWest;
 use crate::nmea::NorthSouth;
 
@@ -18,14 +19,11 @@ use nom::multi::*;
 use nom::sequence::*;
 use nom::Err;
 use nom::IResult;
+use nom::Needed;
 
-use std::convert::TryInto;
 use std::num::ParseFloatError;
 use std::num::ParseIntError;
 use std::time::Duration;
-
-use tracing::error;
-use tracing::trace;
 
 type VE<'a> = VerboseError<&'a [u8]>;
 
@@ -91,84 +89,34 @@ pub(crate) fn parse<
     driver: &Driver,
     received: Duration,
 ) -> IResult<&'a [u8], NMEA, E> {
-    use nom::bytes::streaming::tag;
+    let result = parse_sentence::<VerboseError<&'a [u8]>>(input, received);
 
-    let result = delimited(
-        preceded(garbage, tag(b"$")),
-        tuple((terminated(non_star, star), checksum)),
-        terminated(opt(tag(b"\r")), tag(b"\n")),
-    )(input);
-
-    let (input, (data, given)) = match result {
-        Err(Err::Incomplete(_)) => {
-            return Err(result.err().unwrap());
-        }
-        Err(_) => return parse_error(input),
-        Ok(t) => t,
-    };
-
-    let calculated = data.iter().fold(0, |c, b| c ^ b);
-    let data = std::str::from_utf8(data).unwrap();
-
-    if given == calculated {
-        trace!(
-            "received {:?} parsing \"{}\" (checksum OK), {} bytes remaining",
-            NaiveDateTime::from_timestamp(
-                received.as_secs().try_into().unwrap_or(0),
-                received.subsec_nanos()
-            ),
-            data,
-            input.len()
-        );
-
-        match message::<VerboseError<&'a str>>(data, driver, received) {
-            Err(Err::Error(_)) => Ok((input, NMEA::ParseError(String::from(data)))),
-            Err(Err::Failure(_)) => Ok((input, NMEA::ParseFailure(String::from(data)))),
-            Err(Err::Incomplete(_)) => unreachable!(
-                "Got Incomplete when complete parsers were used on: {:?}",
-                data
-            ),
-            // discard input from sub-parser, it was fully consumed
-            Ok((_, nmea)) => Ok((input, nmea)),
-        }
-    } else {
-        trace!(
-            "invalid checksum for \"{}\" ({} != {})",
-            data,
-            given,
-            calculated
-        );
-
-        let message = String::from(data);
-
-        Ok((
-            input,
-            NMEA::InvalidChecksum(ChecksumMismatch {
-                message,
-                given,
-                calculated,
-            }),
-        ))
-    }
-}
-
-fn parse_error<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], NMEA, E> {
-    match std::str::from_utf8(input) {
-        Ok(i) => {
-            error!("Some error parsing: {}", i);
-
-            Ok((b"", NMEA::ParseError(String::from(i))))
-        }
-        Err(e) => {
-            error!("Some error parsing: {:?} (invalid UTF-8: {})", input, e);
-
-            let next_invalid = e.valid_up_to() + e.error_len().unwrap_or(1);
-
-            Ok((
-                &input[next_invalid..],
-                NMEA::ParseError(String::from("Invalid UTF-8")),
+    let (input, data) = match result {
+        Ok((input, sentence)) => match sentence {
+            NMEASentence::InvalidChecksum(cm) => {
+                return Ok((input, NMEA::InvalidChecksum(cm)));
+            }
+            NMEASentence::ParseError(e) => return Ok((input, NMEA::ParseError(e))),
+            NMEASentence::Valid(d) => (input, d),
+        },
+        Err(Err::Incomplete(Needed::Size(n))) => {
+            return Ok((
+                input,
+                NMEA::ParseError(format!("incomplete, need {:}", n.get())),
             ))
         }
+        Err(_) => unreachable!(),
+    };
+
+    match message::<VerboseError<&'a str>>(data, driver, received) {
+        Err(Err::Error(_)) => Ok((input, NMEA::ParseError(String::from(data)))),
+        Err(Err::Failure(_)) => Ok((input, NMEA::ParseFailure(String::from(data)))),
+        Err(Err::Incomplete(_)) => unreachable!(
+            "Got Incomplete when complete parsers were used on: {:?}",
+            data
+        ),
+        // discard input from sub-parser, it was fully consumed
+        Ok((_, nmea)) => Ok((input, nmea)),
     }
 }
 
@@ -290,44 +238,6 @@ pub(crate) fn private_message<
     driver: &Driver,
 ) -> IResult<&'a str, NMEA, E> {
     driver.parse_private(input)
-}
-
-pub(crate) fn star<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], &'a [u8], E> {
-    use nom::bytes::streaming::tag;
-
-    tag(b"*")(input)
-}
-
-pub(crate) fn non_star<'a, E: ParseError<&'a [u8]>>(
-    input: &'a [u8],
-) -> IResult<&'a [u8], &'a [u8], E> {
-    use nom::bytes::streaming::take_till;
-
-    recognize(take_till(|c| c == b'*'))(input)
-}
-
-pub(crate) fn checksum<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], u8, E> {
-    use nom::bytes::streaming::take_while_m_n;
-    use nom::character::is_hex_digit;
-
-    map(recognize(take_while_m_n(2, 2, is_hex_digit)), |c| {
-        u8::from_str_radix(std::str::from_utf8(c).unwrap(), 16).unwrap()
-    })(input)
-}
-
-pub(crate) fn garbage<'a, E: ParseError<&'a [u8]> + ContextError<&'a [u8]>>(
-    input: &'a [u8],
-) -> IResult<&'a [u8], usize, E> {
-    use nom::bytes::streaming::tag;
-    use nom::bytes::streaming::take_while_m_n;
-
-    context(
-        "garbage",
-        cut(terminated(
-            map(take_while_m_n(0, 164, |c| c != b'$'), |g: &[u8]| g.len()),
-            peek(tag(b"$")),
-        )),
-    )(input)
 }
 
 #[derive(Clone, Debug, PartialEq)]
