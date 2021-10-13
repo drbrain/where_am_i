@@ -82,7 +82,7 @@ impl Server {
 async fn run_listener(address: &String, port: u16, server: Arc<Mutex<Server>>) -> Result<()> {
     let address = (address.as_str(), port);
 
-    let mut listener = TcpListener::bind(address)
+    let listener = TcpListener::bind(address)
         .await
         .with_context(|| format!("Failed to bind to {}:{}", address.0, address.1))?;
 

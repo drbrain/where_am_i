@@ -13,7 +13,7 @@ use tempfile::TempDir;
 use tokio_serial::DataBits;
 use tokio_serial::FlowControl;
 use tokio_serial::Parity;
-use tokio_serial::SerialPortSettings;
+use tokio_serial::SerialPortBuilder;
 use tokio_serial::StopBits;
 
 use tracing_subscriber::filter::EnvFilter;
@@ -173,14 +173,16 @@ fn test_try_from_serial_port_settings() {
         ntp_unit: None,
     };
 
-    let settings = SerialPortSettings::try_from(gps).unwrap();
+    let settings = SerialPortBuilder::try_from(gps).unwrap();
 
-    assert_eq!(38400, settings.baud_rate);
-    assert_eq!(DataBits::Seven, settings.data_bits);
-    assert_eq!(FlowControl::Hardware, settings.flow_control);
-    assert_eq!(Parity::Odd, settings.parity);
-    assert_eq!(StopBits::Two, settings.stop_bits);
-    assert_eq!(Duration::from_millis(10), settings.timeout);
+    let expected = tokio_serial::new("/dev/gps0", 38400);
+    let expected = expected.data_bits(DataBits::Seven);
+    let expected = expected.flow_control(FlowControl::Hardware);
+    let expected = expected.parity(Parity::Odd);
+    let expected = expected.stop_bits(StopBits::Two);
+    let expected = expected.timeout(Duration::from_millis(10));
+
+    assert_eq!(expected, settings);
 }
 
 #[test]
@@ -198,14 +200,16 @@ fn test_try_from_serial_port_settings_default() {
         ntp_unit: None,
     };
 
-    let settings = SerialPortSettings::try_from(gps).unwrap();
+    let settings = SerialPortBuilder::try_from(gps).unwrap();
 
-    assert_eq!(38400, settings.baud_rate);
-    assert_eq!(DataBits::Eight, settings.data_bits);
-    assert_eq!(FlowControl::None, settings.flow_control);
-    assert_eq!(Parity::None, settings.parity);
-    assert_eq!(StopBits::One, settings.stop_bits);
-    assert_eq!(Duration::from_millis(1), settings.timeout);
+    let expected = tokio_serial::new("/dev/gps0", 38400);
+    let expected = expected.data_bits(DataBits::Eight);
+    let expected = expected.flow_control(FlowControl::None);
+    let expected = expected.parity(Parity::None);
+    let expected = expected.stop_bits(StopBits::One);
+    let expected = expected.timeout(Duration::from_millis(1));
+
+    assert_eq!(expected, settings);
 }
 
 #[test]
@@ -223,7 +227,7 @@ fn test_try_from_serial_port_settings_error() {
         ntp_unit: None,
     };
 
-    match SerialPortSettings::try_from(gps).err().unwrap() {
+    match SerialPortBuilder::try_from(gps).err().unwrap() {
         ConfigurationError::InvalidDataBits(e) => assert_eq!('9', e),
         _ => assert!(false),
     }

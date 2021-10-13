@@ -215,7 +215,7 @@ fn relay_messages(tx: Sender, rx: JsonReceiver) {
 }
 
 #[tracing::instrument]
-async fn relay(mut tx: Sender, mut rx: JsonReceiver) {
+async fn relay(tx: Sender, mut rx: JsonReceiver) {
     loop {
         let message = rx.recv().await;
 
@@ -244,7 +244,7 @@ fn relay_pps_messages(tx: Sender, rx: TSReceiver) {
 }
 
 #[tracing::instrument]
-async fn relay_pps(mut tx: Sender, mut rx: TSReceiver) {
+async fn relay_pps(tx: Sender, mut rx: TSReceiver) {
     loop {
         let message = rx.recv().await;
 

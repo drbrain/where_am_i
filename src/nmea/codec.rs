@@ -12,6 +12,7 @@ use nom::Err;
 
 use serde::Serialize;
 
+use std::borrow::Borrow;
 use std::fmt;
 use std::io;
 use std::time::Duration;
@@ -48,8 +49,8 @@ impl Decoder for Codec {
     /// timestamps we produce.
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         let now = timestamp();
-        let bytes = buf.to_bytes();
-        let input = bytes.bytes();
+        let bytes = buf.copy_to_bytes(buf.remaining());
+        let input = bytes.borrow();
 
         match self.parser.parse(input, now) {
             Ok((input, nmea)) => {

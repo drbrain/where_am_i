@@ -13,18 +13,18 @@ use crate::gps::MKT;
 use crate::nmea::Codec;
 use crate::nmea::NMEA;
 
+use futures_util::StreamExt;
+
 use instant::Instant;
 
-use futures_util::stream::StreamExt;
-
-use std::io;
 use std::time::Duration;
 
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 
-use tokio_serial::Serial;
-use tokio_serial::SerialPortSettings;
+use tokio_serial::SerialPortBuilder;
+use tokio_serial::SerialPortBuilderExt;
+use tokio_serial::SerialStream;
 
 use tokio_util::codec::Framed;
 
@@ -34,7 +34,7 @@ use tracing::info;
 
 type NMEASender = broadcast::Sender<NMEA>;
 type RestartWaiter = oneshot::Sender<()>;
-pub type SerialCodec = Framed<Serial, Codec>;
+pub type SerialCodec = Framed<SerialStream, Codec>;
 
 #[derive(Clone, Debug)]
 pub struct MessageSetting {
@@ -46,12 +46,12 @@ pub struct Device {
     pub name: String,
     pub sender: NMEASender,
     gps_type: GpsType,
-    settings: SerialPortSettings,
+    serial_port_builder: SerialPortBuilder,
     messages: Vec<MessageSetting>,
 }
 
 impl Device {
-    pub fn new(name: String, gps_type: GpsType, settings: SerialPortSettings) -> Self {
+    pub fn new(name: String, gps_type: GpsType, serial_port_builder: SerialPortBuilder) -> Self {
         let messages = vec![];
 
         let (sender, _) = broadcast::channel(20);
@@ -60,7 +60,7 @@ impl Device {
             name,
             sender,
             gps_type,
-            settings,
+            serial_port_builder,
             messages,
         }
     }
@@ -74,19 +74,19 @@ impl Device {
         self.messages.push(setting);
     }
 
-    pub async fn open(&self) -> Result<(Serial, Driver)> {
-        open(&self.name, &self.gps_type, &self.settings).await
+    pub async fn open(&self) -> Result<(SerialStream, Driver)> {
+        open(&self.name, &self.gps_type, &self.serial_port_builder).await
     }
 
     pub async fn run(&self) -> NMEASender {
         let name = self.name.clone();
-        let settings = self.settings.clone();
+        let serial_port_builder = self.serial_port_builder.clone();
         let gps_type = self.gps_type.clone();
         let messages = self.messages.clone();
         let reader_tx = self.sender.clone();
 
         tokio::spawn(async move {
-            start(&name, &gps_type, &settings, messages, reader_tx).await;
+            start(&name, &gps_type, &serial_port_builder, messages, reader_tx).await;
         });
 
         self.sender.clone()
@@ -109,8 +109,8 @@ fn backoff() -> ExponentialBackoff {
 async fn open(
     name: &str,
     gps_type: &GpsType,
-    settings: &SerialPortSettings,
-) -> Result<(Serial, Driver)> {
+    serial_port_builder: &SerialPortBuilder,
+) -> Result<(SerialStream, Driver)> {
     let driver = match gps_type {
         GpsType::UBlox => Driver::UBloxNMEA(UBloxNMEA::default()),
         GpsType::MKT => Driver::MKT(MKT::default()),
@@ -118,7 +118,9 @@ async fn open(
     };
 
     (|| async {
-        let serial = Serial::from_path(name.clone(), &settings)
+        let serial = serial_port_builder
+            .clone()
+            .open_native_async()
             .map_err(open_error)
             .with_context(|| format!("Failed to open GPS device {}", name.clone()))?;
 
@@ -130,7 +132,7 @@ async fn open(
     .await
 }
 
-fn open_error(e: io::Error) -> io::Error {
+fn open_error(e: tokio_serial::Error) -> tokio_serial::Error {
     error!("Opening failed: {}", e.to_string());
 
     e
@@ -177,14 +179,14 @@ async fn send_messages(reader_tx: NMEASender, serial: SerialCodec, restarter: Re
 async fn start(
     name: &str,
     gps_type: &GpsType,
-    settings: &SerialPortSettings,
+    serial_port_builder: &SerialPortBuilder,
     messages: Vec<MessageSetting>,
     reader_tx: NMEASender,
 ) {
     loop {
         let (restarter, waiter) = oneshot::channel();
 
-        let (serial, driver) = match open(&name, &gps_type, &settings).await {
+        let (serial, driver) = match open(&name, &gps_type, &serial_port_builder).await {
             Ok(t) => t,
             Err(_) => unreachable!("open retries opening the device forever"),
         };

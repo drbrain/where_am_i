@@ -10,7 +10,7 @@ use std::time::Duration;
 use tokio_serial::DataBits;
 use tokio_serial::FlowControl;
 use tokio_serial::Parity;
-use tokio_serial::SerialPortSettings;
+use tokio_serial::SerialPortBuilder;
 use tokio_serial::StopBits;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -27,20 +27,24 @@ pub struct GpsConfig {
     pub ntp_unit: Option<i32>,
 }
 
-impl TryFrom<GpsConfig> for SerialPortSettings {
+impl TryFrom<GpsConfig> for SerialPortBuilder {
     type Error = ConfigurationError;
 
-    fn try_from(device: GpsConfig) -> Result<SerialPortSettings, ConfigurationError> {
+    fn try_from(device: GpsConfig) -> Result<SerialPortBuilder, ConfigurationError> {
+        let path = device.device;
         let mut baud_rate = 38400;
+
+        if let Some(b) = device.baud_rate {
+            baud_rate = b;
+        }
+
+        let builder = tokio_serial::new(path, baud_rate);
+
         let mut data_bits = DataBits::Eight;
         let mut flow_control = FlowControl::None;
         let mut parity = Parity::None;
         let mut stop_bits = StopBits::One;
         let mut timeout = Duration::from_millis(1);
-
-        if let Some(b) = device.baud_rate {
-            baud_rate = b;
-        }
 
         if let Some(f) = device.framing {
             if f.len() != 3 {
@@ -74,6 +78,10 @@ impl TryFrom<GpsConfig> for SerialPortSettings {
             };
         };
 
+        let builder = builder.data_bits(data_bits);
+        let builder = builder.parity(parity);
+        let builder = builder.stop_bits(stop_bits);
+
         if let Some(f) = device.flow_control {
             if f.len() != 1 {
                 return Err(ConfigurationError::InvalidFlowControl(f));
@@ -89,17 +97,14 @@ impl TryFrom<GpsConfig> for SerialPortSettings {
             };
         }
 
+        let builder = builder.flow_control(flow_control);
+
         if let Some(t) = device.timeout {
             timeout = Duration::from_millis(t.into());
         }
 
-        Ok(SerialPortSettings {
-            baud_rate,
-            data_bits,
-            flow_control,
-            parity,
-            stop_bits,
-            timeout,
-        })
+        let builder = builder.timeout(timeout);
+
+        Ok(builder)
     }
 }

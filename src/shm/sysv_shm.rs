@@ -87,7 +87,7 @@ mod test {
         let expected = if cfg!(target_os = "linux") {
             65538
         } else if cfg!(target_os = "macos") {
-            65536
+            65537
         } else {
             0
         };

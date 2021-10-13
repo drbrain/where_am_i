@@ -12,7 +12,7 @@ use std::sync::atomic::compiler_fence;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 use tracing::error;
 use tracing::trace;
@@ -102,7 +102,7 @@ async fn watch_timestamps(unit: i32, device: String, tx: TSSender) {
         let count_before = time.map(|t| &t.count).read();
 
         if count_before == last_count {
-            delay_for(Duration::from_millis(10)).await;
+            sleep(Duration::from_millis(10)).await;
             continue;
         }
 
@@ -129,7 +129,7 @@ async fn watch_timestamps(unit: i32, device: String, tx: TSSender) {
             // If from a read then we'll have stable values on our next try.
             last_count = count_before;
 
-            delay_for(Duration::from_millis(10)).await;
+            sleep(Duration::from_millis(10)).await;
             continue;
         }
 
@@ -155,6 +155,6 @@ async fn watch_timestamps(unit: i32, device: String, tx: TSSender) {
 
         if tx.send(timestamp).is_ok() {};
 
-        delay_for(Duration::from_millis(1000)).await;
+        sleep(Duration::from_millis(1000)).await;
     }
 }

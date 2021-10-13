@@ -1,8 +1,10 @@
 use std::convert::TryFrom;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use tokio::runtime;
 
-use tokio_serial::SerialPortSettings;
+use tokio_serial::SerialPortBuilder;
 
 use tracing::error;
 use tracing::info;
@@ -20,16 +22,13 @@ use where_am_i::pps;
 use where_am_i::shm::NtpShm;
 
 fn main() {
-    let mut runtime = runtime::Builder::new()
+    let runtime = runtime::Builder::new_multi_thread()
+        .thread_name_fn(|| {
+            static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
+            let id = ATOMIC_ID.fetch_add(1, Ordering::SeqCst);
+            format!("where_am_i-{}", id)
+        })
         .enable_all()
-        .threaded_scheduler()
-        .on_thread_start(|| {
-            eprintln!("thread started");
-        })
-        .on_thread_stop(|| {
-            eprintln!("thread stopped");
-        })
-        .core_threads(2)
         .build()
         .unwrap();
 
@@ -90,7 +89,7 @@ async fn start_gps(gps_config: &GpsConfig, server: &mut Option<Server>) {
     let gps_name = gps_config.device.clone();
     let messages = gps_config.messages.clone().unwrap_or(vec![]);
 
-    let serial_port_settings = match SerialPortSettings::try_from(gps_config.clone()) {
+    let serial_port_settings = match SerialPortBuilder::try_from(gps_config.clone()) {
         Ok(s) => s,
         Err(e) => {
             error!("{}", e);

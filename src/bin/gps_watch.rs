@@ -11,7 +11,7 @@ use where_am_i::gps::UBX_OUTPUT_MESSAGES;
 use where_am_i::nmea::Device;
 use where_am_i::nmea::NMEA;
 
-use tokio_serial::SerialPortSettings;
+use tokio_serial::SerialPortBuilder;
 
 #[tokio::main]
 async fn main() {
@@ -44,7 +44,7 @@ async fn main() {
     let gps_name = device.clone().device;
     let messages = device.clone().messages.unwrap_or(vec![]);
 
-    let serial_port_settings = match SerialPortSettings::try_from(device.clone()) {
+    let serial_port_settings = match SerialPortBuilder::try_from(device.clone()) {
         Ok(s) => s,
         Err(e) => {
             error!("{}", e);
