@@ -19,7 +19,7 @@ path = "src/bin/time_watch.rs"
 [dependencies]
 assert_approx_eq   = "1.1.0"
 anyhow             = "^1.0"
-backoff            = { version = "0.2.1", features = ["async-std"] }
+backoff            = { version = "0.3.0", features = ["tokio"] }
 bitflags           = "1.2.0"
 bytes              = "1.1.0"
 chrono             = "0.4.19"

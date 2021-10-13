@@ -1,7 +1,6 @@
 use anyhow::Context;
 use anyhow::Result;
 
-use backoff::future::FutureOperation;
 use backoff::ExponentialBackoff;
 use backoff::SystemClock;
 
@@ -117,7 +116,7 @@ async fn open(
         GpsType::Generic => Driver::Generic(Generic::default()),
     };
 
-    (|| async {
+    backoff::future::retry(backoff(), || async {
         let serial = serial_port_builder
             .clone()
             .open_native_async()
@@ -128,7 +127,6 @@ async fn open(
 
         Ok((serial, driver.clone()))
     })
-    .retry(backoff())
     .await
 }
 
