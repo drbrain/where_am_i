@@ -54,5 +54,5 @@ ntp_unit = 3
 # bind_address: List of addresses to bind to
 # port:         Port to bind to
 [gpsd]
-bind_address = ["127.0.0.1"]
+bind_addresses = ["127.0.0.1", "::1"]
 port = 2947
