@@ -1,6 +1,9 @@
 mod client;
 pub use client::Client;
 mod codec;
+mod device;
+pub use device::Device;
+mod devices;
 mod parser;
 mod server;
 pub use server::Server;
