@@ -4,6 +4,7 @@ mod codec;
 mod device;
 pub use device::Device;
 mod devices;
+pub use devices::Devices;
 mod parser;
 mod server;
 pub use server::Server;

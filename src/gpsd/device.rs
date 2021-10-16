@@ -15,12 +15,12 @@ pub struct Device {
     pub native: Option<u64>,
 }
 
-impl From<GpsConfig> for Device {
-    fn from(config: GpsConfig) -> Self {
+impl From<&GpsConfig> for Device {
+    fn from(config: &GpsConfig) -> Self {
         let mut parity = None;
         let mut stopbits = None;
 
-        if let Some(f) = config.framing {
+        if let Some(f) = &config.framing {
             if f.len() == 3 {
                 let framing_parity = f.chars().nth(1).unwrap();
 
@@ -48,7 +48,7 @@ impl From<GpsConfig> for Device {
 
         Device {
             class: "DEVICE".to_string(),
-            path: Some(config.device),
+            path: Some(config.device.clone()),
             bps,
             parity,
             stopbits,

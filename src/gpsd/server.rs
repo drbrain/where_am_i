@@ -1,10 +1,12 @@
 use anyhow::Context;
 use anyhow::Result;
 
+use crate::configuration::GpsConfig;
 use crate::configuration::GpsdConfig;
 use crate::gps::GPS;
 use crate::gpsd::client::Client;
-use crate::pps::Device;
+use crate::gpsd::Devices;
+use crate::pps;
 use crate::JsonReceiver;
 use crate::JsonSender;
 use crate::TSReceiver;
@@ -25,16 +27,18 @@ pub struct Server {
     port: u16,
     bind_addresses: Vec<String>,
     pub clients: HashMap<SocketAddr, ()>,
+    pub devices: Devices,
     gps_tx: HashMap<String, JsonSender>,
     pps_tx: HashMap<String, TSSender>,
 }
 
 impl Server {
-    pub fn new(config: &GpsdConfig) -> Self {
+    pub fn new(config: &GpsdConfig, devices: Vec<GpsConfig>) -> Self {
         Server {
             port: config.port,
             bind_addresses: config.bind_addresses.clone(),
             clients: HashMap::new(),
+            devices: devices.into(),
             gps_tx: HashMap::new(),
             pps_tx: HashMap::new(),
         }
@@ -44,7 +48,7 @@ impl Server {
         self.gps_tx.insert(gps.name.clone(), gps.gpsd_tx.clone());
     }
 
-    pub fn add_pps(&mut self, pps: &Device, name: String) {
+    pub fn add_pps(&mut self, pps: &pps::Device, name: String) {
         self.pps_tx.insert(name, pps.tx.clone());
     }
 

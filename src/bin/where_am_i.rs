@@ -46,7 +46,7 @@ async fn run() {
     start_tracing(&config);
 
     let mut server = match &config.gpsd {
-        Some(c) => Some(Server::new(c)),
+        Some(c) => Some(Server::new(c, config.gps.clone())),
         None => {
             eprintln!("GPSD server not configured");
 

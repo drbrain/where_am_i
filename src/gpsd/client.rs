@@ -96,7 +96,7 @@ impl Client {
             let response = match command {
                 Command::Devices => json!({
                     "class": "DEVICES",
-                    "devices": [],
+                    "devices": self.server.lock().await.devices,
                 }),
                 Command::Device(_) => json!({
                     "class": "DEVICE",
