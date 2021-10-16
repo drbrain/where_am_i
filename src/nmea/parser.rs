@@ -19,7 +19,6 @@ use nom::multi::*;
 use nom::sequence::*;
 use nom::Err;
 use nom::IResult;
-use nom::Needed;
 
 use std::num::ParseFloatError;
 use std::num::ParseIntError;
@@ -99,11 +98,8 @@ pub(crate) fn parse<
             NMEASentence::ParseError(e) => return Ok((input, NMEA::ParseError(e))),
             NMEASentence::Valid(d) => (input, d),
         },
-        Err(Err::Incomplete(Needed::Size(n))) => {
-            return Ok((
-                input,
-                NMEA::ParseError(format!("incomplete, need {:}", n.get())),
-            ))
+        Err(Err::Incomplete(n)) => {
+            return Err(Err::Incomplete(n));
         }
         Err(_) => unreachable!(),
     };

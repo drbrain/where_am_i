@@ -3,7 +3,6 @@ use crate::nmea::parser::Parser;
 use crate::nmea::parser::NMEA;
 use crate::nmea::ser;
 
-use bytes::Buf;
 use bytes::BufMut;
 use bytes::Bytes;
 use bytes::BytesMut;
@@ -49,7 +48,7 @@ impl Decoder for Codec {
     /// timestamps we produce.
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         let now = timestamp();
-        let bytes = buf.copy_to_bytes(buf.remaining());
+        let bytes = buf.split_to(buf.len());
         let input = bytes.borrow();
 
         match self.parser.parse(input, now) {

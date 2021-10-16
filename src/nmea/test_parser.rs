@@ -9,6 +9,8 @@ use crate::nmea::EastWest;
 use crate::nmea::NorthSouth;
 
 use nom::error::*;
+use nom::Err::Incomplete;
+use nom::Needed;
 
 use std::time::Duration;
 
@@ -89,9 +91,8 @@ fn test_incomplete() {
     let result = parser::parse::<VEb>(input, &driver(), timestamp());
 
     match result {
-        Ok((input, nmea)) => {
-            assert_eq!(NMEA::ParseError(String::from("incomplete, need 1")), nmea);
-            assert_eq!(b"$EIG", input);
+        Err(Incomplete(Needed::Size(n))) => {
+            assert_eq!(std::num::NonZeroUsize::new(1).unwrap(), n);
         }
         r => assert!(false, "Not incomplete: {:?}", r),
     }

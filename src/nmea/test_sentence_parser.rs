@@ -28,6 +28,20 @@ fn timestamp() -> Duration {
 }
 
 #[test]
+fn test_valid() {
+    let parsed = parse(b"$GPGSV,3,2,10,09,32,158,27,05,22,295,19,27,22,044,31,13,20,312,19*74\r\n");
+
+    let mut data =
+        parser::gsv::<VE>("GPGSV,3,2,10,09,32,158,27,05,22,295,19,27,22,044,31,13,20,312,19")
+            .unwrap()
+            .1;
+
+    data.received = Some(timestamp());
+
+    assert_eq!(NMEA::GSV(data), parsed);
+}
+
+#[test]
 fn test_skip_garbage() {
     let parsed = parse(b"stuff*AA\r\n$EIGAQ,RMC*2B\r\n$");
     let mut data = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;

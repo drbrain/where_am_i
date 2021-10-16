@@ -17,6 +17,7 @@ use nom::sequence::terminated;
 use nom::sequence::tuple;
 use nom::Err;
 use nom::IResult;
+use nom::Needed;
 
 use std::convert::TryInto;
 use std::time::Duration;
@@ -45,7 +46,7 @@ pub(crate) fn parse_sentence<'a, E: ParseError<&'a [u8]> + ContextError<&'a [u8]
         Err(Err::Incomplete(_)) => {
             return Err(result.err().unwrap());
         }
-        Err(_) => return parse_error(input),
+        Err(e) => return parse_error(input, e),
         Ok(t) => t,
     };
 
@@ -84,10 +85,20 @@ pub(crate) fn parse_sentence<'a, E: ParseError<&'a [u8]> + ContextError<&'a [u8]
     Ok((input, result))
 }
 
-fn parse_error<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], NMEASentence, E> {
+fn parse_error<'a, E: ParseError<&'a [u8]>>(
+    input: &'a [u8],
+    e: nom::Err<E>,
+) -> IResult<&'a [u8], NMEASentence, E> {
+    let error = match e {
+        Err::Incomplete(Needed::Size(n)) => format!("incomplete, need {}", n),
+        Err::Incomplete(Needed::Unknown) => format!("incomplete"),
+        Err::Error(_) => format!("(recoverable)"),
+        Err::Failure(_) => format!("(failure)"),
+    };
+
     match std::str::from_utf8(input) {
         Ok(i) => {
-            error!("Some error parsing: {}", i);
+            error!("Error {:?} parsing {}", error, i);
 
             Ok((b"", NMEASentence::ParseError(String::from(i))))
         }
