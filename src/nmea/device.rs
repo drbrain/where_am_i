@@ -44,48 +44,50 @@ pub struct MessageSetting {
 pub struct Device {
     pub name: String,
     pub sender: NMEASender,
-    gps_type: GpsType,
+    driver: Driver,
     serial_port_builder: SerialPortBuilder,
-    messages: Vec<MessageSetting>,
+    message_settings: Vec<MessageSetting>,
 }
 
 impl Device {
-    pub fn new(name: String, gps_type: GpsType, serial_port_builder: SerialPortBuilder) -> Self {
-        let messages = vec![];
-
+    pub fn new(
+        name: String,
+        gps_type: GpsType,
+        serial_port_builder: SerialPortBuilder,
+        messages: Vec<String>,
+    ) -> Self {
         let (sender, _) = broadcast::channel(20);
+
+        let driver = match gps_type {
+            GpsType::UBlox => Driver::UBloxNMEA(UBloxNMEA::default()),
+            GpsType::MKT => Driver::MKT(MKT::default()),
+            GpsType::Generic => Driver::Generic(Generic::default()),
+        };
+
+        let message_settings = driver.message_settings(messages);
 
         Device {
             name,
             sender,
-            gps_type,
+            driver,
             serial_port_builder,
-            messages,
+            message_settings,
         }
     }
 
-    pub fn message(&mut self, id: &str, enabled: bool) {
-        let setting = MessageSetting {
-            id: id.to_string(),
-            enabled,
-        };
-
-        self.messages.push(setting);
-    }
-
-    pub async fn open(&self) -> Result<(SerialStream, Driver)> {
-        open(&self.name, &self.gps_type, &self.serial_port_builder).await
+    pub async fn open(&self) -> Result<SerialStream> {
+        open(&self.name, &self.serial_port_builder).await
     }
 
     pub async fn run(&self) -> NMEASender {
         let name = self.name.clone();
         let serial_port_builder = self.serial_port_builder.clone();
-        let gps_type = self.gps_type.clone();
-        let messages = self.messages.clone();
+        let driver = self.driver.clone();
+        let messages = self.message_settings.clone();
         let reader_tx = self.sender.clone();
 
         tokio::spawn(async move {
-            start(&name, &gps_type, &serial_port_builder, messages, reader_tx).await;
+            start(&name, &driver, &serial_port_builder, messages, reader_tx).await;
         });
 
         self.sender.clone()
@@ -105,17 +107,7 @@ fn backoff() -> ExponentialBackoff {
     }
 }
 
-async fn open(
-    name: &str,
-    gps_type: &GpsType,
-    serial_port_builder: &SerialPortBuilder,
-) -> Result<(SerialStream, Driver)> {
-    let driver = match gps_type {
-        GpsType::UBlox => Driver::UBloxNMEA(UBloxNMEA::default()),
-        GpsType::MKT => Driver::MKT(MKT::default()),
-        GpsType::Generic => Driver::Generic(Generic::default()),
-    };
-
+async fn open(name: &str, serial_port_builder: &SerialPortBuilder) -> Result<SerialStream> {
     backoff::future::retry(backoff(), || async {
         let serial = serial_port_builder
             .clone()
@@ -125,7 +117,7 @@ async fn open(
 
         debug!("Opened NMEA device {}", name.clone());
 
-        Ok((serial, driver.clone()))
+        Ok(serial)
     })
     .await
 }
@@ -176,7 +168,7 @@ async fn send_messages(reader_tx: NMEASender, serial: SerialCodec, restarter: Re
 
 async fn start(
     name: &str,
-    gps_type: &GpsType,
+    driver: &Driver,
     serial_port_builder: &SerialPortBuilder,
     messages: Vec<MessageSetting>,
     reader_tx: NMEASender,
@@ -184,7 +176,7 @@ async fn start(
     loop {
         let (restarter, waiter) = oneshot::channel();
 
-        let (serial, driver) = match open(&name, &gps_type, &serial_port_builder).await {
+        let serial = match open(&name, &serial_port_builder).await {
             Ok(t) => t,
             Err(_) => unreachable!("open retries opening the device forever"),
         };

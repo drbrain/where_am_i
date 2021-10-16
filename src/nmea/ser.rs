@@ -173,6 +173,7 @@ impl<'a> ser::Serializer for &'a mut ToNMEA {
             "UBXConfig" => self.output += "PUBX,41",
             "UBXPort" => {}
             "UBXPortMask" => {}
+            "MKTSetNMEAOutput" => self.output += "PMKT314",
             _ => panic!("don't know how to serialize struct {}", name),
         }
 

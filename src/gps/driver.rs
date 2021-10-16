@@ -24,8 +24,16 @@ impl Driver {
     pub async fn configure(&self, serial: &mut SerialCodec, messages: Vec<MessageSetting>) {
         match self {
             Driver::Generic(_) => (),
-            Driver::MKT(_) => (),
+            Driver::MKT(d) => d.configure(serial, messages).await,
             Driver::UBloxNMEA(d) => d.configure(serial, messages).await,
+        }
+    }
+
+    pub fn message_settings(&self, messages: Vec<String>) -> Vec<MessageSetting> {
+        match self {
+            Driver::Generic(_) => vec![],
+            Driver::MKT(d) => d.message_settings(messages),
+            Driver::UBloxNMEA(d) => d.message_settings(messages),
         }
     }
 
@@ -51,4 +59,13 @@ impl Default for Driver {
     fn default() -> Self {
         Driver::Generic(Generic::default())
     }
+}
+
+pub fn add_message(message_settings: &mut Vec<MessageSetting>, message: &str, enabled: bool) {
+    let setting = MessageSetting {
+        id: message.to_string(),
+        enabled,
+    };
+
+    message_settings.push(setting);
 }

@@ -1,5 +1,6 @@
 // For GlobalTop MKT devices
 
+use crate::gps::add_message;
 use crate::nmea::device::MessageSetting;
 use crate::nmea::device::SerialCodec;
 use crate::nmea::parser_util::*;
@@ -18,14 +19,19 @@ use serde::Serialize;
 
 use std::num::ParseIntError;
 
+use tracing::debug;
 use tracing::error;
 use tracing::info;
+
+pub const OUTPUT_MESSAGES: [&str; 7] = ["GGA", "GLL", "GSA", "GSV", "MCHN", "RMC", "VTG"];
 
 #[derive(Clone, Default, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct MKT {}
 
 impl MKT {
     pub async fn configure(&self, serial: &mut SerialCodec, messages: Vec<MessageSetting>) {
+        debug!("configuring MKT with sentences {:?}", messages);
+
         let mut set = MKTSetNMEAOutput::default();
 
         for message in &messages {
@@ -35,17 +41,11 @@ impl MKT {
             };
 
             match message.id.as_str() {
-                "GLL" => {
-                    set.gll = frequency;
-                }
-                "RMC" => {
-                    set.rmc = frequency;
-                }
-                "VTG" => {
-                    set.vtg = frequency;
-                }
                 "GGA" => {
                     set.gga = frequency;
+                }
+                "GLL" => {
+                    set.gll = frequency;
                 }
                 "GSA" => {
                     set.gsa = frequency;
@@ -56,8 +56,17 @@ impl MKT {
                 "MCHN" => {
                     set.mchn = frequency;
                 }
+                "RMC" => {
+                    set.rmc = frequency;
+                }
+                "VTG" => {
+                    set.vtg = frequency;
+                }
                 unknown => {
-                    error!("Unknown message {}, ignored", unknown);
+                    error!(
+                        "MKT receivers don't support enabling {} sentences, ignored",
+                        unknown
+                    );
                 }
             }
         }
@@ -75,6 +84,23 @@ impl MKT {
         }
     }
 
+    pub fn message_settings(&self, messages: Vec<String>) -> Vec<MessageSetting> {
+        let mut message_settings: Vec<MessageSetting> = vec![];
+
+        if messages.is_empty() {
+            for message in &OUTPUT_MESSAGES {
+                add_message(&mut message_settings, message, true);
+            }
+        } else {
+            for default in &OUTPUT_MESSAGES {
+                let enabled = messages.contains(&default.to_string());
+
+                add_message(&mut message_settings, &default.to_string(), enabled);
+            }
+        }
+
+        message_settings
+    }
     pub fn parse_private<
         'a,
         E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,

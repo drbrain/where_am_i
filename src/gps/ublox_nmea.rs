@@ -3,6 +3,7 @@
 use chrono::naive::NaiveDate;
 use chrono::naive::NaiveTime;
 
+use crate::gps::add_message;
 use crate::nmea::device::MessageSetting;
 use crate::nmea::device::SerialCodec;
 use crate::nmea::parser_util::*;
@@ -36,8 +37,9 @@ use std::num::ParseIntError;
 
 use tracing::error;
 use tracing::info;
+use tracing::trace;
 
-pub const UBX_OUTPUT_MESSAGES: [&str; 15] = [
+pub const OUTPUT_MESSAGES: [&str; 15] = [
     "DTM", "GBS", "GGA", "GLL", "GNS", "GRS", "GSA", "GST", "GSV", "RLM", "RMC", "TXT", "VLW",
     "VTG", "ZDA",
 ];
@@ -47,6 +49,8 @@ pub struct UBloxNMEA {}
 
 impl UBloxNMEA {
     pub async fn configure(&self, serial: &mut SerialCodec, messages: Vec<MessageSetting>) {
+        trace!("configuring u-blox NMEA {:?}", serial);
+
         for message in messages {
             let rate = rate_for(message.id.clone(), message.enabled);
 
@@ -58,6 +62,24 @@ impl UBloxNMEA {
                 ),
             }
         }
+    }
+
+    pub fn message_settings(&self, messages: Vec<String>) -> Vec<MessageSetting> {
+        let mut message_settings: Vec<MessageSetting> = vec![];
+
+        if messages.is_empty() {
+            for message in &OUTPUT_MESSAGES {
+                add_message(&mut message_settings, message, true);
+            }
+        } else {
+            for default in &OUTPUT_MESSAGES {
+                let enabled = messages.contains(&default.to_string());
+
+                add_message(&mut message_settings, &default.to_string(), enabled);
+            }
+        }
+
+        message_settings
     }
 
     pub fn parse_private<

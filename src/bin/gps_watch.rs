@@ -7,7 +7,6 @@ use tracing_subscriber::filter::EnvFilter;
 
 use where_am_i::configuration::Configuration;
 use where_am_i::gps::GPS;
-use where_am_i::gps::UBX_OUTPUT_MESSAGES;
 use where_am_i::nmea::Device;
 use where_am_i::nmea::NMEA;
 
@@ -52,19 +51,12 @@ async fn main() {
         }
     };
 
-    let mut device = Device::new(gps_name.clone(), device.gps_type, serial_port_settings);
-
-    if messages.is_empty() {
-        for message in &UBX_OUTPUT_MESSAGES {
-            device.message(message, true);
-        }
-    } else {
-        for default in &UBX_OUTPUT_MESSAGES {
-            let enabled = messages.contains(&default.to_string());
-
-            device.message(&default.to_string(), enabled);
-        }
-    }
+    let device = Device::new(
+        gps_name.clone(),
+        device.gps_type,
+        serial_port_settings,
+        messages,
+    );
 
     let tx = device.run().await;
 

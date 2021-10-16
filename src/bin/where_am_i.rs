@@ -15,7 +15,6 @@ use tracing_subscriber::filter::EnvFilter;
 use where_am_i::configuration::Configuration;
 use where_am_i::configuration::GpsConfig;
 use where_am_i::gps::GPS;
-use where_am_i::gps::UBX_OUTPUT_MESSAGES;
 use where_am_i::gpsd::Server;
 use where_am_i::nmea;
 use where_am_i::pps;
@@ -48,7 +47,11 @@ async fn run() {
 
     let mut server = match &config.gpsd {
         Some(c) => Some(Server::new(c)),
-        None => None,
+        None => {
+            eprintln!("GPSD server not configured");
+
+            None
+        }
     };
 
     for gps_config in config.gps.iter() {
@@ -97,23 +100,12 @@ async fn start_gps(gps_config: &GpsConfig, server: &mut Option<Server>) {
         }
     };
 
-    let mut device = nmea::Device::new(
+    let device = nmea::Device::new(
         gps_name.clone(),
         gps_config.gps_type.clone(),
         serial_port_settings,
+        messages,
     );
-
-    if messages.is_empty() {
-        for message in &UBX_OUTPUT_MESSAGES {
-            device.message(message, true);
-        }
-    } else {
-        for default in &UBX_OUTPUT_MESSAGES {
-            let enabled = messages.contains(&default.to_string());
-
-            device.message(&default.to_string(), enabled);
-        }
-    }
 
     let gps_tx = device.run().await;
 
