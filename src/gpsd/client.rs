@@ -2,6 +2,7 @@ use crate::gpsd::codec::Codec;
 use crate::gpsd::parser::Command;
 use crate::gpsd::server::Server;
 use crate::gpsd::watch::Watch;
+use crate::gpsd::Devices;
 use crate::JsonReceiver;
 use crate::TSReceiver;
 
@@ -94,10 +95,7 @@ impl Client {
             };
 
             let response = match command {
-                Command::Devices => json!({
-                    "class": "DEVICES",
-                    "devices": self.server.lock().await.devices,
-                }),
+                Command::Devices => self.command_devices().await,
                 Command::Device(_) => json!({
                     "class": "DEVICE",
                     "stopbits": 1,
@@ -133,6 +131,15 @@ impl Client {
         }
 
         Ok(())
+    }
+
+    async fn command_devices(&self) -> Value {
+        let devices: Devices = self.server.lock().await.devices.clone().into();
+
+        json!({
+            "class": "DEVICES",
+            "devices": devices,
+        })
     }
 
     async fn command_watch(&self, updates: Option<Value>) -> Value {
