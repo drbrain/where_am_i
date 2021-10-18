@@ -33,7 +33,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(config: &GpsdConfig, devices: Vec<GpsConfig>) -> Self {
+    pub fn new(config: GpsdConfig, devices: Vec<GpsConfig>) -> Self {
         Server {
             port: config.port,
             bind_addresses: config.bind_addresses.clone(),

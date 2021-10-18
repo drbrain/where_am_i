@@ -14,6 +14,7 @@ use tracing_subscriber::filter::EnvFilter;
 
 use where_am_i::configuration::Configuration;
 use where_am_i::configuration::GpsConfig;
+use where_am_i::configuration::GpsdConfig;
 use where_am_i::gps::GPS;
 use where_am_i::gpsd::Server;
 use where_am_i::nmea;
@@ -45,22 +46,18 @@ async fn run() {
 
     start_tracing(&config);
 
-    let mut server = match &config.gpsd {
-        Some(c) => Some(Server::new(c, config.gps.clone())),
-        None => {
-            eprintln!("GPSD server not configured");
-
-            None
-        }
+    let gpsd_config = match &config.gpsd {
+        Some(c) => c.clone(),
+        None => GpsdConfig::default(),
     };
+
+    let mut server = Server::new(gpsd_config, config.gps.clone());
 
     for gps_config in config.gps.iter() {
         start_gps(gps_config, &mut server).await;
     }
 
-    if let Some(s) = server {
-        s.run().await.unwrap();
-    }
+    server.run().await.unwrap();
 }
 
 fn start_tracing(config: &Configuration) {
@@ -87,7 +84,7 @@ fn start_tracing(config: &Configuration) {
     tracing::subscriber::set_global_default(subscriber).expect("no global subscriber has been set");
 }
 
-async fn start_gps(gps_config: &GpsConfig, server: &mut Option<Server>) {
+async fn start_gps(gps_config: &GpsConfig, server: &mut Server) {
     let name = gps_config.name.clone();
     let gps_name = gps_config.device.clone();
     let messages = gps_config.messages.clone().unwrap_or(vec![]);
@@ -113,9 +110,7 @@ async fn start_gps(gps_config: &GpsConfig, server: &mut Option<Server>) {
 
     gps.read().await;
 
-    if let Some(s) = server {
-        s.add_gps(&gps);
-    }
+    server.add_gps(&gps);
 
     info!("registered GPS {}", name.clone());
 
@@ -138,9 +133,7 @@ async fn start_gps(gps_config: &GpsConfig, server: &mut Option<Server>) {
                 }
             };
 
-            if let Some(s) = server {
-                s.add_pps(&pps, gps_name.clone());
-            }
+            server.add_pps(&pps, gps_name.clone());
 
             info!("registered PPS {} under {}", pps_name, gps_name);
 
