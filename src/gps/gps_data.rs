@@ -46,6 +46,7 @@ impl GPSData {
             NMEA::Unsupported(n) => error!("unsupported: {}", n),
             NMEA::GGA(nd) => self.gga(nd, name, gpsd_tx, ntp_tx),
             NMEA::GSA(nd) => self.gsa(nd, name, gpsd_tx, ntp_tx),
+            NMEA::RMC(nd) => self.rmc(nd, name, gpsd_tx, ntp_tx),
             NMEA::ZDA(nd) => self.zda(nd, name, gpsd_tx, ntp_tx),
             _ => (),
         }
@@ -75,6 +76,7 @@ impl GPSData {
         }
     }
 
+    // updates lat_lon and time
     pub(crate) fn gga(
         &mut self,
         gga: GGAData,
@@ -89,6 +91,7 @@ impl GPSData {
         self.update_time(gga.time);
     }
 
+    // updates navigation modes
     pub(crate) fn gsa(
         &mut self,
         gsa: GSAData,
@@ -132,6 +135,24 @@ impl GPSData {
         }
     }
 
+    // updates lat_lon and time
+    pub(crate) fn rmc(
+        &mut self,
+        rmc: RMCData,
+        _name: &str,
+        _gpsd_tx: &JsonSender,
+        _ntp_tx: &TSSender,
+    ) {
+        self.lat_lon = rmc.lat_lon;
+
+        let reference = NaiveDateTime::new(rmc.date, rmc.time);
+        let reference = DateTime::from_utc(reference, Utc);
+
+        self.time = Some(reference);
+        self.year = reference.year();
+    }
+
+    // updates time and date
     pub(crate) fn zda(
         &mut self,
         zda: ZDAData,

@@ -241,6 +241,43 @@ fn test_gsa_gps() {
 }
 
 #[test]
+fn test_rmc() {
+    let (gpsd_tx, _) = broadcast::channel(1);
+    let (ntp_tx, _) = broadcast::channel(1);
+    let mut gps = GPSData::default();
+
+    let rmc = RMCData {
+        received: None,
+        talker: Talker::GPS,
+        time: NaiveTime::from_hms_milli(1, 8, 0, 0),
+        status: parser::Status::Valid,
+        lat_lon: Some(LatLon {
+            latitude: 44.9343,
+            longitude: -93.2624,
+        }),
+        speed: 0.0,
+        course_over_ground: None,
+        date: NaiveDate::from_ymd(2020, 5, 26),
+        magnetic_variation: None,
+        magnetic_variation_east_west: None,
+        position_mode: parser::PositionMode::AutonomousGNSSFix,
+        nav_status: None,
+    };
+
+    let expected_time = build_time(2020, 5, 26, 1, 8, 0, 0);
+
+    gps.rmc(rmc, "name", &gpsd_tx, &ntp_tx);
+
+    assert_eq!(2020, gps.year);
+    assert_eq!(expected_time, gps.time.unwrap());
+
+    let lat_lon = gps.lat_lon.unwrap();
+
+    assert_approx_eq!(44.9343, lat_lon.latitude);
+    assert_approx_eq!(-93.2624, lat_lon.longitude);
+}
+
+#[test]
 fn test_zda() {
     let (gpsd_tx, _) = broadcast::channel(1);
     let (ntp_tx, _) = broadcast::channel(1);
