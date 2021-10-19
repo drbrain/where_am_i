@@ -234,7 +234,7 @@ async fn relay(tx: Sender, mut rx: JsonReceiver) {
             }
         };
 
-        match tx.send(value.into()).await {
+        match tx.send(value).await {
             Ok(_) => (),
             Err(e) => {
                 error!("error relaying message: {:?}", e);

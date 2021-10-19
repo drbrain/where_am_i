@@ -63,13 +63,10 @@ impl GPSData {
 
             let utc_time = DateTime::from_utc(time, Utc);
 
-            match self.time {
-                Some(stored) => {
-                    if stored == utc_time {
-                        return;
-                    }
+            if let Some(stored) = self.time {
+                if stored == utc_time {
+                    return;
                 }
-                None => (),
             }
 
             trace!("Time updated to {}", utc_time.format("%Y-%m-%dT%H:%M:%SZ"));
@@ -236,5 +233,5 @@ fn report_tpv(reference: DateTime<Utc>, mode: Option<u32>, name: &str, tx: &Json
 fn timestamp() -> Duration {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or(Duration::from_secs(0))
+        .unwrap_or_else(|_| Duration::from_secs(0))
 }

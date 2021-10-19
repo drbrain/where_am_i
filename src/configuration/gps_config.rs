@@ -50,7 +50,7 @@ impl TryFrom<GpsConfig> for SerialPortBuilder {
             if f.len() != 3 {
                 return Err(ConfigurationError::InvalidFraming(f));
             }
-            let framing_data_bits = f.chars().nth(0).unwrap();
+            let framing_data_bits = f.chars().next().unwrap();
 
             data_bits = match framing_data_bits {
                 '8' => DataBits::Eight,
@@ -87,7 +87,7 @@ impl TryFrom<GpsConfig> for SerialPortBuilder {
                 return Err(ConfigurationError::InvalidFlowControl(f));
             }
 
-            let config_flow_control = f.chars().nth(0).unwrap();
+            let config_flow_control = f.chars().next().unwrap();
 
             flow_control = match config_flow_control {
                 'H' => FlowControl::Hardware,

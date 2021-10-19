@@ -91,9 +91,9 @@ fn parse_error<'a, E: ParseError<&'a [u8]>>(
 ) -> IResult<&'a [u8], NMEASentence, E> {
     let error = match e {
         Err::Incomplete(Needed::Size(n)) => format!("incomplete, need {}", n),
-        Err::Incomplete(Needed::Unknown) => format!("incomplete"),
-        Err::Error(_) => format!("(recoverable)"),
-        Err::Failure(_) => format!("(failure)"),
+        Err::Incomplete(Needed::Unknown) => "incomplete".to_string(),
+        Err::Error(_) => "(recoverable)".to_string(),
+        Err::Failure(_) => "(failure)".to_string(),
     };
 
     match std::str::from_utf8(input) {

@@ -49,9 +49,9 @@ impl Timestamp {
         now: Duration,
     ) -> Self {
         Timestamp {
-            device: device,
+            device,
             kind: TimestampKind::PPS,
-            precision: precision,
+            precision,
             leap: 0,
             reference_sec: pps_time.info.assert_tu.sec as u64,
             reference_nsec: pps_time.info.assert_tu.nsec as u32,

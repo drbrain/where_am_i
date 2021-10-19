@@ -49,7 +49,7 @@ async fn relay_timestamps(unit: i32, mut rx: TSReceiver) {
         let reference_usec = (reference_nsec / 1000) as i32;
 
         let received_sec = ts.received_sec.try_into().unwrap_or(0);
-        let received_nsec = ts.received_nsec.try_into().unwrap_or(0);
+        let received_nsec = ts.received_nsec;
         let received_usec = (received_nsec / 1000) as i32;
 
         let leap = ts.leap;
@@ -138,12 +138,12 @@ async fn watch_timestamps(unit: i32, device: String, tx: TSSender) {
         let timestamp = Timestamp {
             device: device.clone(),
             kind: TimestampKind::GPS, // TODO pass in type somewhere
-            precision: precision,
-            leap: leap,
+            precision,
+            leap,
             received_sec: received_sec.try_into().unwrap_or(0),
-            received_nsec: received_nsec,
+            received_nsec,
             reference_sec: reference_sec.try_into().unwrap_or(0),
-            reference_nsec: reference_nsec,
+            reference_nsec,
         };
 
         trace!(

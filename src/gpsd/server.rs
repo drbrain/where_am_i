@@ -40,7 +40,7 @@ impl Server {
     pub fn new(config: GpsdConfig, devices: Vec<GpsConfig>) -> Self {
         Server {
             port: config.port,
-            bind_addresses: config.bind_addresses.clone(),
+            bind_addresses: config.bind_addresses,
             clients: HashMap::new(),
             devices,
             gps_tx: HashMap::new(),
@@ -94,7 +94,7 @@ impl Server {
     async fn start_gps_device(&mut self, gps_config: &GpsConfig) {
         let name = gps_config.name.clone();
         let gps_name = gps_config.device.clone();
-        let messages = gps_config.messages.clone().unwrap_or(vec![]);
+        let messages = gps_config.messages.clone().unwrap_or_default();
 
         let serial_port_settings = match SerialPortBuilder::try_from(gps_config.clone()) {
             Ok(s) => s,
@@ -160,8 +160,8 @@ impl Server {
 }
 
 #[tracing::instrument]
-async fn run_listener(address: &String, port: u16, server: Arc<Mutex<Server>>) -> Result<()> {
-    let address = (address.as_str(), port);
+async fn run_listener(address: &str, port: u16, server: Arc<Mutex<Server>>) -> Result<()> {
+    let address = (address, port);
 
     let listener = TcpListener::bind(address)
         .await

@@ -113,9 +113,9 @@ async fn open(name: &str, serial_port_builder: &SerialPortBuilder) -> Result<Ser
             .clone()
             .open_native_async()
             .map_err(open_error)
-            .with_context(|| format!("Failed to open GPS device {}", name.clone()))?;
+            .with_context(|| format!("Failed to open GPS device {}", name))?;
 
-        debug!("Opened NMEA device {}", name.clone());
+        debug!("Opened NMEA device {}", name);
 
         Ok(serial)
     })
@@ -176,7 +176,7 @@ async fn start(
     loop {
         let (restarter, waiter) = oneshot::channel();
 
-        let serial = match open(&name, &serial_port_builder).await {
+        let serial = match open(name, serial_port_builder).await {
             Ok(t) => t,
             Err(_) => unreachable!("open retries opening the device forever"),
         };

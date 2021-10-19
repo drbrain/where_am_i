@@ -41,7 +41,7 @@ async fn main() {
     let device = config.gps[0].clone();
 
     let gps_name = device.clone().device;
-    let messages = device.clone().messages.unwrap_or(vec![]);
+    let messages = device.clone().messages.unwrap_or_default();
 
     let serial_port_settings = match SerialPortBuilder::try_from(device.clone()) {
         Ok(s) => s,

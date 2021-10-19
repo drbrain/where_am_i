@@ -68,16 +68,13 @@ fn device<'a, E: ParseError<&'a str> + FromExternalError<&'a str, serde_json::Er
         terminated(opt(preceded(equal, json_blob)), eol),
     )(input)?;
 
-    let device_data = match json {
-        Some(j) => Some(DeviceData {
-            path: json_to_string(&j["path"]),
-            bps: j["bps"].as_u64(),
-            parity: json_to_string(&j["parity"]),
-            stopbits: j["stopbits"].as_u64(),
-            native: j["native"].as_u64(),
-        }),
-        None => None,
-    };
+    let device_data = json.map(|j| DeviceData {
+        path: json_to_string(&j["path"]),
+        bps: j["bps"].as_u64(),
+        parity: json_to_string(&j["parity"]),
+        stopbits: j["stopbits"].as_u64(),
+        native: j["native"].as_u64(),
+    });
 
     Ok((input, Command::Device(device_data)))
 }

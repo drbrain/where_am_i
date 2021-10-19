@@ -104,7 +104,7 @@ async fn send_pps_events(pps: File, tx: TSSender, pps_name: String, gps_name: St
             }
         };
 
-        pps_data.device = gps_name.clone().into();
+        pps_data.device = gps_name.clone();
 
         if let Err(_e) = tx.send(pps_data) {
             // error!("send error: {:?}", e);

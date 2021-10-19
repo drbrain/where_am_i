@@ -71,7 +71,7 @@ impl Decoder for Codec {
 fn timestamp() -> Duration {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or(Duration::from_secs(0))
+        .unwrap_or_else(|_| Duration::from_secs(0))
 }
 
 impl<T> Encoder<T> for Codec
