@@ -2,7 +2,7 @@
 name = "where_am_i"
 version = "0.1.0"
 authors = ["Eric Hodel <drbrain@segment7.net>"]
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 name = "where_am_i"
