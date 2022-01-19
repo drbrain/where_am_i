@@ -42,13 +42,22 @@ fn timestamp() -> Duration {
 }
 
 #[test]
-fn test_parse() {
+fn test_parse_sentence() {
     let parsed = parse(b"$EIGAQ,RMC*2B\r\n$");
     let mut data = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;
 
     data.received = Some(timestamp());
 
     assert_eq!(NMEA::GAQ(data), parsed);
+
+    let parsed = parse(b"$GNGSA,A,3,19,12,33,25,24,11,,,,,,,0.97,0.51,0.83,3*08\r\n$");
+    let mut data = parser::gsa::<VE>("GNGSA,A,3,19,12,33,25,24,11,,,,,,,0.97,0.51,0.83,3")
+        .unwrap()
+        .1;
+
+    data.received = Some(timestamp());
+
+    assert_eq!(NMEA::GSA(data), parsed);
 }
 
 #[test]
@@ -463,6 +472,45 @@ fn test_gsa() {
     assert_approx_eq!(1.18, parsed.hdop.unwrap());
     assert_approx_eq!(1.54, parsed.vdop.unwrap());
     assert_eq!(Some(System::GPS), parsed.system);
+
+    let parsed = parser::gsa::<VE>("GNGSA,A,3,19,12,33,25,24,11,,,,,,,0.98,0.50,0.84,3")
+        .unwrap()
+        .1;
+
+    let satellite_ids = vec![
+        Some(19),
+        Some(12),
+        Some(33),
+        Some(25),
+        Some(24),
+        Some(11),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    ];
+
+    assert_eq!(Talker::Combination, parsed.talker);
+    assert_eq!(OperationMode::Automatic, parsed.operation_mode);
+    assert_eq!(NavigationMode::Fix3D, parsed.navigation_mode);
+    assert_eq!(satellite_ids[0], parsed.satellite_ids[0]);
+    assert_eq!(satellite_ids[1], parsed.satellite_ids[1]);
+    assert_eq!(satellite_ids[2], parsed.satellite_ids[2]);
+    assert_eq!(satellite_ids[3], parsed.satellite_ids[3]);
+    assert_eq!(satellite_ids[4], parsed.satellite_ids[4]);
+    assert_eq!(satellite_ids[5], parsed.satellite_ids[5]);
+    assert_eq!(satellite_ids[6], parsed.satellite_ids[6]);
+    assert_eq!(satellite_ids[7], parsed.satellite_ids[7]);
+    assert_eq!(satellite_ids[8], parsed.satellite_ids[8]);
+    assert_eq!(satellite_ids[9], parsed.satellite_ids[9]);
+    assert_eq!(satellite_ids[10], parsed.satellite_ids[10]);
+    assert_eq!(satellite_ids[11], parsed.satellite_ids[11]);
+    assert_approx_eq!(0.98, parsed.pdop.unwrap());
+    assert_approx_eq!(0.50, parsed.hdop.unwrap());
+    assert_approx_eq!(0.84, parsed.vdop.unwrap());
+    assert_eq!(Some(System::Galileo), parsed.system);
 }
 
 #[test]
