@@ -1,18 +1,14 @@
 use super::parser;
 use super::parser::Command;
-
+use crate::gpsd::ErrorMessage;
 use bytes::Buf;
 use bytes::BufMut;
 use bytes::BytesMut;
-
 use serde::Serialize;
-use serde_json::json;
-
 use std::cmp;
 use std::fmt;
 use std::io;
 use std::str;
-
 use tokio_util::codec::Decoder;
 use tokio_util::codec::Encoder;
 
@@ -106,7 +102,10 @@ where
         let out = match serialized {
             Ok(s) => s,
             Err(_) => {
-                let internal_error = json!({"class": "ERROR", "message": "internal error"});
+                let internal_error = ErrorMessage {
+                    message: "internal error".to_string(),
+                };
+
                 match serde_json::to_string(&internal_error) {
                     Ok(s) => s,
                     Err(_) => return Err(CodecError::InternalError),
