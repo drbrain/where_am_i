@@ -1,43 +1,39 @@
 use crate::gpsd::codec::Codec;
 use crate::gpsd::parser::Command;
 use crate::gpsd::server::Server;
-use crate::gpsd::watch::Watch;
+use crate::gpsd::Device;
 use crate::gpsd::Devices;
-use crate::JsonReceiver;
+use crate::gpsd::ErrorMessage;
+use crate::gpsd::Poll;
+use crate::gpsd::Response;
+use crate::gpsd::Version;
+use crate::gpsd::Watch;
 use crate::TSReceiver;
-
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
-
-use serde_json::json;
 use serde_json::Value;
-
 use std::error::Error;
 use std::fmt;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
-
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::TcpStream;
+use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
-
 use tokio_util::codec::FramedRead;
 use tokio_util::codec::FramedWrite;
-
 use tracing::debug;
 use tracing::error;
 use tracing::info;
-
-type Sender = mpsc::Sender<Value>;
 
 pub struct Client {
     server: Arc<Mutex<Server>>,
     pub addr: SocketAddr,
     req: FramedRead<OwnedReadHalf, Codec>,
-    res: Sender,
+    res: mpsc::Sender<Response>,
     pub watch: Arc<Mutex<Watch>>,
 }
 
@@ -63,7 +59,7 @@ impl Client {
         server: Arc<Mutex<Server>>,
         read: OwnedReadHalf,
         addr: SocketAddr,
-        res: Sender,
+        res: mpsc::Sender<Response>,
     ) -> io::Result<Client> {
         let req = FramedRead::new(read, Codec::new());
 
@@ -73,17 +69,14 @@ impl Client {
             s.clients.insert(addr, ());
         }
 
-        let watch = Watch {
-            class: "WATCH".to_string(),
-            ..Default::default()
-        };
+        let watch = Arc::new(Mutex::new(Watch::default()));
 
         Ok(Client {
             server,
             addr,
             req,
             res,
-            watch: Arc::new(Mutex::new(watch)),
+            watch,
         })
     }
 
@@ -96,32 +89,26 @@ impl Client {
 
             let response = match command {
                 Command::Devices => self.command_devices().await,
-                Command::Device(_) => json!({
-                    "class": "DEVICE",
-                    "stopbits": 1,
+                Command::Device(_) => Response::Device(Device {
+                    stopbits: Some("1".to_string()),
+                    ..Device::default()
                 }),
-                Command::Error(e) => json!({
-                    "class": "ERROR",
-                    "message": e,
+                Command::Error(e) => Response::Error(ErrorMessage { message: e }),
+                Command::Poll => Response::Poll(Poll {
+                    time: 0.0,
+                    active: 0,
+                    tpv: vec![],
+                    sky: vec![],
                 }),
-                Command::Poll => json!({
-                    "class": "POLL",
-                    "time": 0,
-                    "active": 0,
-                    "tpv": [],
-                    "sky": [],
-                }),
-                Command::Version => json!({
-                    "class": "VERSION",
-                    "release": "release-3.10",
-                    "rev": "3.10",
-                    "proto_major": 3,
-                    "proto_minor": 10,
+                Command::Version => Response::Version(Version {
+                    release: "release-3.10".to_string(),
+                    rev: "3.10".to_string(),
+                    proto_major: 3,
+                    proto_minor: 10,
                 }),
                 Command::Watch(w) => self.command_watch(w).await,
             };
 
-            debug!("{:?}", response);
             self.res.send(response).await?;
         }
 
@@ -133,16 +120,13 @@ impl Client {
         Ok(())
     }
 
-    async fn command_devices(&self) -> Value {
+    async fn command_devices(&self) -> Response {
         let devices: Devices = self.server.lock().await.devices.clone().into();
 
-        json!({
-            "class": "DEVICES",
-            "devices": devices,
-        })
+        Response::Devices(devices)
     }
 
-    async fn command_watch(&self, updates: Option<Value>) -> Value {
+    async fn command_watch(&self, updates: Option<Value>) -> Response {
         let original;
         let updated;
 
@@ -168,17 +152,10 @@ impl Client {
             (false, false) => (),
         }
 
-        match serde_json::to_value(updated) {
-            Ok(w) => w,
-            Err(_) => json!({
-                "class": "ERROR",
-                "message": "internal error",
-            }),
-        }
+        Response::Watch(updated)
     }
 
     async fn enable_watch(&self, watch: Watch) {
-        debug!("enabling watch for {:?}", self.addr);
         let mut gps_rx = None;
         let mut pps_rx = None;
         let device = match watch.device {
@@ -215,14 +192,14 @@ impl Client {
 // It would be cool to use a trait here, but we can't use async with traits yet.
 // https://smallcultfollowing.com/babysteps/blog/2019/10/26/async-fn-in-traits-are-hard/
 
-fn relay_messages(tx: Sender, rx: JsonReceiver) {
+fn relay_messages(tx: mpsc::Sender<Response>, rx: broadcast::Receiver<Response>) {
     tokio::spawn(async move {
         relay(tx, rx).await;
     });
 }
 
 #[tracing::instrument]
-async fn relay(tx: Sender, mut rx: JsonReceiver) {
+async fn relay(tx: mpsc::Sender<Response>, mut rx: broadcast::Receiver<Response>) {
     loop {
         let message = rx.recv().await;
 
@@ -244,14 +221,13 @@ async fn relay(tx: Sender, mut rx: JsonReceiver) {
     }
 }
 
-fn relay_pps_messages(tx: Sender, rx: TSReceiver) {
+fn relay_pps_messages(tx: mpsc::Sender<Response>, rx: TSReceiver) {
     tokio::spawn(async move {
         relay_pps(tx, rx).await;
     });
 }
 
-#[tracing::instrument]
-async fn relay_pps(tx: Sender, mut rx: TSReceiver) {
+async fn relay_pps(tx: mpsc::Sender<Response>, mut rx: TSReceiver) {
     loop {
         let message = rx.recv().await;
 
@@ -279,7 +255,6 @@ async fn start_client_rx(client: Client) {
     });
 }
 
-#[tracing::instrument]
 async fn client_rx(mut client: Client) {
     match client.run().await {
         Ok(_) => info!("Client {} disconnected", client.addr),
@@ -287,7 +262,7 @@ async fn client_rx(mut client: Client) {
     };
 }
 
-async fn start_client_tx(write: OwnedWriteHalf, rx: mpsc::Receiver<Value>) {
+async fn start_client_tx(write: OwnedWriteHalf, rx: mpsc::Receiver<Response>) {
     let res = FramedWrite::new(write, Codec::new());
 
     tokio::spawn(async move {
@@ -295,8 +270,7 @@ async fn start_client_tx(write: OwnedWriteHalf, rx: mpsc::Receiver<Value>) {
     });
 }
 
-#[tracing::instrument]
-async fn client_tx(mut tx: FramedWrite<OwnedWriteHalf, Codec>, mut rx: mpsc::Receiver<Value>) {
+async fn client_tx(mut tx: FramedWrite<OwnedWriteHalf, Codec>, mut rx: mpsc::Receiver<Response>) {
     while let Some(value) = rx.recv().await {
         match tx.send(value).await {
             Ok(_) => (),

@@ -1,11 +1,24 @@
 mod client;
-pub use client::Client;
 mod codec;
 mod device;
-pub use device::Device;
 mod devices;
-pub use devices::Devices;
 mod parser;
+mod pps;
+mod response;
 mod server;
-pub use server::Server;
+mod toff;
+mod tpv;
 mod watch;
+
+pub use client::Client;
+pub use device::Device;
+pub use devices::Devices;
+pub use response::ErrorMessage;
+pub use response::Poll;
+pub use response::Response;
+pub use response::Sky;
+pub use response::Version;
+pub use server::Server;
+pub use toff::Toff;
+pub use tpv::Tpv;
+pub use watch::Watch;

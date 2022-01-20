@@ -28,12 +28,11 @@ pub use ublox_nmea::UBXTime;
 pub use ublox_nmea::UBXTimePoll;
 pub use ublox_nmea::UBloxNMEA;
 
+use crate::gpsd::Response;
 use crate::nmea::*;
-use crate::JsonSender;
 use crate::TSSender;
-
+use std::fmt::Debug;
 use std::sync::Arc;
-
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::broadcast::Sender;
@@ -44,7 +43,7 @@ type Locked = Arc<Mutex<GPSData>>;
 #[derive(Debug)]
 pub struct GPS {
     pub name: String,
-    pub gpsd_tx: JsonSender,
+    pub gpsd_tx: broadcast::Sender<Response>,
     pub ntp_tx: TSSender,
     device_tx: Sender<NMEA>,
     data: Locked,
@@ -84,7 +83,7 @@ async fn read_device(
     mut rx: Receiver<NMEA>,
     data: Locked,
     name: String,
-    gpsd_tx: JsonSender,
+    gpsd_tx: broadcast::Sender<Response>,
     ntp_tx: TSSender,
 ) {
     let mut data = data.lock().await;

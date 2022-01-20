@@ -1,7 +1,5 @@
 use crate::pps::ioctl;
-
-use serde_json::json;
-use serde_json::Value;
+use serde::Serialize;
 
 use std::time::Duration;
 
@@ -61,35 +59,26 @@ impl Timestamp {
     }
 }
 
-impl Into<Value> for Timestamp {
-    fn into(self) -> Value {
-        match self.kind {
-            TimestampKind::GPS => from_gps(self),
-            TimestampKind::PPS => from_pps(self),
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "class")]
+pub struct GPS {
+    device: String,
+    real_sec: u64,
+    real_nsec: u32,
+    clock_sec: u64,
+    clock_nsec: u32,
+    precision: i32,
+}
+
+impl From<Timestamp> for GPS {
+    fn from(timestamp: Timestamp) -> GPS {
+        GPS {
+            device: timestamp.device,
+            real_sec: timestamp.reference_sec,
+            real_nsec: timestamp.reference_nsec,
+            clock_sec: timestamp.received_sec,
+            clock_nsec: timestamp.received_nsec,
+            precision: timestamp.precision,
         }
     }
-}
-
-fn from_gps(t: Timestamp) -> Value {
-    json!({
-        "class":      "GPS".to_string(),
-        "device":     t.device,
-        "real_sec":   t.reference_sec,
-        "real_nsec":  t.reference_nsec,
-        "clock_sec":  t.received_sec,
-        "clock_nsec": t.received_nsec,
-        "precision":  t.precision,
-    })
-}
-
-fn from_pps(t: Timestamp) -> Value {
-    json!({
-        "class":      "PPS".to_string(),
-        "device":     t.device,
-        "real_sec":   t.reference_sec,
-        "real_nsec":  t.reference_nsec,
-        "clock_sec":  t.received_sec,
-        "clock_nsec": t.received_nsec,
-        "precision":  t.precision,
-    })
 }

@@ -1,16 +1,15 @@
-use chrono::prelude::*;
-
+use crate::gpsd::Response;
+use crate::gpsd::Toff;
+use crate::gpsd::Tpv;
 use crate::nmea::*;
-use crate::JsonSender;
 use crate::TSSender;
 use crate::Timestamp;
 use crate::TimestampKind;
-
-use serde_json::json;
-
+use chrono::prelude::*;
+use std::fmt::Debug;
 use std::time::Duration;
 use std::time::SystemTime;
-
+use tokio::sync::broadcast;
 use tracing::error;
 use tracing::trace;
 
@@ -35,7 +34,13 @@ pub struct GPSData {
 }
 
 impl GPSData {
-    pub fn read_nmea(&mut self, nmea: NMEA, name: &str, gpsd_tx: &JsonSender, ntp_tx: &TSSender) {
+    pub fn read_nmea(
+        &mut self,
+        nmea: NMEA,
+        name: &str,
+        gpsd_tx: &broadcast::Sender<Response>,
+        ntp_tx: &TSSender,
+    ) {
         match nmea {
             NMEA::InvalidChecksum(cm) => error!(
                 "checksum match, given {}, calculated {} on {}",
@@ -81,7 +86,7 @@ impl GPSData {
         &mut self,
         gga: GGAData,
         _name: &str,
-        _gpsd_tx: &JsonSender,
+        _gpsd_tx: &broadcast::Sender<Response>,
         _ntp_tx: &TSSender,
     ) {
         self.quality = Some(gga.quality);
@@ -96,7 +101,7 @@ impl GPSData {
         &mut self,
         gsa: GSAData,
         _name: &str,
-        _gpsd_tx: &JsonSender,
+        _gpsd_tx: &broadcast::Sender<Response>,
         _ntp_tx: &TSSender,
     ) {
         match gsa.system {
@@ -140,7 +145,7 @@ impl GPSData {
         &mut self,
         rmc: RMCData,
         _name: &str,
-        _gpsd_tx: &JsonSender,
+        _gpsd_tx: &broadcast::Sender<Response>,
         _ntp_tx: &TSSender,
     ) {
         self.lat_lon = rmc.lat_lon;
@@ -157,7 +162,7 @@ impl GPSData {
         &mut self,
         zda: ZDAData,
         name: &str,
-        gpsd_tx: &JsonSender,
+        gpsd_tx: &broadcast::Sender<Response>,
         ntp_tx: &TSSender,
     ) {
         let year = match zda.year {
@@ -221,31 +226,36 @@ fn report_ntp(reference: DateTime<Utc>, received: Duration, name: &str, tx: &TSS
     if tx.send(ts).is_ok() {};
 }
 
-fn report_toff(reference: DateTime<Utc>, received: Duration, name: &str, tx: &JsonSender) {
-    let sec = reference.timestamp();
-    let nsec = reference.timestamp_subsec_nanos();
-
-    let toff = json!({
-        "class":      "TOFF".to_string(),
-        "device":     name,
-        "real_sec":   sec,
-        "real_nsec":  nsec,
-        "clock_sec":  received.as_secs(),
-        "clock_nsec": received.subsec_nanos(),
+fn report_toff(
+    reference: DateTime<Utc>,
+    received: Duration,
+    name: &str,
+    tx: &broadcast::Sender<Response>,
+) {
+    let toff = Response::Toff(Toff {
+        device: name.to_string(),
+        real_sec: reference.timestamp(),
+        real_nsec: reference.timestamp_subsec_nanos(),
+        clock_sec: received.as_secs(),
+        clock_nsec: received.subsec_nanos(),
     });
 
     if tx.send(toff).is_ok() {}
 }
 
-fn report_tpv(reference: DateTime<Utc>, mode: Option<u32>, name: &str, tx: &JsonSender) {
-    let reference = reference.format("%Y-%m-%dT%H:%M:%SZ").to_string();
+fn report_tpv(
+    reference: DateTime<Utc>,
+    mode: Option<u32>,
+    name: &str,
+    tx: &broadcast::Sender<Response>,
+) {
+    let time = reference.format("%Y-%m-%dT%H:%M:%SZ").to_string();
     let mode = mode.unwrap_or(0);
 
-    let tpv = json!({
-        "class":  "TPV".to_string(),
-        "device": name,
-        "time":   reference,
-        "mode":   mode,
+    let tpv = Response::Tpv(Tpv {
+        device: name.to_string(),
+        time,
+        mode,
     });
 
     if tx.send(tpv).is_ok() {}

@@ -3,14 +3,13 @@ use crate::gpsd::Device;
 
 use std::convert::From;
 
-use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
+#[serde(rename = "DEVICES", tag = "class")]
 pub struct Devices {
-    pub class: String,
-    pub devices: Vec<Device>,
-    pub remote: Option<String>,
+    devices: Vec<Device>,
+    remote: Option<String>,
 }
 
 impl From<Vec<GpsConfig>> for Devices {
@@ -22,7 +21,6 @@ impl From<Vec<GpsConfig>> for Devices {
         }
 
         Devices {
-            class: "DEVICES".to_string(),
             devices,
             remote: None,
         }

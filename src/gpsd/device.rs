@@ -2,12 +2,11 @@ use crate::configuration::GpsConfig;
 
 use std::convert::From;
 
-use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
+#[serde(rename = "DEVICE", tag = "class")]
 pub struct Device {
-    pub class: String,
     pub path: Option<String>,
     pub bps: Option<u32>,
     pub parity: Option<String>,
@@ -47,7 +46,6 @@ impl From<&GpsConfig> for Device {
         };
 
         Device {
-            class: "DEVICE".to_string(),
             path: Some(config.device.clone()),
             bps,
             parity,

@@ -6,8 +6,8 @@ use serde::Serialize;
 use serde_json::Value;
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename = "WATCH", tag = "class")]
 pub struct Watch {
-    pub class: String,
     pub enable: bool,
     pub json: bool,
     pub nmea: bool,

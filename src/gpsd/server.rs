@@ -1,29 +1,24 @@
-use anyhow::Context;
-use anyhow::Result;
-
 use crate::configuration::GpsConfig;
 use crate::configuration::GpsdConfig;
 use crate::gps::GPS;
 use crate::gpsd::client::Client;
+use crate::gpsd::Response;
 use crate::nmea;
 use crate::pps;
 use crate::shm::NtpShm;
-use crate::JsonReceiver;
-use crate::JsonSender;
 use crate::TSReceiver;
 use crate::TSSender;
-
+use anyhow::Context;
+use anyhow::Result;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
 use std::net::SocketAddr;
 use std::sync::Arc;
-
 use tokio::net::TcpListener;
+use tokio::sync::broadcast;
 use tokio::sync::Mutex;
-
 use tokio_serial::SerialPortBuilder;
-
 use tracing::error;
 use tracing::info;
 
@@ -32,7 +27,7 @@ pub struct Server {
     bind_addresses: Vec<String>,
     pub clients: HashMap<SocketAddr, ()>,
     pub devices: Vec<GpsConfig>,
-    gps_tx: HashMap<String, JsonSender>,
+    gps_tx: HashMap<String, broadcast::Sender<Response>>,
     pps_tx: HashMap<String, TSSender>,
 }
 
@@ -56,7 +51,7 @@ impl Server {
         self.pps_tx.insert(name, pps.tx.clone());
     }
 
-    pub fn gps_rx_for(&self, device: String) -> Option<JsonReceiver> {
+    pub fn gps_rx_for(&self, device: String) -> Option<broadcast::Receiver<Response>> {
         if let Some(tx) = self.gps_tx.get(&device) {
             return Some(tx.subscribe());
         }

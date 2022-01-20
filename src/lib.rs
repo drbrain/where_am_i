@@ -16,13 +16,9 @@ extern crate nix;
 #[macro_use]
 extern crate assert_approx_eq;
 
-use serde_json::Value;
 use timestamp::Timestamp;
 use timestamp::TimestampKind;
 use tokio::sync::broadcast;
-
-pub type JsonReceiver = broadcast::Receiver<Value>;
-pub type JsonSender = broadcast::Sender<Value>;
 
 pub type TSReceiver = broadcast::Receiver<Timestamp>;
 pub type TSSender = broadcast::Sender<Timestamp>;
