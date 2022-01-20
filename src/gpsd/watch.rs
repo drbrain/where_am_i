@@ -1,60 +1,56 @@
-use super::parser::json_to_string;
-
 use serde::Deserialize;
 use serde::Serialize;
-
-use serde_json::Value;
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename = "WATCH", tag = "class")]
 pub struct Watch {
-    pub enable: bool,
-    pub json: bool,
-    pub nmea: bool,
-    pub raw: u64,
-    pub scaled: bool,
-    pub split24: bool,
-    pub pps: bool,
+    pub enable: Option<bool>,
+    pub json: Option<bool>,
+    pub nmea: Option<bool>,
+    pub raw: Option<u64>,
+    pub scaled: Option<bool>,
+    pub split24: Option<bool>,
+    pub pps: Option<bool>,
     pub device: Option<String>,
     pub remote: Option<String>,
 }
 
 impl Watch {
-    pub fn update(&mut self, json: Value) {
-        if json["enable"].is_boolean() {
-            self.enable = json["enable"].as_bool().unwrap_or(false);
+    pub fn update(&mut self, updates: Watch) {
+        if updates.enable.is_some() {
+            self.enable = updates.enable;
         }
 
-        if json["json"].is_boolean() {
-            self.json = json["json"].as_bool().unwrap_or(false);
+        if updates.json.is_some() {
+            self.json = updates.json;
         }
 
-        if json["nmea"].is_boolean() {
-            self.nmea = json["nmea"].as_bool().unwrap_or(false);
+        if updates.nmea.is_some() {
+            self.nmea = updates.nmea;
         }
 
-        if json["raw"].is_u64() {
-            self.raw = json["raw"].as_u64().unwrap_or(0);
+        if updates.raw.is_some() {
+            self.raw = updates.raw;
         }
 
-        if json["scaled"].is_boolean() {
-            self.scaled = json["scaled"].as_bool().unwrap_or(false);
+        if updates.scaled.is_some() {
+            self.scaled = updates.scaled;
         }
 
-        if json["split24"].is_boolean() {
-            self.split24 = json["split24"].as_bool().unwrap_or(false);
+        if updates.split24.is_some() {
+            self.split24 = updates.split24;
         }
 
-        if json["pps"].is_boolean() {
-            self.pps = json["pps"].as_bool().unwrap_or(false);
+        if updates.pps.is_some() {
+            self.pps = updates.pps;
         }
 
-        if json["device"].is_string() {
-            self.device = json_to_string(&json["device"]);
+        if updates.device.is_some() {
+            self.device = updates.device;
         }
 
-        if json["remote"].is_string() {
-            self.remote = json_to_string(&json["remote"]);
+        if updates.remote.is_some() {
+            self.remote = updates.remote;
         }
     }
 }

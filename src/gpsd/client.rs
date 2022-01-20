@@ -11,7 +11,6 @@ use crate::gpsd::Watch;
 use crate::TSReceiver;
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
-use serde_json::Value;
 use std::error::Error;
 use std::fmt;
 use std::io;
@@ -126,7 +125,7 @@ impl Client {
         Response::Devices(devices)
     }
 
-    async fn command_watch(&self, updates: Option<Value>) -> Response {
+    async fn command_watch(&self, updates: Option<Watch>) -> Response {
         let original;
         let updated;
 
@@ -135,14 +134,17 @@ impl Client {
 
             original = watch.clone();
 
-            if let Some(j) = updates {
-                watch.update(j);
+            if let Some(updates) = updates {
+                watch.update(updates);
             };
 
             updated = watch.clone();
         }
 
-        match (original.enable, updated.enable) {
+        match (
+            original.enable.unwrap_or(false),
+            updated.enable.unwrap_or(false),
+        ) {
             // enable
             (false, true) => self.enable_watch(updated.clone()).await,
             // disable
@@ -166,11 +168,11 @@ impl Client {
         {
             let server = self.server.lock().await;
 
-            if watch.enable {
+            if watch.enable.unwrap_or(false) {
                 gps_rx = server.gps_rx_for(device.clone());
             }
 
-            if watch.pps {
+            if watch.pps.unwrap_or(false) {
                 pps_rx = server.pps_rx_for(device.clone())
             }
         }

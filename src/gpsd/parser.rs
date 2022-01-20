@@ -1,5 +1,5 @@
-use serde_json::Value;
-
+use crate::gpsd::Device;
+use crate::gpsd::Watch;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_while1;
@@ -14,32 +14,16 @@ use nom::sequence::delimited;
 use nom::sequence::preceded;
 use nom::sequence::terminated;
 use nom::IResult;
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct DeviceData {
-    pub path: Option<String>,
-    pub bps: Option<u64>,
-    pub parity: Option<String>,
-    pub stopbits: Option<u64>,
-    pub native: Option<u64>,
-}
+use serde::Deserialize;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Command {
-    Device(Option<DeviceData>),
+    Device(Option<Device>),
     Devices,
     Error(String),
     Poll,
     Version,
-    Watch(Option<Value>),
-}
-
-pub fn json_to_string(input: &Value) -> Option<String> {
-    if input.is_null() {
-        None
-    } else {
-        input.as_str().map(|v| v.to_string())
-    }
+    Watch(Option<Watch>),
 }
 
 fn equal<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
@@ -50,9 +34,13 @@ fn eol<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, char, E> 
     preceded(char(';'), preceded(opt(char('\r')), char('\n')))(input)
 }
 
-fn json_blob<'a, E: ParseError<&'a str> + FromExternalError<&'a str, serde_json::Error>>(
+fn json_blob<
+    'a,
+    T: Deserialize<'a>,
+    E: ParseError<&'a str> + FromExternalError<&'a str, serde_json::Error>,
+>(
     input: &'a str,
-) -> IResult<&'a str, Value, E> {
+) -> IResult<&'a str, T, E> {
     let innards = take_while1(|c| c != '}');
 
     let blob = recognize(delimited(char('{'), innards, char('}')));
@@ -63,20 +51,12 @@ fn json_blob<'a, E: ParseError<&'a str> + FromExternalError<&'a str, serde_json:
 fn device<'a, E: ParseError<&'a str> + FromExternalError<&'a str, serde_json::Error>>(
     input: &'a str,
 ) -> IResult<&'a str, Command, E> {
-    let (input, json) = preceded(
+    let (input, device) = preceded(
         tag("?DEVICE"),
-        terminated(opt(preceded(equal, json_blob)), eol),
+        terminated(opt(preceded(equal, json_blob::<Device, E>)), eol),
     )(input)?;
 
-    let device_data = json.map(|j| DeviceData {
-        path: json_to_string(&j["path"]),
-        bps: j["bps"].as_u64(),
-        parity: json_to_string(&j["parity"]),
-        stopbits: j["stopbits"].as_u64(),
-        native: j["native"].as_u64(),
-    });
-
-    Ok((input, Command::Device(device_data)))
+    Ok((input, Command::Device(device.into())))
 }
 
 fn devices<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Command, E> {
@@ -102,7 +82,7 @@ fn watch<'a, E: ParseError<&'a str> + FromExternalError<&'a str, serde_json::Err
 ) -> IResult<&'a str, Command, E> {
     let (input, json) = preceded(
         tag("?WATCH"),
-        terminated(opt(preceded(equal, json_blob)), eol),
+        terminated(opt(preceded(equal, json_blob::<Watch, E>)), eol),
     )(input)?;
 
     Ok((input, Command::Watch(json)))
@@ -126,7 +106,6 @@ pub fn parse(input: &str) -> Command {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[test]
     fn test_eol() {
@@ -135,17 +114,10 @@ mod tests {
     }
 
     #[test]
-    fn test_json_blob() {
-        let expected: Value = serde_json::from_str("{\"hello\":true}").unwrap();
-
-        assert_eq!(expected, json_blob::<()>("{\"hello\":true}").unwrap().1);
-    }
-
-    #[test]
     fn test_device() {
         assert_eq!(Command::Device(None), device::<()>("?DEVICE;\n").unwrap().1);
 
-        let device_data = DeviceData {
+        let device_data = Device {
             path: Some("/dev/gps0".to_string()),
             bps: Some(38400),
             parity: None,
@@ -180,10 +152,11 @@ mod tests {
     fn test_watch() {
         assert_eq!(Command::Watch(None), watch::<()>("?WATCH;\n").unwrap().1);
 
-        let watch_data = json!({
-            "device": "/dev/gps0",
-            "enable": true,
-        });
+        let watch_data = Watch {
+            device: Some("/dev/gps0".to_string()),
+            enable: Some(true),
+            ..Watch::default()
+        };
 
         assert_eq!(
             Command::Watch(Some(watch_data)),
