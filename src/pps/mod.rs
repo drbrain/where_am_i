@@ -8,9 +8,7 @@ pub use error::Error;
 
 use crate::timestamp::Timestamp;
 use state::State;
-
 use libc::c_int;
-
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -19,7 +17,6 @@ use std::task::Context;
 use std::task::Poll;
 use std::thread;
 use std::time::SystemTime;
-
 use tracing::error;
 
 pub struct PPS {
@@ -43,13 +40,10 @@ impl PPS {
 fn run(shared_state: Arc<Mutex<State>>) {
     let mut shared_state = shared_state.lock().unwrap();
 
-    // reset shared state
-    shared_state.ok = false;
+    // reset timestamp
     shared_state.result = None;
 
     fetch_pps(&mut shared_state);
-
-    shared_state.completed = true;
 
     if let Some(waker) = shared_state.waker.take() {
         waker.wake()
@@ -76,8 +70,6 @@ fn fetch_pps(shared_state: &mut State) {
 
             let pps_obj = Timestamp::from_pps_time(device, precision, data, n);
 
-            shared_state.ok = true;
-
             shared_state.result = Some(pps_obj);
         }
         (Ok(_), Err(e)) => {
@@ -93,18 +85,12 @@ impl Future for PPS {
     type Output = Result<Timestamp, String>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut guard = self.shared_state.lock().unwrap();
+        let mut state = self.shared_state.lock().unwrap();
 
-        if guard.completed {
-            let pps_time = guard.result.as_ref().unwrap();
-
-            if guard.ok {
-                Poll::Ready(Ok(pps_time.clone()))
-            } else {
-                Poll::Ready(Err("something went wrong".to_string()))
-            }
+        if let Some(pps_time) = state.result.as_ref() {
+            Poll::Ready(Ok(pps_time.clone()))
         } else {
-            guard.waker = Some(cx.waker().clone());
+            state.waker = Some(cx.waker().clone());
 
             Poll::Pending
         }

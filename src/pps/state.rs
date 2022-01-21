@@ -10,8 +10,6 @@ pub struct State {
     pub precision: i32,
     pub fd: c_int,
     pub result: Option<Timestamp>,
-    pub ok: bool,
-    pub completed: bool,
     pub waker: Option<Waker>,
 }
 
@@ -22,8 +20,6 @@ impl State {
             precision,
             fd,
             result: None,
-            ok: false,
-            completed: false,
             waker: None,
         }
     }
