@@ -87,13 +87,13 @@ fn fetch_pps(shared_state: &mut State) {
 }
 
 impl Future for PPS {
-    type Output = Result<Timestamp, String>;
+    type Output = Timestamp;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut state = self.shared_state.lock().unwrap();
 
         if let Some(pps_time) = state.result.as_ref() {
-            Poll::Ready(Ok(pps_time.clone()))
+            Poll::Ready(pps_time.clone())
         } else {
             state.waker = Some(cx.waker().clone());
 

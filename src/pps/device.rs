@@ -9,7 +9,6 @@ use std::os::unix::io::AsRawFd;
 use tokio::fs::File;
 use tokio::sync::broadcast;
 
-use tracing::error;
 use tracing::info;
 
 #[derive(Debug)]
@@ -96,13 +95,7 @@ async fn send_pps_events(pps: File, tx: TSSender, pps_name: String, gps_name: St
     info!("watching PPS events on {}", pps_name);
 
     loop {
-        let mut pps_data = match PPS::new(pps_name.clone(), -20, fd).await {
-            Ok(d) => d,
-            Err(e) => {
-                error!("PPS fetch error on {} ({:?})", pps_name, e);
-                continue;
-            }
-        };
+        let mut pps_data = PPS::new(pps_name.clone(), -20, fd).await;
 
         pps_data.device = gps_name.clone();
 
