@@ -55,28 +55,33 @@ fn fetch_pps(shared_state: &mut State) {
     data.timeout.flags = ioctl::TIME_INVALID;
 
     let data_ptr: *mut ioctl::data = &mut data;
-    let result;
+    let fetched;
 
     unsafe {
-        result = ioctl::fetch(shared_state.fd, data_ptr);
+        fetched = ioctl::fetch(shared_state.fd, data_ptr);
+    }
+
+    match fetched {
+        Ok(_) => (),
+        Err(e) => {
+            error!("unable to get PPS event ({:?})", e);
+            return;
+        }
     }
 
     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
 
-    match (result, now) {
-        (Ok(_), Ok(n)) => {
+    match now {
+        Ok(now) => {
             let device = shared_state.device.clone();
             let precision = shared_state.precision;
 
-            let pps_obj = Timestamp::from_pps_time(device, precision, data, n);
+            let pps_obj = Timestamp::from_pps_time(device, precision, data, now);
 
             shared_state.result = Some(pps_obj);
         }
-        (Ok(_), Err(e)) => {
-            error!("unable to get timestamp for PPS event ({:?})", e);
-        }
-        (Err(e), _) => {
-            error!("unable to get PPS event ({:?})", e);
+        Err(e) => {
+            error!("unable to get system clock timestamp for PPS event ({:?})", e);
         }
     }
 }
