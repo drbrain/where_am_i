@@ -90,7 +90,7 @@ async fn send_pps_events(pps: File, tx: TSSender, pps_name: String) {
     let fd = pps.as_raw_fd();
 
     info!("watching PPS events on {}", pps_name);
-    let pps = PPS::new(pps_name.clone(), -20, fd);
+    let pps = PPS::new(pps_name.clone(), fd);
 
     tokio::pin!(pps);
 

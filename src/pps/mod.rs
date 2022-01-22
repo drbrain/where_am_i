@@ -26,8 +26,8 @@ pub struct PPS {
 }
 
 impl PPS {
-    pub fn new(device: String, precision: i32, fd: c_int) -> Self {
-        let state = State::new(device, precision, fd);
+    pub fn new(device: String, fd: c_int) -> Self {
+        let state = State::new(device, fd);
 
         let pps_state = Arc::new(Mutex::new(state));
         let waker = Arc::new(Mutex::new(None));
@@ -81,9 +81,7 @@ fn fetch_pps(pps_state: &mut State) {
 
     match now {
         Ok(now) => {
-            let precision = pps_state.precision;
-
-            let pps_obj = Timestamp::from_pps_time(precision, data, now);
+            let pps_obj = Timestamp::from_pps_time(data, now);
 
             pps_state.result = Some(pps_obj);
         }

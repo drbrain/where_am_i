@@ -9,7 +9,7 @@ use tracing_subscriber::filter::EnvFilter;
 use where_am_i::configuration::Configuration;
 use where_am_i::configuration::GpsConfig;
 use where_am_i::shm::NtpShm;
-use where_am_i::timestamp::Timestamp;
+use where_am_i::shm::Timestamp;
 
 #[tokio::main]
 async fn main() {
@@ -25,9 +25,8 @@ async fn main() {
     let zero = Duration::seconds(0);
 
     while let Ok((device, ts)) = rx.recv().await {
-        let received_time = NaiveDateTime::from_timestamp(ts.received_sec as i64, ts.received_nsec);
-        let reference_time =
-            NaiveDateTime::from_timestamp(ts.reference_sec as i64, ts.reference_nsec);
+        let received_time = NaiveDateTime::from_timestamp(ts.receive_sec as i64, ts.receive_nsec);
+        let reference_time = NaiveDateTime::from_timestamp(ts.clock_sec as i64, ts.clock_nsec);
 
         let offset = reference_time.signed_duration_since(received_time);
 
@@ -96,7 +95,7 @@ impl NtpShmWatch {
         let tx = self.tx.clone();
 
         tokio::spawn(async move {
-            NtpShm::watch(ntp_unit, device, tx).await;
+            NtpShm::new(0).watch(ntp_unit, device, tx).await;
         });
 
         debug!(

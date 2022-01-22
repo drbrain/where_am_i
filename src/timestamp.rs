@@ -15,8 +15,6 @@ use std::time::Duration;
 /// synchronized.
 #[derive(Clone, Debug)]
 pub struct Timestamp {
-    /// Precision of the timestamp.
-    pub precision: i32,
     /// Nonzero if a leap second is coming
     pub leap: i32,
     /// The system clock seconds this timestamp was received
@@ -30,9 +28,8 @@ pub struct Timestamp {
 }
 
 impl Timestamp {
-    pub fn from_pps_time(precision: i32, pps_time: ioctl::data, now: Duration) -> Self {
+    pub fn from_pps_time(pps_time: ioctl::data, now: Duration) -> Self {
         Timestamp {
-            precision,
             leap: 0,
             reference_sec: pps_time.info.assert_tu.sec as u64,
             reference_nsec: pps_time.info.assert_tu.nsec as u32,
@@ -50,7 +47,6 @@ pub struct GPS {
     real_nsec: u32,
     clock_sec: u64,
     clock_nsec: u32,
-    precision: i32,
 }
 
 impl From<(String, Timestamp)> for GPS {
@@ -63,7 +59,6 @@ impl From<(String, Timestamp)> for GPS {
             real_nsec: timestamp.reference_nsec,
             clock_sec: timestamp.received_sec,
             clock_nsec: timestamp.received_nsec,
-            precision: timestamp.precision,
         }
     }
 }

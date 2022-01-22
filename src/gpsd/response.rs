@@ -29,7 +29,7 @@ impl From<(&String, Timestamp)> for Response {
             real_nsec: timestamp.reference_nsec,
             clock_sec: timestamp.received_sec,
             clock_nsec: timestamp.received_nsec,
-            precision: timestamp.precision,
+            precision: -20,
         })
     }
 }

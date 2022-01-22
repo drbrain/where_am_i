@@ -1,7 +1,6 @@
 use crate::shm::sysv_shm;
 use crate::shm::sysv_shm::ShmTime;
 use crate::TSReceiver;
-use crate::Timestamp;
 use std::convert::TryInto;
 use std::io;
 use std::sync::atomic::compiler_fence;
@@ -12,16 +11,27 @@ use tokio::time::sleep;
 use tracing::error;
 use tracing::trace;
 
-pub struct NtpShm {}
+pub struct NtpShm {
+    precision: i32,
+}
 
 const NTPD_BASE: i32 = 0x4e545030;
 
 impl NtpShm {
-    pub async fn relay(unit: i32, rx: TSReceiver) {
-        tokio::spawn(relay_timestamps(unit, rx));
+    pub fn new(precision: i32) -> Self {
+        NtpShm { precision }
     }
 
-    pub async fn watch(unit: i32, device: String, tx: broadcast::Sender<(String, Timestamp)>) {
+    pub async fn relay(&self, unit: i32, rx: TSReceiver) {
+        tokio::spawn(relay_timestamps(unit, self.precision, rx));
+    }
+
+    pub async fn watch(
+        &self,
+        unit: i32,
+        device: String,
+        tx: broadcast::Sender<(String, crate::shm::Timestamp)>,
+    ) {
         tokio::spawn(watch_timestamps(unit, device, tx));
     }
 }
@@ -34,7 +44,7 @@ fn map_ntp_unit(unit: i32) -> io::Result<ShmTime> {
     sysv_shm::map(id)
 }
 
-async fn relay_timestamps(unit: i32, mut rx: TSReceiver) {
+async fn relay_timestamps(unit: i32, precision: i32, mut rx: TSReceiver) {
     let mut time = map_ntp_unit(unit).unwrap();
     let mut last_count: i32;
 
@@ -48,7 +58,6 @@ async fn relay_timestamps(unit: i32, mut rx: TSReceiver) {
         let received_usec = (received_nsec / 1000) as i32;
 
         let leap = ts.leap;
-        let precision = ts.precision;
 
         time.map_mut(|t| &mut t.valid).write(0);
         time.map_mut(|t| &mut t.count).update(|c| *c += 1);
@@ -82,6 +91,12 @@ async fn relay_timestamps(unit: i32, mut rx: TSReceiver) {
     sysv_shm::unmap(time);
 }
 
+macro_rules! read {
+    ($time: ident, $field:ident) => {
+        $time.map(|t| &t.$field).read()
+    };
+}
+
 // NTP reads the shared memory as described at http://doc.ntp.org/4.2.8/drivers/driver28.html
 //
 // In mode 1 it resets valid and bumps count after reading values.  We can't trust valid as it may
@@ -89,12 +104,17 @@ async fn relay_timestamps(unit: i32, mut rx: TSReceiver) {
 //
 // Instead we make a best-effort by tracking count.  If it is different than last go-around and
 // did not change while reading we probably got new values, so we report them.
-async fn watch_timestamps(unit: i32, device: String, tx: broadcast::Sender<(String, Timestamp)>) {
+async fn watch_timestamps(
+    unit: i32,
+    device: String,
+    tx: broadcast::Sender<(String, crate::shm::Timestamp)>,
+) {
     let time = map_ntp_unit(unit).unwrap();
     let mut last_count: i32 = 0;
 
+    // TODO use tokio::time::interval
     loop {
-        let count_before = time.map(|t| &t.count).read();
+        let count_before = read!(time, count);
 
         if count_before == last_count {
             sleep(Duration::from_millis(10)).await;
@@ -103,18 +123,21 @@ async fn watch_timestamps(unit: i32, device: String, tx: broadcast::Sender<(Stri
 
         compiler_fence(Ordering::SeqCst);
 
-        let reference_sec = time.map(|t| &t.clock_sec).read();
-        let reference_nsec = time.map(|t| &t.clock_nsec).read();
-
-        let received_sec = time.map(|t| &t.receive_sec).read();
-        let received_nsec = time.map(|t| &t.receive_nsec).read();
-
-        let leap = time.map(|t| &t.leap).read();
-        let precision = time.map(|t| &t.precision).read();
+        let mode = read!(time, mode);
+        let clock_sec = read!(time, clock_sec);
+        let clock_usec = read!(time, clock_usec);
+        let receive_sec = read!(time, receive_sec);
+        let receive_usec = read!(time, receive_usec);
+        let leap = read!(time, leap);
+        let precision = read!(time, precision);
+        let nsamples = read!(time, nsamples);
+        let valid = read!(time, valid);
+        let clock_nsec = read!(time, clock_nsec);
+        let receive_nsec = read!(time, receive_nsec);
 
         compiler_fence(Ordering::SeqCst);
 
-        let count_after = time.map(|t| &t.count).read();
+        let count_after = read!(time, count);
 
         if count_before != count_after {
             // We probably raced a clock write or NTP read.
@@ -129,14 +152,21 @@ async fn watch_timestamps(unit: i32, device: String, tx: broadcast::Sender<(Stri
         }
 
         last_count = count_after;
+        let count = count_after;
 
-        let timestamp = Timestamp {
-            precision,
+        let timestamp = crate::shm::Timestamp {
+            mode,
+            count,
+            clock_sec,
+            clock_usec,
+            receive_sec,
+            receive_usec,
             leap,
-            received_sec: received_sec.try_into().unwrap_or(0),
-            received_nsec,
-            reference_sec: reference_sec.try_into().unwrap_or(0),
-            reference_nsec,
+            precision,
+            nsamples,
+            valid,
+            clock_nsec,
+            receive_nsec,
         };
 
         trace!(
@@ -146,7 +176,9 @@ async fn watch_timestamps(unit: i32, device: String, tx: broadcast::Sender<(Stri
             timestamp
         );
 
-        if tx.send((device.clone(), timestamp)).is_ok() {};
+        if let Err(_) = tx.send((device.clone(), timestamp)) {
+            break;
+        }
 
         sleep(Duration::from_millis(1000)).await;
     }
