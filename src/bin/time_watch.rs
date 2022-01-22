@@ -1,20 +1,15 @@
 use chrono::Duration;
 use chrono::NaiveDateTime;
-
 use std::convert::TryFrom;
-
 use tokio::sync::broadcast;
-
 use tracing::debug;
 use tracing::error;
 use tracing::info;
-
 use tracing_subscriber::filter::EnvFilter;
-
 use where_am_i::configuration::Configuration;
 use where_am_i::configuration::GpsConfig;
 use where_am_i::shm::NtpShm;
-use where_am_i::TSSender;
+use where_am_i::timestamp::Timestamp;
 
 #[tokio::main]
 async fn main() {
@@ -29,7 +24,7 @@ async fn main() {
 
     let zero = Duration::seconds(0);
 
-    while let Ok(ts) = rx.recv().await {
+    while let Ok((device, ts)) = rx.recv().await {
         let received_time = NaiveDateTime::from_timestamp(ts.received_sec as i64, ts.received_nsec);
         let reference_time =
             NaiveDateTime::from_timestamp(ts.reference_sec as i64, ts.reference_nsec);
@@ -44,7 +39,7 @@ async fn main() {
 
         info!(
             "{} tick {} received {} system at {}",
-            ts.device, reference_time, offset_text, received_time
+            device, reference_time, offset_text, received_time
         );
     }
 }
@@ -80,11 +75,11 @@ fn load_config() -> Configuration {
 struct NtpShmWatch {
     device: String,
     ntp_unit: i32,
-    tx: TSSender,
+    tx: broadcast::Sender<(String, Timestamp)>,
 }
 
 impl NtpShmWatch {
-    pub fn new(config: GpsConfig, tx: TSSender) -> Self {
+    pub fn new(config: GpsConfig, tx: broadcast::Sender<(String, Timestamp)>) -> Self {
         let device = config.device.clone();
         let ntp_unit = config.ntp_unit.unwrap();
 

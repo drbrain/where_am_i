@@ -81,10 +81,9 @@ fn fetch_pps(pps_state: &mut State) {
 
     match now {
         Ok(now) => {
-            let device = pps_state.device.clone();
             let precision = pps_state.precision;
 
-            let pps_obj = Timestamp::from_pps_time(device, precision, data, now);
+            let pps_obj = Timestamp::from_pps_time(precision, data, now);
 
             pps_state.result = Some(pps_obj);
         }

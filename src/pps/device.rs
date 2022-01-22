@@ -77,17 +77,16 @@ impl Device {
 
         let pps_name = self.name.clone();
         let tx = self.tx.clone();
-        let gps_name = self.gps_name.clone();
 
         tokio::spawn(async move {
-            send_pps_events(pps, tx, pps_name, gps_name).await;
+            send_pps_events(pps, tx, pps_name).await;
         });
 
         Ok(())
     }
 }
 
-async fn send_pps_events(pps: File, tx: TSSender, pps_name: String, gps_name: String) {
+async fn send_pps_events(pps: File, tx: TSSender, pps_name: String) {
     let fd = pps.as_raw_fd();
 
     info!("watching PPS events on {}", pps_name);
@@ -95,9 +94,7 @@ async fn send_pps_events(pps: File, tx: TSSender, pps_name: String, gps_name: St
 
     tokio::pin!(pps);
 
-    while let Some(mut timestamp) = pps.next().await {
-        timestamp.device = gps_name.clone();
-
+    while let Some(timestamp) = pps.next().await {
         if let Err(_e) = tx.send(timestamp) {
             // error!("send error: {:?}", e);
         }

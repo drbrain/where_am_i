@@ -1,18 +1,14 @@
-use crate::TSReceiver;
-use crate::TSSender;
-use crate::Timestamp;
-
 use crate::shm::sysv_shm;
 use crate::shm::sysv_shm::ShmTime;
-
+use crate::TSReceiver;
+use crate::Timestamp;
 use std::convert::TryInto;
 use std::io;
 use std::sync::atomic::compiler_fence;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-
+use tokio::sync::broadcast;
 use tokio::time::sleep;
-
 use tracing::error;
 use tracing::trace;
 
@@ -25,7 +21,7 @@ impl NtpShm {
         tokio::spawn(relay_timestamps(unit, rx));
     }
 
-    pub async fn watch(unit: i32, device: String, tx: TSSender) {
+    pub async fn watch(unit: i32, device: String, tx: broadcast::Sender<(String, Timestamp)>) {
         tokio::spawn(watch_timestamps(unit, device, tx));
     }
 }
@@ -93,7 +89,7 @@ async fn relay_timestamps(unit: i32, mut rx: TSReceiver) {
 //
 // Instead we make a best-effort by tracking count.  If it is different than last go-around and
 // did not change while reading we probably got new values, so we report them.
-async fn watch_timestamps(unit: i32, device: String, tx: TSSender) {
+async fn watch_timestamps(unit: i32, device: String, tx: broadcast::Sender<(String, Timestamp)>) {
     let time = map_ntp_unit(unit).unwrap();
     let mut last_count: i32 = 0;
 
@@ -135,7 +131,6 @@ async fn watch_timestamps(unit: i32, device: String, tx: TSSender) {
         last_count = count_after;
 
         let timestamp = Timestamp {
-            device: device.clone(),
             precision,
             leap,
             received_sec: received_sec.try_into().unwrap_or(0),
@@ -151,7 +146,7 @@ async fn watch_timestamps(unit: i32, device: String, tx: TSSender) {
             timestamp
         );
 
-        if tx.send(timestamp).is_ok() {};
+        if tx.send((device.clone(), timestamp)).is_ok() {};
 
         sleep(Duration::from_millis(1000)).await;
     }

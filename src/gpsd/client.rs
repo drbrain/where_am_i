@@ -182,7 +182,7 @@ impl Client {
         }
 
         if let Some(rx) = pps_rx {
-            relay_pps_messages(self.res.clone(), rx)
+            relay_pps(device, self.res.clone(), rx).await
         }
     }
 
@@ -223,32 +223,15 @@ async fn relay(tx: mpsc::Sender<Response>, mut rx: broadcast::Receiver<Response>
     }
 }
 
-fn relay_pps_messages(tx: mpsc::Sender<Response>, rx: TSReceiver) {
+async fn relay_pps(device: String, tx: mpsc::Sender<Response>, mut rx: TSReceiver) {
     tokio::spawn(async move {
-        relay_pps(tx, rx).await;
-    });
-}
-
-async fn relay_pps(tx: mpsc::Sender<Response>, mut rx: TSReceiver) {
-    loop {
-        let message = rx.recv().await;
-
-        let value = match message {
-            Ok(v) => v,
-            Err(e) => {
-                error!("error receiving message to relay: {:?}", e);
-                break;
-            }
-        };
-
-        match tx.send(value.into()).await {
-            Ok(_) => (),
-            Err(e) => {
+        while let Ok(timestamp) = rx.recv().await {
+            if let Err(e) = tx.send((&device, timestamp).into()).await {
                 error!("error relaying message: {:?}", e);
                 break;
             }
         }
-    }
+    });
 }
 
 async fn start_client_rx(client: Client) {
