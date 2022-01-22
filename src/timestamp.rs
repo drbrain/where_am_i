@@ -1,6 +1,5 @@
 use crate::pps::ioctl;
 use serde::Serialize;
-
 use std::time::Duration;
 
 /// A timestamp to be sent to (or read from) NTP.
@@ -15,8 +14,6 @@ use std::time::Duration;
 /// synchronized.
 #[derive(Clone, Debug)]
 pub struct Timestamp {
-    /// Nonzero if a leap second is coming
-    pub leap: i32,
     /// The system clock seconds this timestamp was received
     pub received_sec: u64,
     /// The system clock nanoseconds since the last second boundary this timestamp was received
@@ -30,7 +27,6 @@ pub struct Timestamp {
 impl Timestamp {
     pub fn from_pps_time(pps_time: ioctl::data, now: Duration) -> Self {
         Timestamp {
-            leap: 0,
             reference_sec: pps_time.info.assert_tu.sec as u64,
             reference_nsec: pps_time.info.assert_tu.nsec as u32,
             received_sec: now.as_secs(),

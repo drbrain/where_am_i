@@ -1,3 +1,13 @@
+// Portions copyright (c) University of Delaware 1992-2015 under the NTP license
+//
+// Permission to use, copy, modify, and distribute this software and its documentation for any
+// purpose with or without fee is hereby granted, provided that the above copyright notice appears
+// in all copies and that both the copyright notice and this permission notice appear in supporting
+// documentation, and that the name University of Delaware not be used in advertising or publicity
+// pertaining to distribution of the software without specific, written prior permission. The
+// University of Delaware makes no representations about the suitability this software for any
+// purpose. It is provided "as is" without express or implied warranty.
+
 use crate::timestamp::Timestamp;
 use anyhow::anyhow;
 use anyhow::Result;

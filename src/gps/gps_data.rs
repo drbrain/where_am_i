@@ -212,7 +212,6 @@ fn gpsd_mode(navigation_mode: &NavigationMode) -> u32 {
 
 fn report_ntp(reference: DateTime<Utc>, received: Duration, _name: &str, tx: &TSSender) {
     let ts = Timestamp {
-        leap: 0,
         received_sec: received.as_secs(),
         received_nsec: received.subsec_nanos(),
         reference_sec: reference.timestamp() as u64,

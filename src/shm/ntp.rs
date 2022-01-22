@@ -22,8 +22,8 @@ impl NtpShm {
         NtpShm { precision }
     }
 
-    pub async fn relay(&self, unit: i32, rx: TSReceiver) {
-        tokio::spawn(relay_timestamps(unit, self.precision, rx));
+    pub async fn relay(&self, unit: i32, leap: bool, rx: TSReceiver) {
+        tokio::spawn(relay_timestamps(unit, self.precision, leap, rx));
     }
 
     pub async fn watch(
@@ -44,7 +44,7 @@ fn map_ntp_unit(unit: i32) -> io::Result<ShmTime> {
     sysv_shm::map(id)
 }
 
-async fn relay_timestamps(unit: i32, precision: i32, mut rx: TSReceiver) {
+async fn relay_timestamps(unit: i32, precision: i32, leap: bool, mut rx: TSReceiver) {
     let mut time = map_ntp_unit(unit).unwrap();
     let mut last_count: i32;
 
@@ -57,8 +57,6 @@ async fn relay_timestamps(unit: i32, precision: i32, mut rx: TSReceiver) {
         let received_nsec = ts.received_nsec;
         let received_usec = (received_nsec / 1000) as i32;
 
-        let leap = ts.leap;
-
         time.map_mut(|t| &mut t.valid).write(0);
         time.map_mut(|t| &mut t.count).update(|c| *c += 1);
 
@@ -70,7 +68,7 @@ async fn relay_timestamps(unit: i32, precision: i32, mut rx: TSReceiver) {
         time.map_mut(|t| &mut t.receive_sec).write(received_sec);
         time.map_mut(|t| &mut t.receive_usec).write(received_usec);
 
-        time.map_mut(|t| &mut t.leap).write(leap);
+        time.map_mut(|t| &mut t.leap).write(leap as i32);
 
         time.map_mut(|t| &mut t.precision).write(precision);
 
