@@ -7,50 +7,58 @@ pub use device::Device;
 pub use error::Error;
 
 use crate::timestamp::Timestamp;
-use state::State;
 use libc::c_int;
-use std::future::Future;
+use state::State;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::task::Context;
 use std::task::Poll;
+use std::task::Waker;
 use std::thread;
 use std::time::SystemTime;
+use tokio_stream::Stream;
 use tracing::error;
 
 pub struct PPS {
-    shared_state: Arc<Mutex<State>>,
+    pps_state: Arc<Mutex<State>>,
+    waker: Arc<Mutex<Option<Waker>>>,
 }
 
 impl PPS {
     pub fn new(device: String, precision: i32, fd: c_int) -> Self {
         let state = State::new(device, precision, fd);
 
-        let shared_state = Arc::new(Mutex::new(state));
+        let pps_state = Arc::new(Mutex::new(state));
+        let waker = Arc::new(Mutex::new(None));
 
-        let thread_shared_state = shared_state.clone();
+        let thread_pps_state = pps_state.clone();
+        let thread_pps_waker = waker.clone();
 
-        thread::spawn(move || run(thread_shared_state));
+        thread::spawn(move || run(thread_pps_state, thread_pps_waker));
 
-        PPS { shared_state }
+        PPS { pps_state, waker }
     }
 }
 
-fn run(shared_state: Arc<Mutex<State>>) {
-    let mut shared_state = shared_state.lock().unwrap();
+fn run(pps_state: Arc<Mutex<State>>, waker: Arc<Mutex<Option<Waker>>>) {
+    loop {
+        let mut pps_state = pps_state.lock().unwrap();
 
-    // reset timestamp
-    shared_state.result = None;
+        // reset timestamp
+        pps_state.result = None;
 
-    fetch_pps(&mut shared_state);
+        fetch_pps(&mut pps_state);
 
-    if let Some(waker) = shared_state.waker.take() {
-        waker.wake()
+        let mut waker = waker.lock().unwrap();
+
+        if let Some(waker) = waker.take() {
+            waker.wake()
+        }
     }
 }
 
-fn fetch_pps(shared_state: &mut State) {
+fn fetch_pps(pps_state: &mut State) {
     let mut data = ioctl::data::default();
     data.timeout.flags = ioctl::TIME_INVALID;
 
@@ -58,7 +66,7 @@ fn fetch_pps(shared_state: &mut State) {
     let fetched;
 
     unsafe {
-        fetched = ioctl::fetch(shared_state.fd, data_ptr);
+        fetched = ioctl::fetch(pps_state.fd, data_ptr);
     }
 
     match fetched {
@@ -73,31 +81,40 @@ fn fetch_pps(shared_state: &mut State) {
 
     match now {
         Ok(now) => {
-            let device = shared_state.device.clone();
-            let precision = shared_state.precision;
+            let device = pps_state.device.clone();
+            let precision = pps_state.precision;
 
             let pps_obj = Timestamp::from_pps_time(device, precision, data, now);
 
-            shared_state.result = Some(pps_obj);
+            pps_state.result = Some(pps_obj);
         }
         Err(e) => {
-            error!("unable to get system clock timestamp for PPS event ({:?})", e);
+            error!(
+                "unable to get system clock timestamp for PPS event ({:?})",
+                e
+            );
         }
     }
 }
 
-impl Future for PPS {
-    type Output = Timestamp;
+impl Stream for PPS {
+    type Item = Timestamp;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut state = self.shared_state.lock().unwrap();
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let state = self.pps_state.lock().unwrap();
 
         if let Some(pps_time) = state.result.as_ref() {
-            Poll::Ready(pps_time.clone())
+            Poll::Ready(Some(pps_time.clone()))
         } else {
-            state.waker = Some(cx.waker().clone());
+            let mut waker = self.waker.lock().unwrap();
+
+            *waker = Some(cx.waker().clone());
 
             Poll::Pending
         }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (1, Some(1))
     }
 }

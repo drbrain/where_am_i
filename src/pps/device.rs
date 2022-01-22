@@ -2,13 +2,11 @@ use crate::pps::ioctl;
 use crate::pps::Error;
 use crate::pps::PPS;
 use crate::TSSender;
-
 use std::fs::OpenOptions;
 use std::os::unix::io::AsRawFd;
-
 use tokio::fs::File;
 use tokio::sync::broadcast;
-
+use tokio_stream::StreamExt;
 use tracing::info;
 
 #[derive(Debug)]
@@ -93,13 +91,14 @@ async fn send_pps_events(pps: File, tx: TSSender, pps_name: String, gps_name: St
     let fd = pps.as_raw_fd();
 
     info!("watching PPS events on {}", pps_name);
+    let pps = PPS::new(pps_name.clone(), -20, fd);
 
-    loop {
-        let mut pps_data = PPS::new(pps_name.clone(), -20, fd).await;
+    tokio::pin!(pps);
 
-        pps_data.device = gps_name.clone();
+    while let Some(mut timestamp) = pps.next().await {
+        timestamp.device = gps_name.clone();
 
-        if let Err(_e) = tx.send(pps_data) {
+        if let Err(_e) = tx.send(timestamp) {
             // error!("send error: {:?}", e);
         }
     }
