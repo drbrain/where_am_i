@@ -13,6 +13,10 @@ name = "gps_watch"
 path = "src/bin/gps_watch.rs"
 
 [[bin]]
+name = "precision"
+path = "src/bin/precision.rs"
+
+[[bin]]
 name = "time_watch"
 path = "src/bin/time_watch.rs"
 
@@ -22,6 +26,7 @@ anyhow             = "^1.0"
 backoff            = { version = "0.4.0", features = ["tokio"] }
 bitflags           = "^1.3"
 bytes              = "^1.1"
+clap                = { version = "^3.0", features = ["derive"] }
 chrono             = "0.4.19"
 futures            = "0.3.19"
 futures-util       = "0.3.19"
