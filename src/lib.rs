@@ -3,6 +3,7 @@ pub mod gps;
 pub mod gpsd;
 pub mod nmea;
 pub mod pps;
+pub mod precision;
 pub mod shm;
 pub mod timestamp;
 
