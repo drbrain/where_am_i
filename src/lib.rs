@@ -17,7 +17,6 @@ extern crate nix;
 extern crate assert_approx_eq;
 
 use timestamp::Timestamp;
-use timestamp::TimestampKind;
 use tokio::sync::broadcast;
 
 pub type TSReceiver = broadcast::Receiver<Timestamp>;

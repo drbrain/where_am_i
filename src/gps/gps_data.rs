@@ -4,7 +4,6 @@ use crate::gpsd::Tpv;
 use crate::nmea::*;
 use crate::TSSender;
 use crate::Timestamp;
-use crate::TimestampKind;
 use chrono::prelude::*;
 use std::fmt::Debug;
 use std::time::Duration;
@@ -214,7 +213,6 @@ fn gpsd_mode(navigation_mode: &NavigationMode) -> u32 {
 fn report_ntp(reference: DateTime<Utc>, received: Duration, name: &str, tx: &TSSender) {
     let ts = Timestamp {
         device: name.into(),
-        kind: TimestampKind::GPS,
         precision: -1,
         leap: 0,
         received_sec: received.as_secs(),

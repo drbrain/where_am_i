@@ -1,7 +1,6 @@
 use crate::TSReceiver;
 use crate::TSSender;
 use crate::Timestamp;
-use crate::TimestampKind;
 
 use crate::shm::sysv_shm;
 use crate::shm::sysv_shm::ShmTime;
@@ -137,7 +136,6 @@ async fn watch_timestamps(unit: i32, device: String, tx: TSSender) {
 
         let timestamp = Timestamp {
             device: device.clone(),
-            kind: TimestampKind::GPS, // TODO pass in type somewhere
             precision,
             leap,
             received_sec: received_sec.try_into().unwrap_or(0),

@@ -3,12 +3,6 @@ use serde::Serialize;
 
 use std::time::Duration;
 
-#[derive(Clone, Debug)]
-pub enum TimestampKind {
-    GPS,
-    PPS,
-}
-
 /// A timestamp to be sent to (or read from) NTP.
 ///
 /// A timestamp includes both a "real" value and a "clock" value.
@@ -23,8 +17,6 @@ pub enum TimestampKind {
 pub struct Timestamp {
     /// Device the timestamp was read from
     pub device: String,
-    /// Kind of device the timestamp was read from
-    pub kind: TimestampKind,
     /// Precision of the timestamp.
     pub precision: i32,
     /// Nonzero if a leap second is coming
@@ -48,7 +40,6 @@ impl Timestamp {
     ) -> Self {
         Timestamp {
             device,
-            kind: TimestampKind::PPS,
             precision,
             leap: 0,
             reference_sec: pps_time.info.assert_tu.sec as u64,
