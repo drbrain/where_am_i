@@ -21,7 +21,7 @@ use tracing::trace;
 pub struct PPS {
     // Don't let the File go out of scope
     _pps_file: Arc<File>,
-    current_timestamp: Arc<watch::Receiver<Option<Timestamp>>>,
+    current_timestamp: watch::Receiver<Option<Timestamp>>,
 }
 
 impl PPS {
@@ -51,12 +51,12 @@ impl PPS {
 
         Ok(PPS {
             _pps_file: Arc::new(pps_file),
-            current_timestamp: Arc::new(current_timestamp),
+            current_timestamp: current_timestamp,
         })
     }
 
     pub fn current_timestamp(&self) -> watch::Receiver<Option<Timestamp>> {
-        Arc::try_unwrap(self.current_timestamp.clone()).unwrap()
+        self.current_timestamp.clone()
     }
 }
 
@@ -106,6 +106,7 @@ fn run(mut state: State, sender: watch::Sender<Option<Timestamp>>) {
         fetch_pps(&mut state);
 
         if let Err(_) = sender.send(state.result) {
+            error!("No more PPS receivers");
             return;
         }
     }
