@@ -2,14 +2,14 @@ use libc::c_int;
 
 use std::mem;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 #[repr(C)]
 pub struct data {
     pub info: info,
     pub timeout: time,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 #[repr(C)]
 pub struct info {
     pub assert_sequence: u32, // sequence number of assert event
@@ -19,7 +19,7 @@ pub struct info {
     pub current_mode: i32,    // current mode
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 #[repr(C)]
 pub struct params {
     pub api_version: i32,    // API version
@@ -28,7 +28,7 @@ pub struct params {
     pub clear_off_tu: time,  // clear offset compensation
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 #[repr(C)]
 pub struct time {
     pub sec: i64,   // seconds

@@ -21,8 +21,10 @@ use std::thread;
 use std::time::SystemTime;
 use tokio::fs::File;
 use tokio_stream::Stream;
+use tracing::debug;
 use tracing::error;
 use tracing::info;
+use tracing::trace;
 
 #[derive(Debug)]
 pub struct PPS {
@@ -41,6 +43,7 @@ impl PPS {
 
         let pps_file = File::from_std(pps_file);
         let fd = pps_file.as_raw_fd();
+        debug!("Opened PPS {} as fd ({})", &device_name, fd);
 
         configure(fd, &device_name)?;
 
@@ -70,28 +73,34 @@ fn configure(pps_fd: c_int, name: &str) -> Result<()> {
         if let Err(e) = ioctl::getcap(pps_fd, &mut mode) {
             return Err(anyhow!("cannot capture PPS assert for {} ({})", name, e));
         };
+        trace!("PPS {} mode: {}", name, mode);
 
         if mode & ioctl::CANWAIT == 0 {
             return Err(anyhow!("PPS device {} can't wait", name));
         };
+        trace!("PPS {} can wait", name);
 
         if (mode & ioctl::CAPTUREASSERT) == 0 {
             return Err(anyhow!("PPS device {} can't capture assert", name));
         };
+        trace!("PPS {} can capture assert", name);
 
         let mut params = ioctl::params::default();
 
         if let Err(e) = ioctl::getparams(pps_fd, &mut params) {
             return Err(anyhow!("cannot get PPS parameters for {} ({})", name, e));
         };
+        trace!("PPS {} params: {:?}", name, params);
 
         params.mode |= ioctl::CAPTUREASSERT;
 
         if let Err(e) = ioctl::setparams(pps_fd, &mut params) {
             return Err(anyhow!("cannot set PPS parameters for {} ({})", name, e));
         };
+        trace!("Set PPS {} params {:?}", name, params);
     }
 
+    trace!("PPS {} configured", name);
     Ok(())
 }
 
@@ -117,6 +126,7 @@ fn fetch_pps(pps_state: &mut State) {
 
     let data_ptr: *mut ioctl::data = &mut data;
     let fetched;
+    trace!("Waiting for PPS signal for fd {}", pps_state.fd);
 
     unsafe {
         fetched = ioctl::fetch(pps_state.fd, data_ptr);
@@ -125,12 +135,13 @@ fn fetch_pps(pps_state: &mut State) {
     match fetched {
         Ok(_) => (),
         Err(e) => {
-            error!("unable to get PPS event ({:?})", e);
+            error!("unable to get PPS event from fd {} ({:?})", pps_state.fd, e);
             return;
         }
     }
 
     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
+    trace!("Received PPS signal from fd {}", pps_state.fd);
 
     match now {
         Ok(now) => {
