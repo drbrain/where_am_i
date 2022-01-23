@@ -1,7 +1,5 @@
 use anyhow::Result;
 use clap::Parser;
-use std::fs::OpenOptions;
-use std::os::unix::io::AsRawFd;
 use tracing::info;
 use where_am_i::pps::PPS;
 use where_am_i::precision::Precision;
@@ -24,12 +22,7 @@ async fn main() -> Result<()> {
 
     let device = args.pps_device.clone();
 
-    let pps = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(device.clone())?;
-
-    let pps = PPS::new(device.clone(), pps.as_raw_fd());
+    let pps = PPS::new(device.clone())?;
     info!("Opened PPS device {}", device.clone());
 
     let precision = Precision::default();

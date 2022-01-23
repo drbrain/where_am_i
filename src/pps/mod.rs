@@ -1,14 +1,16 @@
 mod device;
-mod error;
 pub mod ioctl;
 pub mod state;
 
 pub use device::Device;
-pub use error::Error;
 
 use crate::timestamp::Timestamp;
+use anyhow::anyhow;
+use anyhow::Result;
 use libc::c_int;
 use state::State;
+use std::fs::OpenOptions;
+use std::os::unix::io::AsRawFd;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -17,17 +19,32 @@ use std::task::Poll;
 use std::task::Waker;
 use std::thread;
 use std::time::SystemTime;
+use tokio::fs::File;
 use tokio_stream::Stream;
 use tracing::error;
+use tracing::info;
 
+#[derive(Debug)]
 pub struct PPS {
+    // Don't let the File go out of scope
+    _pps_file: File,
     pps_state: Arc<Mutex<State>>,
     waker: Arc<Mutex<Option<Waker>>>,
 }
 
 impl PPS {
-    pub fn new(device: String, fd: c_int) -> Self {
-        let state = State::new(device, fd);
+    pub fn new(device_name: String) -> Result<Self> {
+        let pps_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(device_name.clone())?;
+
+        let pps_file = File::from_std(pps_file);
+        let fd = pps_file.as_raw_fd();
+
+        configure(fd, &device_name)?;
+
+        let state = State::new(device_name.clone(), fd);
 
         let pps_state = Arc::new(Mutex::new(state));
         let waker = Arc::new(Mutex::new(None));
@@ -36,16 +53,52 @@ impl PPS {
         let thread_pps_waker = waker.clone();
 
         thread::spawn(move || run(thread_pps_state, thread_pps_waker));
+        info!("Started PPS device {}", &device_name);
 
-        PPS { pps_state, waker }
+        Ok(PPS {
+            _pps_file: pps_file,
+            pps_state,
+            waker,
+        })
     }
+}
+
+fn configure(pps_fd: c_int, name: &str) -> Result<()> {
+    unsafe {
+        let mut mode = 0;
+
+        if let Err(e) = ioctl::getcap(pps_fd, &mut mode) {
+            return Err(anyhow!("cannot capture PPS assert for {} ({})", name, e));
+        };
+
+        if mode & ioctl::CANWAIT == 0 {
+            return Err(anyhow!("PPS device {} can't wait", name));
+        };
+
+        if (mode & ioctl::CAPTUREASSERT) == 0 {
+            return Err(anyhow!("PPS device {} can't capture assert", name));
+        };
+
+        let mut params = ioctl::params::default();
+
+        if let Err(e) = ioctl::getparams(pps_fd, &mut params) {
+            return Err(anyhow!("cannot get PPS parameters for {} ({})", name, e));
+        };
+
+        params.mode |= ioctl::CAPTUREASSERT;
+
+        if let Err(e) = ioctl::setparams(pps_fd, &mut params) {
+            return Err(anyhow!("cannot set PPS parameters for {} ({})", name, e));
+        };
+    }
+
+    Ok(())
 }
 
 fn run(pps_state: Arc<Mutex<State>>, waker: Arc<Mutex<Option<Waker>>>) {
     loop {
-        let mut pps_state = pps_state.lock().unwrap();
-
         // reset timestamp
+        let mut pps_state = pps_state.lock().unwrap();
         pps_state.result = None;
 
         fetch_pps(&mut pps_state);

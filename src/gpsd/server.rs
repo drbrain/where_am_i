@@ -127,7 +127,7 @@ impl Server {
             Some(pps_config) => {
                 let pps_name = pps_config.device.clone();
 
-                let mut pps = pps::Device::new(pps_name.clone(), gps_name.clone());
+                let pps = pps::Device::new(pps_name.clone(), gps_name.clone()).unwrap();
 
                 match pps.run().await {
                     Ok(()) => (),
