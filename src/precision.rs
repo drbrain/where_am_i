@@ -8,12 +8,13 @@
 // University of Delaware makes no representations about the suitability this software for any
 // purpose. It is provided "as is" without express or implied warranty.
 
+use crate::pps::PPS;
 use crate::timestamp::Timestamp;
 use anyhow::anyhow;
 use anyhow::Result;
-use std::marker::Unpin;
-use tokio_stream::Stream;
-use tokio_stream::StreamExt;
+use std::ops::Deref;
+use tokio::sync::watch;
+use tracing::error;
 
 pub struct Precision {
     /// Maximum number of samples to process when measuring ticks
@@ -33,12 +34,9 @@ impl Precision {
         }
     }
 
-    pub async fn measure_precision<T>(&self, stream: T) -> Result<i32>
-    where
-        T: Stream<Item = Timestamp> + Unpin,
-    {
+    pub async fn measure_precision(&self, pps: PPS) -> Result<i32> {
         let mut i = 0;
-        let mut tick = self.measure_tick(stream).await?;
+        let mut tick = self.measure_tick(pps).await?;
 
         while tick <= 1.0 {
             tick *= 2.0;
@@ -52,16 +50,14 @@ impl Precision {
         Ok(i)
     }
 
-    async fn measure_tick<T>(&self, mut stream: T) -> Result<f64>
-    where
-        T: Stream<Item = Timestamp> + Unpin,
-    {
+    async fn measure_tick(&self, pps: PPS) -> Result<f64> {
+        let mut current_timestamp = pps.current_timestamp();
         let mut tick = u32::MAX;
         let mut repeats: u32 = 0;
         let mut max_repeats: u32 = 0;
         let mut changes: u32 = 0;
 
-        let mut last = if let Some(ts) = stream.next().await {
+        let mut last = if let Some(ts) = next_tick(&mut current_timestamp).await {
             ts.reference_nsec
         } else {
             return Err(anyhow!("Unable to retrieve timestamp"));
@@ -69,7 +65,7 @@ impl Precision {
 
         let mut loops = 0;
 
-        while let Some(ts) = stream.next().await {
+        while let Some(ts) = next_tick(&mut current_timestamp).await {
             let val = ts.reference_nsec;
             let diff = val - last;
             last = val;
@@ -92,6 +88,17 @@ impl Precision {
 
         Ok(tick as f64 / u32::MAX as f64)
     }
+}
+
+async fn next_tick(
+    current_timestamp: &mut watch::Receiver<Option<Timestamp>>,
+) -> Option<Timestamp> {
+    if let Err(_) = current_timestamp.changed().await {
+        error!("PPS source shut down");
+        return None;
+    }
+
+    current_timestamp.borrow().deref().clone()
 }
 
 impl Default for Precision {

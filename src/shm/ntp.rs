@@ -3,10 +3,12 @@ use crate::shm::sysv_shm::ShmTime;
 use crate::TSReceiver;
 use std::convert::TryInto;
 use std::io;
+use std::ops::Deref;
 use std::sync::atomic::compiler_fence;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::sync::broadcast;
+use tokio::sync::watch;
 use tokio::time::sleep;
 use tracing::error;
 use tracing::trace;
@@ -24,6 +26,20 @@ impl NtpShm {
 
     pub async fn relay(&self, unit: i32, leap: bool, rx: TSReceiver) {
         tokio::spawn(relay_timestamps(unit, self.precision, leap, rx));
+    }
+
+    pub async fn relay_pps(
+        &self,
+        unit: i32,
+        leap: bool,
+        current_timestamp: watch::Receiver<Option<crate::timestamp::Timestamp>>,
+    ) {
+        tokio::spawn(relay_pps_timestamps(
+            unit,
+            self.precision,
+            leap,
+            current_timestamp,
+        ));
     }
 
     pub async fn watch(
@@ -45,48 +61,85 @@ fn map_ntp_unit(unit: i32) -> io::Result<ShmTime> {
 }
 
 async fn relay_timestamps(unit: i32, precision: i32, leap: bool, mut rx: TSReceiver) {
-    let mut time = map_ntp_unit(unit).unwrap();
-    let mut last_count: i32;
+    let mut shm_time = map_ntp_unit(unit).unwrap();
 
     while let Ok(ts) = rx.recv().await {
-        let reference_sec = ts.reference_sec.try_into().unwrap_or(0);
-        let reference_nsec = ts.reference_nsec;
-        let reference_usec = (reference_nsec / 1000) as i32;
-
-        let received_sec = ts.received_sec.try_into().unwrap_or(0);
-        let received_nsec = ts.received_nsec;
-        let received_usec = (received_nsec / 1000) as i32;
-
-        time.map_mut(|t| &mut t.valid).write(0);
-        time.map_mut(|t| &mut t.count).update(|c| *c += 1);
-
-        compiler_fence(Ordering::SeqCst);
-
-        time.map_mut(|t| &mut t.clock_sec).write(reference_sec);
-        time.map_mut(|t| &mut t.clock_usec).write(reference_usec);
-
-        time.map_mut(|t| &mut t.receive_sec).write(received_sec);
-        time.map_mut(|t| &mut t.receive_usec).write(received_usec);
-
-        time.map_mut(|t| &mut t.leap).write(leap as i32);
-
-        time.map_mut(|t| &mut t.precision).write(precision);
-
-        time.map_mut(|t| &mut t.clock_nsec).write(reference_nsec);
-        time.map_mut(|t| &mut t.receive_nsec).write(received_nsec);
-
-        compiler_fence(Ordering::SeqCst);
-
-        time.map_mut(|t| &mut t.count).update(|c| *c += 1);
-        time.map_mut(|t| &mut t.valid).write(1);
-        last_count = time.map(|t| &t.count).read();
-
-        trace!("set NTP timestamp on unit {} count {}", unit, last_count);
+        write_timestamp(&mut shm_time, &ts, precision, leap);
     }
 
     error!("Sending timestamps failed");
 
-    sysv_shm::unmap(time);
+    sysv_shm::unmap(shm_time);
+}
+
+async fn relay_pps_timestamps(
+    unit: i32,
+    precision: i32,
+    leap: bool,
+    mut current_timestamp: watch::Receiver<Option<crate::timestamp::Timestamp>>,
+) {
+    let mut shm_time = map_ntp_unit(unit).unwrap();
+
+    loop {
+        if let Err(_) = current_timestamp.changed().await {
+            error!("PPS source for NTP shm unit {} shut down", unit);
+            break;
+        }
+
+        if let Some(ts) = current_timestamp.borrow().deref() {
+            write_timestamp(&mut shm_time, ts, precision, leap);
+        }
+    }
+
+    sysv_shm::unmap(shm_time);
+}
+
+fn write_timestamp(
+    time: &mut ShmTime,
+    ts: &crate::timestamp::Timestamp,
+    precision: i32,
+    leap: bool,
+) -> i32 {
+    let reference_sec = ts.reference_sec.try_into().unwrap_or(0);
+    let reference_nsec = ts.reference_nsec;
+    let reference_usec = (reference_nsec / 1000) as i32;
+
+    let received_sec = ts.received_sec.try_into().unwrap_or(0);
+    let received_nsec = ts.received_nsec;
+    let received_usec = (received_nsec / 1000) as i32;
+
+    time.map_mut(|t| &mut t.valid).write(0);
+    time.map_mut(|t| &mut t.count).update(|c| *c += 1);
+
+    compiler_fence(Ordering::SeqCst);
+
+    time.map_mut(|t| &mut t.clock_sec).write(reference_sec);
+    time.map_mut(|t| &mut t.clock_usec).write(reference_usec);
+
+    time.map_mut(|t| &mut t.receive_sec).write(received_sec);
+    time.map_mut(|t| &mut t.receive_usec).write(received_usec);
+
+    time.map_mut(|t| &mut t.leap).write(leap as i32);
+
+    time.map_mut(|t| &mut t.precision).write(precision);
+
+    time.map_mut(|t| &mut t.clock_nsec).write(reference_nsec);
+    time.map_mut(|t| &mut t.receive_nsec).write(received_nsec);
+
+    compiler_fence(Ordering::SeqCst);
+
+    time.map_mut(|t| &mut t.count).update(|c| *c += 1);
+    time.map_mut(|t| &mut t.valid).write(1);
+    let last_count: i32 = time.map(|t| &t.count).read();
+
+    trace!(
+        "set NTP timestamp {}: {}.{}",
+        last_count,
+        ts.reference_sec,
+        ts.reference_nsec
+    );
+
+    last_count
 }
 
 macro_rules! read {

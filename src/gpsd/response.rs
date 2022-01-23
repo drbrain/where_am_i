@@ -19,8 +19,8 @@ pub enum Response {
     Watch(Watch),
 }
 
-impl From<(&String, Timestamp)> for Response {
-    fn from(from: (&String, Timestamp)) -> Response {
+impl From<(&String, &Timestamp)> for Response {
+    fn from(from: (&String, &Timestamp)) -> Response {
         let (device, timestamp) = from;
 
         Response::PPS(PPS {

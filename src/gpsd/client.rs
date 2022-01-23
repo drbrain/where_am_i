@@ -8,19 +8,21 @@ use crate::gpsd::Poll;
 use crate::gpsd::Response;
 use crate::gpsd::Version;
 use crate::gpsd::Watch;
-use crate::TSReceiver;
+use crate::Timestamp;
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 use std::error::Error;
 use std::fmt;
 use std::io;
 use std::net::SocketAddr;
+use std::ops::Deref;
 use std::sync::Arc;
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
+use tokio::sync::watch;
 use tokio::sync::Mutex;
 use tokio_util::codec::FramedRead;
 use tokio_util::codec::FramedWrite;
@@ -159,7 +161,7 @@ impl Client {
 
     async fn enable_watch(&self, watch: Watch) {
         let mut gps_rx = None;
-        let mut pps_rx = None;
+        let mut pps = None;
         let device = match watch.device {
             Some(d) => d,
             None => return,
@@ -173,7 +175,7 @@ impl Client {
             }
 
             if watch.pps.unwrap_or(false) {
-                pps_rx = server.pps_rx_for(device.clone())
+                pps = server.pps_for(device.clone())
             }
         }
 
@@ -181,8 +183,8 @@ impl Client {
             relay_messages(self.res.clone(), rx)
         }
 
-        if let Some(rx) = pps_rx {
-            relay_pps(device, self.res.clone(), rx).await
+        if let Some(pps) = pps {
+            relay_pps(device, self.res.clone(), pps.current_timestamp()).await
         }
     }
 
@@ -223,12 +225,28 @@ async fn relay(tx: mpsc::Sender<Response>, mut rx: broadcast::Receiver<Response>
     }
 }
 
-async fn relay_pps(device: String, tx: mpsc::Sender<Response>, mut rx: TSReceiver) {
+async fn relay_pps(
+    device: String,
+    tx: mpsc::Sender<Response>,
+    mut latest_timestamp: watch::Receiver<Option<Timestamp>>,
+) {
     tokio::spawn(async move {
-        while let Ok(timestamp) = rx.recv().await {
-            if let Err(e) = tx.send((&device, timestamp).into()).await {
-                error!("error relaying message: {:?}", e);
+        loop {
+            if let Err(e) = latest_timestamp.changed().await {
+                error!("PPS timestamp source hung up: {:?}", e);
                 break;
+            }
+
+            let response = match latest_timestamp.borrow().deref() {
+                Some(ts) => Some((&device, ts).into()),
+                None => None,
+            };
+
+            if let Some(response) = response {
+                if let Err(e) = tx.send(response).await {
+                    error!("error relaying message: {:?}", e);
+                    break;
+                }
             }
         }
     });

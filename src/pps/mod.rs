@@ -1,8 +1,5 @@
-mod device;
 pub mod ioctl;
 pub mod state;
-
-pub use device::Device;
 
 use crate::timestamp::Timestamp;
 use anyhow::anyhow;
@@ -11,27 +8,20 @@ use libc::c_int;
 use state::State;
 use std::fs::OpenOptions;
 use std::os::unix::io::AsRawFd;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::Mutex;
-use std::task::Context;
-use std::task::Poll;
-use std::task::Waker;
-use std::thread;
 use std::time::SystemTime;
 use tokio::fs::File;
-use tokio_stream::Stream;
+use tokio::sync::watch;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::trace;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PPS {
     // Don't let the File go out of scope
-    _pps_file: File,
-    pps_state: Arc<Mutex<State>>,
-    waker: Arc<Mutex<Option<Waker>>>,
+    _pps_file: Arc<File>,
+    current_timestamp: Arc<watch::Receiver<Option<Timestamp>>>,
 }
 
 impl PPS {
@@ -48,21 +38,25 @@ impl PPS {
         configure(fd, &device_name)?;
 
         let state = State::new(device_name.clone(), fd);
+        let (sender, current_timestamp) = watch::channel(None);
 
-        let pps_state = Arc::new(Mutex::new(state));
-        let waker = Arc::new(Mutex::new(None));
+        let thread_device_name = device_name.clone();
 
-        let thread_pps_state = pps_state.clone();
-        let thread_pps_waker = waker.clone();
+        tokio::task::spawn_blocking(move || {
+            run(state, sender);
+            trace!("PPS {} shutdown, no more watchers", &thread_device_name);
+        });
 
-        thread::spawn(move || run(thread_pps_state, thread_pps_waker));
         info!("Started PPS device {}", &device_name);
 
         Ok(PPS {
-            _pps_file: pps_file,
-            pps_state,
-            waker,
+            _pps_file: Arc::new(pps_file),
+            current_timestamp: Arc::new(current_timestamp),
         })
+    }
+
+    pub fn current_timestamp(&self) -> watch::Receiver<Option<Timestamp>> {
+        Arc::try_unwrap(self.current_timestamp.clone()).unwrap()
     }
 }
 
@@ -104,18 +98,15 @@ fn configure(pps_fd: c_int, name: &str) -> Result<()> {
     Ok(())
 }
 
-fn run(pps_state: Arc<Mutex<State>>, waker: Arc<Mutex<Option<Waker>>>) {
+fn run(mut state: State, sender: watch::Sender<Option<Timestamp>>) {
     loop {
         // reset timestamp
-        let mut pps_state = pps_state.lock().unwrap();
-        pps_state.result = None;
+        state.result = None;
 
-        fetch_pps(&mut pps_state);
+        fetch_pps(&mut state);
 
-        let mut waker = waker.lock().unwrap();
-
-        if let Some(waker) = waker.take() {
-            waker.wake()
+        if let Err(_) = sender.send(state.result) {
+            return;
         }
     }
 }
@@ -155,27 +146,5 @@ fn fetch_pps(pps_state: &mut State) {
                 e
             );
         }
-    }
-}
-
-impl Stream for PPS {
-    type Item = Timestamp;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let state = self.pps_state.lock().unwrap();
-
-        if let Some(pps_time) = state.result.as_ref() {
-            Poll::Ready(Some(pps_time.clone()))
-        } else {
-            let mut waker = self.waker.lock().unwrap();
-
-            *waker = Some(cx.waker().clone());
-
-            Poll::Pending
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (1, Some(1))
     }
 }

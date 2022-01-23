@@ -4,10 +4,8 @@ use crate::gps::GPS;
 use crate::gpsd::client::Client;
 use crate::gpsd::Response;
 use crate::nmea;
-use crate::pps;
+use crate::pps::PPS;
 use crate::shm::NtpShm;
-use crate::TSReceiver;
-use crate::TSSender;
 use anyhow::Context;
 use anyhow::Result;
 use std::collections::HashMap;
@@ -28,7 +26,7 @@ pub struct Server {
     pub clients: HashMap<SocketAddr, ()>,
     pub devices: Vec<GpsConfig>,
     gps_tx: HashMap<String, broadcast::Sender<Response>>,
-    pps_tx: HashMap<String, TSSender>,
+    pps: HashMap<String, PPS>,
 }
 
 impl Server {
@@ -39,7 +37,7 @@ impl Server {
             clients: HashMap::new(),
             devices,
             gps_tx: HashMap::new(),
-            pps_tx: HashMap::new(),
+            pps: HashMap::new(),
         }
     }
 
@@ -47,8 +45,8 @@ impl Server {
         self.gps_tx.insert(gps.name.clone(), gps.gpsd_tx.clone());
     }
 
-    pub fn add_pps(&mut self, pps: &pps::Device, name: String) {
-        self.pps_tx.insert(name, pps.tx.clone());
+    pub fn add_pps(&mut self, pps: &PPS, name: String) {
+        self.pps.insert(name, pps.clone());
     }
 
     pub fn gps_rx_for(&self, device: String) -> Option<broadcast::Receiver<Response>> {
@@ -60,12 +58,11 @@ impl Server {
     }
 
     #[tracing::instrument]
-    pub fn pps_rx_for(&self, device: String) -> Option<TSReceiver> {
-        if let Some(tx) = self.pps_tx.get(&device) {
-            return Some(tx.subscribe());
+    pub fn pps_for(&self, device: String) -> Option<PPS> {
+        match self.pps.get(&device) {
+            Some(pps) => Some(pps.clone()),
+            None => None,
         }
-
-        None
     }
 
     pub async fn run(self) -> Result<()> {
@@ -127,15 +124,7 @@ impl Server {
             Some(pps_config) => {
                 let pps_name = pps_config.device.clone();
 
-                let pps = pps::Device::new(pps_name.clone(), gps_name.clone()).unwrap();
-
-                match pps.run().await {
-                    Ok(()) => (),
-                    Err(e) => {
-                        error!("Error opening PPS device {}: {}", pps_name, e);
-                        std::process::exit(1);
-                    }
-                };
+                let pps = PPS::new(pps_name.clone()).unwrap();
 
                 self.add_pps(&pps, gps_name.clone());
 
@@ -143,7 +132,7 @@ impl Server {
 
                 if let Some(ntp_unit) = pps_config.ntp_unit {
                     NtpShm::new(-20)
-                        .relay(ntp_unit, false, pps.tx.subscribe())
+                        .relay_pps(ntp_unit, false, pps.current_timestamp())
                         .await;
                     info!(
                         "Sending PPS time from {} via NTP unit {}",
