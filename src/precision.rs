@@ -67,7 +67,8 @@ impl Precision {
 
         while let Some(ts) = next_tick(&mut current_timestamp).await {
             let val = ts.reference_nsec;
-            let diff = val - last;
+            // We can use abs_diff() in the future
+            let diff = if val < last { last - val } else { val - last };
             last = val;
 
             if diff > self.min_clock_increment {
