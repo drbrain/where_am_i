@@ -42,8 +42,30 @@ fn test_valid() {
 }
 
 #[test]
+fn test_incomplete() {
+    let driver = driver();
+    let input = b"\r\n$EIGAQ,RMC*2B";
+
+    match parser::parse::<VEb>(input, &driver, timestamp()) {
+        Err(Err::Incomplete(nom::Needed::Size(needed))) => {
+            assert_eq!(std::num::NonZeroUsize::new(1).unwrap(), needed)
+        }
+        _ => {
+            panic!("Expected Incomplete");
+        }
+    }
+}
+
+#[test]
 fn test_skip_garbage() {
     let parsed = parse(b"stuff*AA\r\n$EIGAQ,RMC*2B\r\n$");
+    let mut data = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;
+
+    data.received = Some(timestamp());
+
+    assert_eq!(NMEA::GAQ(data), parsed);
+
+    let parsed = parse(b"\r\n$EIGAQ,RMC*2B\r\n");
     let mut data = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;
 
     data.received = Some(timestamp());
@@ -63,6 +85,12 @@ fn test_garbage() {
     let (input, count) = sentence_parser::garbage::<VEb>(input).unwrap();
 
     assert_eq!(1, count);
+    assert_eq!(b"$", input);
+
+    let input = b"\r\n$";
+    let (input, count) = sentence_parser::garbage::<VEb>(input).unwrap();
+
+    assert_eq!(2, count);
     assert_eq!(b"$", input);
 
     let input = b"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx$";

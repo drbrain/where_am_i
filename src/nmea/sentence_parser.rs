@@ -1,8 +1,8 @@
-use chrono::NaiveDateTime;
-
 use crate::nmea::parser::ChecksumMismatch;
-
-use nom::bytes::complete::tag;
+use chrono::NaiveDateTime;
+use nom::bytes::streaming::tag;
+use nom::bytes::streaming::take_while_m_n;
+use nom::character::is_hex_digit;
 use nom::combinator::cut;
 use nom::combinator::map;
 use nom::combinator::opt;
@@ -18,10 +18,8 @@ use nom::sequence::tuple;
 use nom::Err;
 use nom::IResult;
 use nom::Needed;
-
 use std::convert::TryInto;
 use std::time::Duration;
-
 use tracing::error;
 use tracing::trace;
 
@@ -118,9 +116,6 @@ fn parse_error<'a, E: ParseError<&'a [u8]>>(
 pub(crate) fn garbage<'a, E: ParseError<&'a [u8]> + ContextError<&'a [u8]>>(
     input: &'a [u8],
 ) -> IResult<&'a [u8], usize, E> {
-    use nom::bytes::streaming::tag;
-    use nom::bytes::streaming::take_while_m_n;
-
     context(
         "garbage",
         cut(terminated(
@@ -139,15 +134,10 @@ pub(crate) fn non_star<'a, E: ParseError<&'a [u8]>>(
 }
 
 pub(crate) fn star<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], &'a [u8], E> {
-    use nom::bytes::streaming::tag;
-
     tag(b"*")(input)
 }
 
 pub(crate) fn checksum<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], u8, E> {
-    use nom::bytes::streaming::take_while_m_n;
-    use nom::character::is_hex_digit;
-
     map(recognize(take_while_m_n(2, 2, is_hex_digit)), |c| {
         u8::from_str_radix(std::str::from_utf8(c).unwrap(), 16).unwrap()
     })(input)
