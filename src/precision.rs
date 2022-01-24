@@ -26,7 +26,11 @@ impl Precision {
         Precision {}
     }
 
-    pub async fn measure(&self, pps: PPS) -> Result<i32> {
+    /// Calculate precision for +pps+.
+    ///
+    /// This will capture up to `MIN_CHANGES` samples and calculate the measurement precision for
+    /// that PPS device.
+    pub async fn once(&self, pps: PPS) -> Result<i32> {
         let (sender, mut receiver) = watch::channel(0.0);
 
         let task = tokio::spawn(measure_ticks(pps, sender));
@@ -34,19 +38,33 @@ impl Precision {
         receiver.changed().await?;
         task.abort();
 
-        let mut tick = *receiver.borrow().deref();
-        let mut i = 0;
+        let tick = *receiver.borrow().deref();
 
-        while tick <= 1.0 {
-            tick *= 2.0;
-            i -= 1;
-        }
+        Ok(precision(tick))
+    }
 
-        if tick - 1.0 > 1.0 - tick / 2.0 {
-            i += 1;
-        }
+    /// Continuously measure precision for +pps+.
+    ///
+    /// This will start updating precision through the returned `watch::Receiver` after
+    /// `MIN_CHANGES` samples
+    pub async fn watch(&self, pps: PPS) -> watch::Receiver<i32> {
+        let (tick_sender, mut tick_receiver) = watch::channel(0.0);
 
-        Ok(i)
+        tokio::spawn(measure_ticks(pps, tick_sender));
+
+        let (precision_sender, precision_receiver) = watch::channel(0);
+
+        tokio::spawn(async move {
+            while let Ok(_) = tick_receiver.changed().await {
+                let tick = *tick_receiver.borrow().deref();
+
+                if let Err(_) = precision_sender.send(precision(tick)) {
+                    break;
+                }
+            }
+        });
+
+        precision_receiver
     }
 }
 
@@ -87,6 +105,21 @@ async fn measure_ticks(pps: PPS, tick_times: watch::Sender<f64>) -> Result<()> {
     }
 
     Err(anyhow!("Unable to retrieve timestamp"))
+}
+
+fn precision(mut tick: f64) -> i32 {
+    let mut precision = 0;
+
+    while tick <= 1.0 {
+        tick *= 2.0;
+        precision -= 1;
+    }
+
+    if tick - 1.0 > 1.0 - tick / 2.0 {
+        precision += 1;
+    }
+
+    precision
 }
 
 async fn next_tick(
