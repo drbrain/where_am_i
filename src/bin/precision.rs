@@ -25,11 +25,10 @@ async fn main() -> Result<()> {
     let pps = PPS::new(device.clone())?;
     info!("Opened PPS device {}", device.clone());
 
-    let precision = Precision::default();
     info!(
         "PPS {} precision: {}",
         device.clone(),
-        precision.measure_precision(pps).await?
+        Precision::new().measure(pps).await?
     );
 
     Ok(())

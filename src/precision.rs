@@ -16,27 +16,26 @@ use std::ops::Deref;
 use tokio::sync::watch;
 use tracing::error;
 
-pub struct Precision {
-    /// Maximum number of samples to process when measuring ticks
-    max_samples: u32,
-    /// Minimum number of sample-to-sample changes when measuring ticks
-    min_changes: u32,
-    /// Minimum clock increment in 32 bit fractional seconds
-    min_clock_increment: u32,
-}
+const MIN_CHANGES: u32 = 12;
+const MIN_CLOCK_INCREMENT: u32 = 86;
+
+pub struct Precision {}
 
 impl Precision {
-    pub fn new(max_samples: u32, min_changes: u32, min_clock_increment: u32) -> Self {
-        Precision {
-            max_samples,
-            min_changes,
-            min_clock_increment,
-        }
+    pub fn new() -> Self {
+        Precision {}
     }
 
-    pub async fn measure_precision(&self, pps: PPS) -> Result<i32> {
+    pub async fn measure(&self, pps: PPS) -> Result<i32> {
+        let (sender, mut receiver) = watch::channel(0.0);
+
+        let task = tokio::spawn(measure_ticks(pps, sender));
+
+        receiver.changed().await?;
+        task.abort();
+
+        let mut tick = *receiver.borrow().deref();
         let mut i = 0;
-        let mut tick = self.measure_tick(pps).await?;
 
         while tick <= 1.0 {
             tick *= 2.0;
@@ -49,46 +48,45 @@ impl Precision {
 
         Ok(i)
     }
+}
 
-    async fn measure_tick(&self, pps: PPS) -> Result<f64> {
-        let mut current_timestamp = pps.current_timestamp();
-        let mut tick = u32::MAX;
-        let mut repeats: u32 = 0;
-        let mut max_repeats: u32 = 0;
-        let mut changes: u32 = 0;
+async fn measure_ticks(pps: PPS, tick_times: watch::Sender<f64>) -> Result<()> {
+    let mut tick = u32::MAX;
+    let mut repeats = 0;
+    let mut max_repeats = 0;
+    let mut changes = 0;
 
-        let mut last = if let Some(ts) = next_tick(&mut current_timestamp).await {
-            ts.reference_nsec
+    let mut current_timestamp = pps.current_timestamp();
+
+    let mut last = if let Some(ts) = next_tick(&mut current_timestamp).await {
+        ts.reference_nsec
+    } else {
+        return Err(anyhow!("Unable to retrieve timestamp"));
+    };
+
+    while let Some(ts) = next_tick(&mut current_timestamp).await {
+        let val = ts.reference_nsec;
+        // We can use abs_diff() in the future
+        let diff = if val < last { last - val } else { val - last };
+        last = val;
+
+        if diff > MIN_CLOCK_INCREMENT {
+            max_repeats = repeats.max(max_repeats);
+            repeats = 0;
+            changes += 1;
+            tick = diff.min(tick);
         } else {
-            return Err(anyhow!("Unable to retrieve timestamp"));
-        };
-
-        let mut loops = 0;
-
-        while let Some(ts) = next_tick(&mut current_timestamp).await {
-            let val = ts.reference_nsec;
-            // We can use abs_diff() in the future
-            let diff = if val < last { last - val } else { val - last };
-            last = val;
-
-            if diff > self.min_clock_increment {
-                max_repeats = repeats.max(max_repeats);
-                repeats = 0;
-                changes += 1;
-                tick = diff.min(tick);
-            } else {
-                repeats += 1
-            }
-
-            loops += 1;
-
-            if loops > self.max_samples || changes > self.min_changes {
-                break;
-            }
+            repeats += 1
         }
 
-        Ok(tick as f64 / u32::MAX as f64)
+        if changes > MIN_CHANGES {
+            if let Err(_) = tick_times.send(tick as f64 / u32::MAX as f64) {
+                return Err(anyhow!("No longer measuring ticks"));
+            }
+        }
     }
+
+    Err(anyhow!("Unable to retrieve timestamp"))
 }
 
 async fn next_tick(
@@ -100,14 +98,4 @@ async fn next_tick(
     }
 
     current_timestamp.borrow().deref().clone()
-}
-
-impl Default for Precision {
-    fn default() -> Self {
-        Precision {
-            max_samples: 60,
-            min_changes: 12,
-            min_clock_increment: 86,
-        }
-    }
 }
