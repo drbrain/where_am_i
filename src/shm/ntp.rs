@@ -13,37 +13,34 @@ use tokio::time::sleep;
 use tracing::error;
 use tracing::trace;
 
-pub struct NtpShm {
-    precision: i32,
-}
+pub struct NtpShm {}
 
 const NTPD_BASE: i32 = 0x4e545030;
 
 impl NtpShm {
-    pub fn new(precision: i32) -> Self {
-        NtpShm { precision }
+    pub fn new() -> Self {
+        NtpShm {}
     }
 
-    pub async fn relay(&self, unit: i32, leap: bool, rx: TSReceiver) {
-        tokio::spawn(relay_timestamps(unit, self.precision, leap, rx));
+    pub async fn relay(unit: i32, leap: bool, precision: i32, rx: TSReceiver) {
+        tokio::spawn(relay_timestamps(unit, precision, leap, rx));
     }
 
     pub async fn relay_pps(
-        &self,
         unit: i32,
+        current_precision: watch::Receiver<i32>,
         leap: bool,
         current_timestamp: watch::Receiver<Option<crate::timestamp::Timestamp>>,
     ) {
         tokio::spawn(relay_pps_timestamps(
             unit,
-            self.precision,
+            current_precision,
             leap,
             current_timestamp,
         ));
     }
 
     pub async fn watch(
-        &self,
         unit: i32,
         device: String,
         tx: broadcast::Sender<(String, crate::shm::Timestamp)>,
@@ -74,7 +71,7 @@ async fn relay_timestamps(unit: i32, precision: i32, leap: bool, mut rx: TSRecei
 
 async fn relay_pps_timestamps(
     unit: i32,
-    precision: i32,
+    current_precision: watch::Receiver<i32>,
     leap: bool,
     mut current_timestamp: watch::Receiver<Option<crate::timestamp::Timestamp>>,
 ) {
@@ -85,6 +82,8 @@ async fn relay_pps_timestamps(
             error!("PPS source for NTP shm unit {} shut down", unit);
             break;
         }
+
+        let precision = *current_precision.borrow().deref();
 
         if let Some(ts) = current_timestamp.borrow().deref() {
             write_timestamp(&mut shm_time, ts, precision, leap);

@@ -95,7 +95,7 @@ impl NtpShmWatch {
         let tx = self.tx.clone();
 
         tokio::spawn(async move {
-            NtpShm::new(0).watch(ntp_unit, device, tx).await;
+            NtpShm::watch(ntp_unit, device, tx).await;
         });
 
         debug!(

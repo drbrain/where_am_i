@@ -47,9 +47,13 @@ impl Server {
         self.gps_tx.insert(gps.name.clone(), gps.gpsd_tx.clone());
     }
 
-    pub async fn add_pps(&mut self, pps: &PPS, name: String) {
-        let precision = Precision::new().watch(pps.clone()).await;
-        self.pps.insert(name, (pps.clone(), precision));
+    pub async fn add_pps(
+        &mut self,
+        pps: &PPS,
+        current_precision: watch::Receiver<i32>,
+        name: String,
+    ) {
+        self.pps.insert(name, (pps.clone(), current_precision));
     }
 
     pub fn gps_rx_for(&self, device: String) -> Option<broadcast::Receiver<Response>> {
@@ -117,9 +121,7 @@ impl Server {
         info!("registered GPS {}", name.clone());
 
         if let Some(ntp_unit) = gps_config.ntp_unit {
-            NtpShm::new(-1)
-                .relay(ntp_unit, false, gps.ntp_tx.subscribe())
-                .await;
+            NtpShm::relay(ntp_unit, false, -1, gps.ntp_tx.subscribe()).await;
             info!("Sending GPS time from {} via NTP unit {}", name, ntp_unit);
         }
 
@@ -128,14 +130,15 @@ impl Server {
                 let pps_name = pps_config.device.clone();
 
                 let pps = PPS::new(pps_name.clone()).unwrap();
+                let current_precision = Precision::new().watch(pps.clone()).await;
 
-                self.add_pps(&pps, gps_name.clone()).await;
+                self.add_pps(&pps, current_precision.clone(), gps_name.clone())
+                    .await;
 
                 info!("registered PPS {} under {}", pps_name, gps_name);
 
                 if let Some(ntp_unit) = pps_config.ntp_unit {
-                    NtpShm::new(-20)
-                        .relay_pps(ntp_unit, false, pps.current_timestamp())
+                    NtpShm::relay_pps(ntp_unit, current_precision, false, pps.current_timestamp())
                         .await;
                     info!(
                         "Sending PPS time from {} via NTP unit {}",
