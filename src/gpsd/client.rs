@@ -183,8 +183,8 @@ impl Client {
             relay_messages(self.res.clone(), rx)
         }
 
-        if let Some(pps) = pps {
-            relay_pps(device, self.res.clone(), pps.current_timestamp()).await
+        if let Some((pps, precision)) = pps {
+            relay_pps(device, self.res.clone(), precision, pps.current_timestamp()).await
         }
     }
 
@@ -228,6 +228,7 @@ async fn relay(tx: mpsc::Sender<Response>, mut rx: broadcast::Receiver<Response>
 async fn relay_pps(
     device: String,
     tx: mpsc::Sender<Response>,
+    latest_precision: watch::Receiver<i32>,
     mut latest_timestamp: watch::Receiver<Option<Timestamp>>,
 ) {
     tokio::spawn(async move {
@@ -237,8 +238,10 @@ async fn relay_pps(
                 break;
             }
 
+            let precision = *latest_precision.borrow().deref();
+
             let response = match latest_timestamp.borrow().deref() {
-                Some(ts) => Some((&device, ts).into()),
+                Some(ts) => Some((&device, precision, ts).into()),
                 None => None,
             };
 

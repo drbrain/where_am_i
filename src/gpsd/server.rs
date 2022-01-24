@@ -5,6 +5,7 @@ use crate::gpsd::client::Client;
 use crate::gpsd::Response;
 use crate::nmea;
 use crate::pps::PPS;
+use crate::precision::Precision;
 use crate::shm::NtpShm;
 use anyhow::Context;
 use anyhow::Result;
@@ -15,6 +16,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
+use tokio::sync::watch;
 use tokio::sync::Mutex;
 use tokio_serial::SerialPortBuilder;
 use tracing::error;
@@ -26,7 +28,7 @@ pub struct Server {
     pub clients: HashMap<SocketAddr, ()>,
     pub devices: Vec<GpsConfig>,
     gps_tx: HashMap<String, broadcast::Sender<Response>>,
-    pps: HashMap<String, PPS>,
+    pps: HashMap<String, (PPS, watch::Receiver<i32>)>,
 }
 
 impl Server {
@@ -45,8 +47,9 @@ impl Server {
         self.gps_tx.insert(gps.name.clone(), gps.gpsd_tx.clone());
     }
 
-    pub fn add_pps(&mut self, pps: &PPS, name: String) {
-        self.pps.insert(name, pps.clone());
+    pub async fn add_pps(&mut self, pps: &PPS, name: String) {
+        let precision = Precision::new().watch(pps.clone()).await;
+        self.pps.insert(name, (pps.clone(), precision));
     }
 
     pub fn gps_rx_for(&self, device: String) -> Option<broadcast::Receiver<Response>> {
@@ -58,9 +61,9 @@ impl Server {
     }
 
     #[tracing::instrument]
-    pub fn pps_for(&self, device: String) -> Option<PPS> {
+    pub fn pps_for(&self, device: String) -> Option<(PPS, watch::Receiver<i32>)> {
         match self.pps.get(&device) {
-            Some(pps) => Some(pps.clone()),
+            Some((pps, precision)) => Some((pps.clone(), precision.clone())),
             None => None,
         }
     }
@@ -126,7 +129,7 @@ impl Server {
 
                 let pps = PPS::new(pps_name.clone()).unwrap();
 
-                self.add_pps(&pps, gps_name.clone());
+                self.add_pps(&pps, gps_name.clone()).await;
 
                 info!("registered PPS {} under {}", pps_name, gps_name);
 

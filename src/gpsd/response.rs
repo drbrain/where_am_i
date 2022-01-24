@@ -19,9 +19,9 @@ pub enum Response {
     Watch(Watch),
 }
 
-impl From<(&String, &Timestamp)> for Response {
-    fn from(from: (&String, &Timestamp)) -> Response {
-        let (device, timestamp) = from;
+impl From<(&String, i32, &Timestamp)> for Response {
+    fn from(from: (&String, i32, &Timestamp)) -> Response {
+        let (device, precision, timestamp) = from;
 
         Response::PPS(PPS {
             device: device.to_string(),
@@ -29,7 +29,7 @@ impl From<(&String, &Timestamp)> for Response {
             real_nsec: timestamp.reference_nsec,
             clock_sec: timestamp.received_sec,
             clock_nsec: timestamp.received_nsec,
-            precision: -20,
+            precision,
         })
     }
 }
