@@ -3,7 +3,6 @@ use crate::configuration::GpsdConfig;
 use crate::gps::GPS;
 use crate::gpsd::client::Client;
 use crate::gpsd::Response;
-use crate::nmea;
 use crate::pps::PPS;
 use crate::precision::Precision;
 use crate::shm::NtpShm;
@@ -94,9 +93,7 @@ impl Server {
         let name = gps_config.name.clone();
         let gps_name = gps_config.device.clone();
 
-        let device = nmea::Device::new(gps_config).await?;
-
-        let mut gps = GPS::new(gps_name.clone(), device);
+        let mut gps = GPS::new(gps_config).await?;
 
         gps.read().await;
 

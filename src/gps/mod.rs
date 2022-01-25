@@ -28,9 +28,12 @@ pub use ublox_nmea::UBXTime;
 pub use ublox_nmea::UBXTimePoll;
 pub use ublox_nmea::UBloxNMEA;
 
+use crate::configuration::GpsConfig;
 use crate::gpsd::Response;
+use crate::nmea::Device;
 use crate::nmea::*;
 use crate::TSSender;
+use anyhow::Result;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -49,20 +52,27 @@ pub struct GPS {
 }
 
 impl GPS {
-    pub fn new(name: String, device: Device) -> Self {
+    pub async fn new(config: &GpsConfig) -> Result<Self> {
+        let device = Device::new(&config).await?;
+
+        let name = config.name.clone();
         let (gpsd_tx, _) = broadcast::channel(5);
         let (ntp_tx, _) = broadcast::channel(5);
         let data = GPSData::default();
         let data = Mutex::new(data);
         let data = Arc::new(data);
 
-        GPS {
+        Ok(GPS {
             name,
             gpsd_tx,
             ntp_tx,
             device,
             data,
-        }
+        })
+    }
+
+    pub fn subscribe_nmea(&self) -> broadcast::Receiver<NMEA> {
+        self.device.subscribe()
     }
 
     pub async fn read(&mut self) {

@@ -5,7 +5,6 @@ use tracing::info;
 use tracing_subscriber::filter::EnvFilter;
 use where_am_i::configuration::Configuration;
 use where_am_i::gps::GPS;
-use where_am_i::nmea::Device;
 use where_am_i::nmea::NMEA;
 
 #[tokio::main]
@@ -36,12 +35,8 @@ async fn main() -> Result<()> {
 
     let device = config.gps[0].clone();
 
-    let gps_name = device.clone().device;
-
-    let device = Device::new(&device).await?;
-    let mut rx = device.subscribe();
-
-    let mut gps = GPS::new(gps_name, device);
+    let mut gps = GPS::new(&device).await?;
+    let mut rx = gps.subscribe_nmea();
 
     gps.read().await;
 
