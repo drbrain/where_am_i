@@ -94,5 +94,9 @@ async fn read_device(
 
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
 mod test_mkt;
+
+#[cfg(test)]
 mod test_ublox_nmea;
