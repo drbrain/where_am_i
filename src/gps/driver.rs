@@ -19,7 +19,7 @@ pub enum Driver {
 }
 
 impl Driver {
-    pub async fn configure(&self, serial: &mut SerialCodec, messages: Vec<MessageSetting>) {
+    pub async fn configure(&self, serial: &mut SerialCodec, messages: &Vec<MessageSetting>) {
         match self {
             Driver::Generic(_) => (),
             Driver::MKT(d) => d.configure(serial, messages).await,
@@ -27,7 +27,7 @@ impl Driver {
         }
     }
 
-    pub fn message_settings(&self, messages: Vec<String>) -> Vec<MessageSetting> {
+    pub fn message_settings(&self, messages: &Vec<String>) -> Vec<MessageSetting> {
         match self {
             Driver::Generic(_) => vec![],
             Driver::MKT(d) => d.message_settings(messages),

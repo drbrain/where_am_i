@@ -1,16 +1,14 @@
+use anyhow::Result;
 use std::convert::TryFrom;
-
 use tracing::error;
 use tracing::Level;
-
 use tracing_subscriber::filter::EnvFilter;
-
 use where_am_i::configuration::Configuration;
 use where_am_i::configuration::GpsdConfig;
 use where_am_i::gpsd::Server;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     let config = match Configuration::load_from_next_arg() {
         Ok(c) => c,
         Err(e) => {
@@ -28,9 +26,9 @@ async fn main() {
 
     let mut server = Server::new(gpsd_config, config.gps.clone());
 
-    server.start_gps_devices().await;
+    server.start_gps_devices().await?;
 
-    server.run().await.unwrap();
+    server.run().await
 }
 
 fn start_tracing(config: &Configuration) {

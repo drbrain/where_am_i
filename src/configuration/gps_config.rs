@@ -27,6 +27,15 @@ pub struct GpsConfig {
     pub ntp_unit: Option<i32>,
 }
 
+impl GpsConfig {
+    pub fn messages(&self) -> Vec<String> {
+        match &self.messages {
+            Some(m) => m.clone(),
+            None => vec![],
+        }
+    }
+}
+
 impl TryFrom<GpsConfig> for SerialPortBuilder {
     type Error = ConfigurationError;
 

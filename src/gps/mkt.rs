@@ -24,12 +24,12 @@ pub const OUTPUT_MESSAGES: [&str; 7] = ["GGA", "GLL", "GSA", "GSV", "MCHN", "RMC
 pub struct MKT {}
 
 impl MKT {
-    pub async fn configure(&self, serial: &mut SerialCodec, messages: Vec<MessageSetting>) {
+    pub async fn configure(&self, serial: &mut SerialCodec, messages: &Vec<MessageSetting>) {
         debug!("configuring MKT with sentences {:?}", messages);
 
         let mut set = MKTSetNMEAOutput::default();
 
-        for message in &messages {
+        for message in messages {
             let frequency: u32 = match message.enabled {
                 true => 1,
                 false => 0,
@@ -79,7 +79,7 @@ impl MKT {
         }
     }
 
-    pub fn message_settings(&self, messages: Vec<String>) -> Vec<MessageSetting> {
+    pub fn message_settings(&self, messages: &Vec<String>) -> Vec<MessageSetting> {
         let mut message_settings: Vec<MessageSetting> = vec![];
 
         if messages.is_empty() {
@@ -96,6 +96,7 @@ impl MKT {
 
         message_settings
     }
+
     pub fn parse_private<
         'a,
         E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,

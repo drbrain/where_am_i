@@ -35,7 +35,6 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Receiver;
-use tokio::sync::broadcast::Sender;
 use tokio::sync::Mutex;
 
 type Locked = Arc<Mutex<GPSData>>;
@@ -45,12 +44,12 @@ pub struct GPS {
     pub name: String,
     pub gpsd_tx: broadcast::Sender<Response>,
     pub ntp_tx: TSSender,
-    device_tx: Sender<NMEA>,
+    device: Device,
     data: Locked,
 }
 
 impl GPS {
-    pub fn new(name: String, device_tx: Sender<NMEA>) -> Self {
+    pub fn new(name: String, device: Device) -> Self {
         let (gpsd_tx, _) = broadcast::channel(5);
         let (ntp_tx, _) = broadcast::channel(5);
         let data = GPSData::default();
@@ -61,7 +60,7 @@ impl GPS {
             name,
             gpsd_tx,
             ntp_tx,
-            device_tx,
+            device,
             data,
         }
     }
@@ -69,7 +68,7 @@ impl GPS {
     pub async fn read(&mut self) {
         let data = Arc::clone(&self.data);
         let name = self.name.clone();
-        let rx = self.device_tx.subscribe();
+        let rx = self.device.subscribe();
         let gpsd_tx = self.gpsd_tx.clone();
         let ntp_tx = self.ntp_tx.clone();
 

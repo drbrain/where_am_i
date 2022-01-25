@@ -42,7 +42,7 @@ pub const OUTPUT_MESSAGES: [&str; 15] = [
 pub struct UBloxNMEA {}
 
 impl UBloxNMEA {
-    pub async fn configure(&self, serial: &mut SerialCodec, messages: Vec<MessageSetting>) {
+    pub async fn configure(&self, serial: &mut SerialCodec, messages: &Vec<MessageSetting>) {
         trace!("configuring u-blox NMEA {:?}", serial);
 
         for message in messages {
@@ -58,7 +58,7 @@ impl UBloxNMEA {
         }
     }
 
-    pub fn message_settings(&self, messages: Vec<String>) -> Vec<MessageSetting> {
+    pub fn message_settings(&self, messages: &Vec<String>) -> Vec<MessageSetting> {
         let mut message_settings: Vec<MessageSetting> = vec![];
 
         if messages.is_empty() {

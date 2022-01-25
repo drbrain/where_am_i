@@ -1,19 +1,15 @@
+use anyhow::Result;
 use std::convert::TryFrom;
-
 use tracing::error;
 use tracing::info;
-
 use tracing_subscriber::filter::EnvFilter;
-
 use where_am_i::configuration::Configuration;
 use where_am_i::gps::GPS;
 use where_am_i::nmea::Device;
 use where_am_i::nmea::NMEA;
 
-use tokio_serial::SerialPortBuilder;
-
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     let config = match Configuration::load_from_next_arg() {
         Ok(c) => c,
         Err(e) => {
@@ -41,30 +37,13 @@ async fn main() {
     let device = config.gps[0].clone();
 
     let gps_name = device.clone().device;
-    let messages = device.clone().messages.unwrap_or_default();
 
-    let serial_port_settings = match SerialPortBuilder::try_from(device.clone()) {
-        Ok(s) => s,
-        Err(e) => {
-            error!("{}", e);
-            std::process::exit(1);
-        }
-    };
+    let device = Device::new(&device).await?;
+    let mut rx = device.subscribe();
 
-    let device = Device::new(
-        gps_name.clone(),
-        device.gps_type,
-        serial_port_settings,
-        messages,
-    );
-
-    let tx = device.run().await;
-
-    let mut gps = GPS::new(gps_name, tx.clone());
+    let mut gps = GPS::new(gps_name, device);
 
     gps.read().await;
-
-    let mut rx = tx.subscribe();
 
     while let Ok(nmea) = rx.recv().await {
         match nmea {
@@ -78,4 +57,6 @@ async fn main() {
             n => info!("{:?}", n),
         }
     }
+
+    Ok(())
 }

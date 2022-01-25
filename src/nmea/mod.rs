@@ -1,5 +1,6 @@
 mod codec;
 pub mod device;
+pub mod device_builder;
 pub mod message_setting;
 pub mod parser;
 pub mod parser_util;
@@ -9,6 +10,7 @@ mod ser;
 pub use codec::Codec;
 pub use device::Device;
 pub use device::SerialCodec;
+pub use device_builder::DeviceBuilder;
 pub use message_setting::MessageSetting;
 pub use parser::message;
 pub use parser::DTMData;

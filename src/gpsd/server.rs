@@ -10,7 +10,6 @@ use crate::shm::NtpShm;
 use anyhow::Context;
 use anyhow::Result;
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::fmt;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -18,7 +17,6 @@ use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tokio::sync::watch;
 use tokio::sync::Mutex;
-use tokio_serial::SerialPortBuilder;
 use tracing::error;
 use tracing::info;
 
@@ -84,35 +82,21 @@ impl Server {
         Ok(())
     }
 
-    pub async fn start_gps_devices(&mut self) {
+    pub async fn start_gps_devices(&mut self) -> Result<()> {
         for gps_config in self.devices.clone().iter() {
-            self.start_gps_device(gps_config).await;
+            self.start_gps_device(gps_config).await?;
         }
+
+        Ok(())
     }
 
-    async fn start_gps_device(&mut self, gps_config: &GpsConfig) {
+    async fn start_gps_device(&mut self, gps_config: &GpsConfig) -> Result<()> {
         let name = gps_config.name.clone();
         let gps_name = gps_config.device.clone();
-        let messages = gps_config.messages.clone().unwrap_or_default();
 
-        let serial_port_settings = match SerialPortBuilder::try_from(gps_config.clone()) {
-            Ok(s) => s,
-            Err(e) => {
-                error!("{}", e);
-                std::process::exit(1);
-            }
-        };
+        let device = nmea::Device::new(gps_config).await?;
 
-        let device = nmea::Device::new(
-            gps_name.clone(),
-            gps_config.gps_type.clone(),
-            serial_port_settings,
-            messages,
-        );
-
-        let gps_tx = device.run().await;
-
-        let mut gps = GPS::new(gps_name.clone(), gps_tx.clone());
+        let mut gps = GPS::new(gps_name.clone(), device);
 
         gps.read().await;
 
@@ -150,6 +134,8 @@ impl Server {
             }
             None => None,
         };
+
+        Ok(())
     }
 }
 
