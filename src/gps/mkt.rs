@@ -1,24 +1,19 @@
 // For GlobalTop MKT devices
 
 use crate::gps::add_message;
-use crate::nmea::device::MessageSetting;
 use crate::nmea::device::SerialCodec;
 use crate::nmea::parser_util::*;
+use crate::nmea::MessageSetting;
 use crate::nmea::NMEA;
-
 use futures_util::sink::SinkExt;
-
 use nom::branch::*;
 use nom::bytes::complete::*;
 use nom::combinator::*;
 use nom::error::*;
 use nom::sequence::*;
 use nom::IResult;
-
 use serde::Serialize;
-
 use std::num::ParseIntError;
-
 use tracing::debug;
 use tracing::error;
 use tracing::info;

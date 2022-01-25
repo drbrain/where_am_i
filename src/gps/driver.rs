@@ -1,15 +1,13 @@
 use crate::gps::Generic;
 use crate::gps::UBloxNMEA;
 use crate::gps::MKT;
-use crate::nmea::device::MessageSetting;
+use crate::nmea::MessageSetting;
 use crate::nmea::SerialCodec;
 use crate::nmea::NMEA;
-
 use nom::error::ContextError;
 use nom::error::FromExternalError;
 use nom::error::ParseError;
 use nom::IResult;
-
 use std::num::ParseFloatError;
 use std::num::ParseIntError;
 

@@ -1,32 +1,24 @@
-use anyhow::Context;
-use anyhow::Result;
-
-use backoff::ExponentialBackoff;
-use backoff::SystemClock;
-
 use crate::gps::Driver;
 use crate::gps::Generic;
 use crate::gps::GpsType;
 use crate::gps::UBloxNMEA;
 use crate::gps::MKT;
 use crate::nmea::Codec;
+use crate::nmea::MessageSetting;
 use crate::nmea::NMEA;
-
+use anyhow::Context;
+use anyhow::Result;
+use backoff::ExponentialBackoff;
+use backoff::SystemClock;
 use futures_util::StreamExt;
-
 use instant::Instant;
-
 use std::time::Duration;
-
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
-
 use tokio_serial::SerialPortBuilder;
 use tokio_serial::SerialPortBuilderExt;
 use tokio_serial::SerialStream;
-
 use tokio_util::codec::Framed;
-
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -34,12 +26,6 @@ use tracing::info;
 type NMEASender = broadcast::Sender<NMEA>;
 type RestartWaiter = oneshot::Sender<()>;
 pub type SerialCodec = Framed<SerialStream, Codec>;
-
-#[derive(Clone, Debug)]
-pub struct MessageSetting {
-    pub id: String,
-    pub enabled: bool,
-}
 
 pub struct Device {
     pub name: String,

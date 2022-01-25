@@ -1,16 +1,13 @@
 // For UBlox ZED-F9P devices
 
-use chrono::naive::NaiveDate;
-use chrono::naive::NaiveTime;
-
 use crate::gps::add_message;
-use crate::nmea::device::MessageSetting;
 use crate::nmea::device::SerialCodec;
 use crate::nmea::parser_util::*;
+use crate::nmea::MessageSetting;
 use crate::nmea::NMEA;
-
+use chrono::naive::NaiveDate;
+use chrono::naive::NaiveTime;
 use futures_util::sink::SinkExt;
-
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_while_m_n;
@@ -27,14 +24,11 @@ use nom::sequence::preceded;
 use nom::sequence::terminated;
 use nom::sequence::tuple;
 use nom::IResult;
-
 use serde::ser::SerializeStruct;
 use serde::ser::Serializer;
 use serde::Serialize;
-
 use std::num::ParseFloatError;
 use std::num::ParseIntError;
-
 use tracing::error;
 use tracing::info;
 use tracing::trace;
