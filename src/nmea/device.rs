@@ -10,7 +10,7 @@ use tokio_util::codec::Framed;
 
 pub type SerialCodec = Framed<SerialStream, Codec>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Device {
     pub name: String,
     pub(crate) sender: Arc<broadcast::Sender<NMEA>>,

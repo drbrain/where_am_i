@@ -42,7 +42,7 @@ use tokio::sync::Mutex;
 
 type Locked = Arc<Mutex<GPSData>>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct GPS {
     pub name: String,
     pub gpsd_tx: broadcast::Sender<Response>,
