@@ -102,7 +102,9 @@ impl Server {
         info!("registered GPS {}", name.clone());
 
         if let Some(ntp_unit) = gps_config.ntp_unit {
-            NtpShm::relay(ntp_unit, false, -1, gps.ntp_tx.subscribe()).await;
+            let ntp_shm = NtpShm::new(ntp_unit);
+
+            ntp_shm.relay(false, -1, gps.ntp_tx.subscribe()).await;
             info!("Sending GPS time from {} via NTP unit {}", name, ntp_unit);
         }
 
@@ -119,7 +121,9 @@ impl Server {
                 info!("registered PPS {} under {}", pps_name, gps_name);
 
                 if let Some(ntp_unit) = pps_config.ntp_unit {
-                    NtpShm::relay_pps(ntp_unit, current_precision, false, pps.current_timestamp())
+                    let ntp_shm = NtpShm::new(ntp_unit);
+                    ntp_shm
+                        .relay_pps(current_precision, false, pps.current_timestamp())
                         .await;
                     info!(
                         "Sending PPS time from {} via NTP unit {}",

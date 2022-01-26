@@ -13,27 +13,29 @@ use tokio::time::sleep;
 use tracing::error;
 use tracing::trace;
 
-pub struct NtpShm {}
+pub struct NtpShm {
+    unit: i32,
+}
 
 const NTPD_BASE: i32 = 0x4e545030;
 
 impl NtpShm {
-    pub fn new() -> Self {
-        NtpShm {}
+    pub fn new(unit: i32) -> Self {
+        NtpShm { unit }
     }
 
-    pub async fn relay(unit: i32, leap: bool, precision: i32, rx: TSReceiver) {
-        tokio::spawn(relay_timestamps(unit, precision, leap, rx));
+    pub async fn relay(&self, leap: bool, precision: i32, rx: TSReceiver) {
+        tokio::spawn(relay_timestamps(self.unit, precision, leap, rx));
     }
 
     pub async fn relay_pps(
-        unit: i32,
+        &self,
         current_precision: watch::Receiver<i32>,
         leap: bool,
         current_timestamp: watch::Receiver<Option<crate::timestamp::Timestamp>>,
     ) {
         tokio::spawn(relay_pps_timestamps(
-            unit,
+            self.unit,
             current_precision,
             leap,
             current_timestamp,
