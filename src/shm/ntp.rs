@@ -24,14 +24,14 @@ impl NtpShm {
         NtpShm { unit }
     }
 
-    pub async fn relay(&self, leap: bool, precision: i32, rx: TSReceiver) {
+    pub async fn relay(&self, leap: i32, precision: i32, rx: TSReceiver) {
         tokio::spawn(relay_timestamps(self.unit, precision, leap, rx));
     }
 
     pub async fn relay_pps(
         &self,
         current_precision: watch::Receiver<i32>,
-        leap: bool,
+        leap: i32,
         current_timestamp: watch::Receiver<Option<crate::timestamp::Timestamp>>,
     ) {
         tokio::spawn(relay_pps_timestamps(
@@ -59,7 +59,7 @@ fn map_ntp_unit(unit: i32) -> io::Result<ShmTime> {
     sysv_shm::map(id)
 }
 
-async fn relay_timestamps(unit: i32, precision: i32, leap: bool, mut rx: TSReceiver) {
+async fn relay_timestamps(unit: i32, precision: i32, leap: i32, mut rx: TSReceiver) {
     let mut shm_time = map_ntp_unit(unit).unwrap();
 
     while let Ok(ts) = rx.recv().await {
@@ -74,7 +74,7 @@ async fn relay_timestamps(unit: i32, precision: i32, leap: bool, mut rx: TSRecei
 async fn relay_pps_timestamps(
     unit: i32,
     current_precision: watch::Receiver<i32>,
-    leap: bool,
+    leap: i32,
     mut current_timestamp: watch::Receiver<Option<crate::timestamp::Timestamp>>,
 ) {
     let mut shm_time = map_ntp_unit(unit).unwrap();
@@ -95,11 +95,32 @@ async fn relay_pps_timestamps(
     sysv_shm::unmap(shm_time);
 }
 
+macro_rules! write {
+    ($time: ident, $field:ident) => {
+        write!($time, $field, $field)
+    };
+    ($time: ident, $shm_field:ident, $value:expr) => {
+        $time.map_mut(|t| &mut t.$shm_field).write($value)
+    };
+}
+
+macro_rules! update {
+    ($time: ident, $shm_field:ident, $ex:expr) => {
+        $time.map_mut(|t| &mut t.$shm_field).update($ex)
+    };
+}
+
+macro_rules! read {
+    ($time: ident, $field:ident) => {
+        $time.map(|t| &t.$field).read()
+    };
+}
+
 fn write_timestamp(
     time: &mut ShmTime,
     ts: &crate::timestamp::Timestamp,
     precision: i32,
-    leap: bool,
+    leap: i32,
 ) -> i32 {
     let reference_sec = ts.reference_sec.try_into().unwrap_or(0);
     let reference_nsec = ts.reference_nsec;
@@ -109,29 +130,30 @@ fn write_timestamp(
     let received_nsec = ts.received_nsec;
     let received_usec = (received_nsec / 1000) as i32;
 
-    time.map_mut(|t| &mut t.valid).write(0);
-    time.map_mut(|t| &mut t.count).update(|c| *c += 1);
+    write!(time, valid, 0);
+    update!(time, count, |c| *c += 1);
 
     compiler_fence(Ordering::SeqCst);
 
-    time.map_mut(|t| &mut t.clock_sec).write(reference_sec);
-    time.map_mut(|t| &mut t.clock_usec).write(reference_usec);
+    write!(time, clock_sec, reference_sec);
+    write!(time, clock_usec, reference_usec);
 
-    time.map_mut(|t| &mut t.receive_sec).write(received_sec);
-    time.map_mut(|t| &mut t.receive_usec).write(received_usec);
+    write!(time, receive_sec, received_sec);
+    write!(time, receive_usec, received_usec);
 
-    time.map_mut(|t| &mut t.leap).write(leap as i32);
+    write!(time, leap);
 
-    time.map_mut(|t| &mut t.precision).write(precision);
+    write!(time, precision);
 
-    time.map_mut(|t| &mut t.clock_nsec).write(reference_nsec);
-    time.map_mut(|t| &mut t.receive_nsec).write(received_nsec);
+    write!(time, clock_nsec, reference_nsec);
+    write!(time, receive_nsec, received_nsec);
 
     compiler_fence(Ordering::SeqCst);
 
-    time.map_mut(|t| &mut t.count).update(|c| *c += 1);
-    time.map_mut(|t| &mut t.valid).write(1);
-    let last_count: i32 = time.map(|t| &t.count).read();
+    update!(time, count, |c| *c += 1);
+    write!(time, valid, 1);
+
+    let last_count: i32 = read!(time, count);
 
     trace!(
         "set NTP timestamp {}: {}.{}",
@@ -141,12 +163,6 @@ fn write_timestamp(
     );
 
     last_count
-}
-
-macro_rules! read {
-    ($time: ident, $field:ident) => {
-        $time.map(|t| &t.$field).read()
-    };
 }
 
 // NTP reads the shared memory as described at http://doc.ntp.org/4.2.8/drivers/driver28.html

@@ -104,7 +104,7 @@ impl Server {
         if let Some(ntp_unit) = gps_config.ntp_unit {
             let ntp_shm = NtpShm::new(ntp_unit);
 
-            ntp_shm.relay(false, -1, gps.ntp_tx.subscribe()).await;
+            ntp_shm.relay(0, -1, gps.ntp_tx.subscribe()).await;
             info!("Sending GPS time from {} via NTP unit {}", name, ntp_unit);
         }
 
@@ -123,7 +123,7 @@ impl Server {
                 if let Some(ntp_unit) = pps_config.ntp_unit {
                     let ntp_shm = NtpShm::new(ntp_unit);
                     ntp_shm
-                        .relay_pps(current_precision, false, pps.current_timestamp())
+                        .relay_pps(current_precision, 0, pps.current_timestamp())
                         .await;
                     info!(
                         "Sending PPS time from {} via NTP unit {}",
