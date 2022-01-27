@@ -12,7 +12,7 @@ use std::time::Duration;
 /// The "real" value is the time of the system or "wall" clock when the timestamp was read.  It may
 /// be different than the clock time if the system clock and the reference clock are not
 /// synchronized.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Timestamp {
     /// The system clock seconds this timestamp was received
     pub received_sec: u64,

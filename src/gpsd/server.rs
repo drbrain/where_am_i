@@ -102,9 +102,23 @@ impl Server {
         info!("registered GPS {}", name.clone());
 
         if let Some(ntp_unit) = gps_config.ntp_unit {
-            let ntp_shm = NtpShm::new(ntp_unit);
+            let mut rx = gps.ntp_tx.subscribe();
+            let local = tokio::task::LocalSet::new();
 
-            ntp_shm.relay(0, -1, gps.ntp_tx.subscribe()).await;
+            local
+                .run_until(async move {
+                    tokio::task::spawn_local(async move {
+                        let mut ntp_shm = NtpShm::new(ntp_unit).unwrap();
+
+                        while let Ok(ts) = rx.recv().await {
+                            ntp_shm.update_old(-1, 0, &ts);
+                        }
+                    })
+                    .await
+                    .unwrap();
+                })
+                .await;
+
             info!("Sending GPS time from {} via NTP unit {}", name, ntp_unit);
         }
 
@@ -121,14 +135,26 @@ impl Server {
                 info!("registered PPS {} under {}", pps_name, gps_name);
 
                 if let Some(ntp_unit) = pps_config.ntp_unit {
-                    let ntp_shm = NtpShm::new(ntp_unit);
-                    ntp_shm
-                        .relay_pps(current_precision, 0, pps.current_timestamp())
+                    let mut current_timestamp = pps.current_timestamp();
+                    let local = tokio::task::LocalSet::new();
+
+                    local
+                        .run_until(async move {
+                            tokio::task::spawn_local(async move {
+                                let mut ntp_shm = NtpShm::new(ntp_unit).unwrap();
+
+                                loop {
+                                    ntp_shm
+                                        .update(&current_precision, 0, &mut current_timestamp)
+                                        .await;
+                                }
+                            })
+                            .await
+                            .unwrap();
+                        })
                         .await;
-                    info!(
-                        "Sending PPS time from {} via NTP unit {}",
-                        pps_name, ntp_unit
-                    );
+
+                    info!("Sending PPS time from {} via NTP unit {}", name, ntp_unit);
                 }
 
                 Some(pps)

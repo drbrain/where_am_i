@@ -3,6 +3,7 @@ pub mod state;
 
 use crate::timestamp::Timestamp;
 use anyhow::anyhow;
+use anyhow::Context;
 use anyhow::Result;
 use libc::c_int;
 use state::State;
@@ -21,7 +22,7 @@ use tracing::trace;
 pub struct PPS {
     // Don't let the File go out of scope
     _pps_file: Arc<File>,
-    current_timestamp: watch::Receiver<Option<Timestamp>>,
+    current_timestamp: watch::Receiver<Timestamp>,
 }
 
 impl PPS {
@@ -38,7 +39,7 @@ impl PPS {
         configure(fd, &device_name)?;
 
         let state = State::new(device_name.clone(), fd);
-        let (sender, current_timestamp) = watch::channel(None);
+        let (sender, current_timestamp) = watch::channel(Timestamp::default());
 
         let thread_device_name = device_name.clone();
 
@@ -51,11 +52,11 @@ impl PPS {
 
         Ok(PPS {
             _pps_file: Arc::new(pps_file),
-            current_timestamp: current_timestamp,
+            current_timestamp,
         })
     }
 
-    pub fn current_timestamp(&self) -> watch::Receiver<Option<Timestamp>> {
+    pub fn current_timestamp(&self) -> watch::Receiver<Timestamp> {
         self.current_timestamp.clone()
     }
 }
@@ -98,12 +99,15 @@ fn configure(pps_fd: c_int, name: &str) -> Result<()> {
     Ok(())
 }
 
-fn run(mut state: State, sender: watch::Sender<Option<Timestamp>>) {
+fn run(mut state: State, sender: watch::Sender<Timestamp>) {
     loop {
         // reset timestamp
-        state.result = None;
+        state.result = Timestamp::default();
 
-        fetch_pps(&mut state);
+        if let Err(e) = fetch_pps(&mut state) {
+            error!("{}", e);
+            return;
+        };
 
         if let Err(_) = sender.send(state.result) {
             error!("No more PPS receivers");
@@ -112,7 +116,7 @@ fn run(mut state: State, sender: watch::Sender<Option<Timestamp>>) {
     }
 }
 
-fn fetch_pps(pps_state: &mut State) {
+fn fetch_pps(pps_state: &mut State) -> Result<()> {
     let mut data = ioctl::data::default();
     data.timeout.flags = ioctl::TIME_INVALID;
 
@@ -124,28 +128,13 @@ fn fetch_pps(pps_state: &mut State) {
         fetched = ioctl::fetch(pps_state.fd, data_ptr);
     }
 
-    match fetched {
-        Ok(_) => (),
-        Err(e) => {
-            error!("unable to get PPS event from fd {} ({:?})", pps_state.fd, e);
-            return;
-        }
-    }
+    fetched.with_context(|| format!("unable to get PPS event from fd {}", pps_state.fd))?;
 
-    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
     trace!("Received PPS signal from fd {}", pps_state.fd);
 
-    match now {
-        Ok(now) => {
-            let pps_obj = Timestamp::from_pps_time(data, now);
+    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
 
-            pps_state.result = Some(pps_obj);
-        }
-        Err(e) => {
-            error!(
-                "unable to get system clock timestamp for PPS event ({:?})",
-                e
-            );
-        }
-    }
+    pps_state.result = Timestamp::from_pps_time(data, now);
+
+    Ok(())
 }

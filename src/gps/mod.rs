@@ -58,9 +58,7 @@ impl GPS {
         let name = config.name.clone();
         let (gpsd_tx, _) = broadcast::channel(5);
         let (ntp_tx, _) = broadcast::channel(5);
-        let data = GPSData::default();
-        let data = Mutex::new(data);
-        let data = Arc::new(data);
+        let data = Arc::new(Mutex::new(GPSData::default()));
 
         Ok(GPS {
             name,

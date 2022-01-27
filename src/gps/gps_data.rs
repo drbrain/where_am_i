@@ -198,7 +198,7 @@ impl GPSData {
 
         report_toff(reference, received, name, gpsd_tx);
         report_tpv(reference, self.mode, name, gpsd_tx);
-        report_ntp(reference, received, name, ntp_tx);
+        report_ntp(reference, received, ntp_tx);
     }
 }
 
@@ -210,7 +210,7 @@ fn gpsd_mode(navigation_mode: &NavigationMode) -> u32 {
     }
 }
 
-fn report_ntp(reference: DateTime<Utc>, received: Duration, _name: &str, tx: &TSSender) {
+fn report_ntp(reference: DateTime<Utc>, received: Duration, tx: &TSSender) {
     let ts = Timestamp {
         received_sec: received.as_secs(),
         received_nsec: received.subsec_nanos(),

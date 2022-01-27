@@ -229,7 +229,7 @@ async fn relay_pps(
     device: String,
     tx: mpsc::Sender<Response>,
     latest_precision: watch::Receiver<i32>,
-    mut latest_timestamp: watch::Receiver<Option<Timestamp>>,
+    mut latest_timestamp: watch::Receiver<Timestamp>,
 ) {
     tokio::spawn(async move {
         loop {
@@ -240,16 +240,11 @@ async fn relay_pps(
 
             let precision = *latest_precision.borrow().deref();
 
-            let response = match latest_timestamp.borrow().deref() {
-                Some(ts) => Some((&device, precision, ts).into()),
-                None => None,
-            };
+            let ts = latest_timestamp.borrow().deref().clone();
 
-            if let Some(response) = response {
-                if let Err(e) = tx.send(response).await {
-                    error!("error relaying message: {:?}", e);
-                    break;
-                }
+            if let Err(e) = tx.send((&device, precision, &ts).into()).await {
+                error!("error relaying message: {:?}", e);
+                break;
             }
         }
     });

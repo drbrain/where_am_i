@@ -14,7 +14,6 @@ use anyhow::anyhow;
 use anyhow::Result;
 use std::ops::Deref;
 use tokio::sync::watch;
-use tracing::error;
 
 const MIN_CHANGES: u32 = 12;
 const MIN_CLOCK_INCREMENT: u32 = 86;
@@ -76,14 +75,10 @@ async fn measure_ticks(pps: PPS, tick_times: watch::Sender<f64>) -> Result<()> {
 
     let mut current_timestamp = pps.current_timestamp();
 
-    let mut last = if let Some(ts) = next_tick(&mut current_timestamp).await {
-        ts.reference_nsec
-    } else {
-        return Err(anyhow!("Unable to retrieve timestamp"));
-    };
+    let mut last = next_tick(&mut current_timestamp).await?.reference_nsec;
 
-    while let Some(ts) = next_tick(&mut current_timestamp).await {
-        let val = ts.reference_nsec;
+    loop {
+        let val = next_tick(&mut current_timestamp).await?.reference_nsec;
         // We can use abs_diff() in the future
         let diff = if val < last { last - val } else { val - last };
         last = val;
@@ -103,8 +98,6 @@ async fn measure_ticks(pps: PPS, tick_times: watch::Sender<f64>) -> Result<()> {
             }
         }
     }
-
-    Err(anyhow!("Unable to retrieve timestamp"))
 }
 
 fn precision(mut tick: f64) -> i32 {
@@ -122,13 +115,8 @@ fn precision(mut tick: f64) -> i32 {
     precision
 }
 
-async fn next_tick(
-    current_timestamp: &mut watch::Receiver<Option<Timestamp>>,
-) -> Option<Timestamp> {
-    if let Err(_) = current_timestamp.changed().await {
-        error!("PPS source shut down");
-        return None;
-    }
+async fn next_tick(current_timestamp: &mut watch::Receiver<Timestamp>) -> Result<Timestamp> {
+    current_timestamp.changed().await?;
 
-    current_timestamp.borrow().deref().clone()
+    Ok(current_timestamp.borrow().deref().clone())
 }

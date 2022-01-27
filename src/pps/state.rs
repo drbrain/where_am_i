@@ -6,7 +6,7 @@ use libc::c_int;
 pub struct State {
     pub device: String,
     pub fd: c_int,
-    pub result: Option<Timestamp>,
+    pub result: Timestamp,
 }
 
 impl State {
@@ -14,7 +14,7 @@ impl State {
         State {
             device,
             fd,
-            result: None,
+            result: Timestamp::default(),
         }
     }
 }
