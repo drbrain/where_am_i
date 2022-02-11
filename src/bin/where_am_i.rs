@@ -3,9 +3,11 @@ use std::convert::TryFrom;
 use tracing::error;
 use tracing::Level;
 use tracing_subscriber::filter::EnvFilter;
-use where_am_i::configuration::Configuration;
-use where_am_i::configuration::GpsdConfig;
-use where_am_i::gpsd::Server;
+use where_am_i::{
+    configuration::{Configuration, GpsdConfig},
+    devices::Devices,
+    gpsd::Server,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -24,10 +26,9 @@ async fn main() -> Result<()> {
         None => GpsdConfig::default(),
     };
 
-    let mut server = Server::new(gpsd_config, config.gps.clone());
+    let devices = Devices::start(&config.gps).await?;
 
-    server.start_gps_devices().await?;
-
+    let server = Server::new(gpsd_config, devices);
     server.run().await
 }
 

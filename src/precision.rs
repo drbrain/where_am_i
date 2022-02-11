@@ -8,16 +8,15 @@
 // University of Delaware makes no representations about the suitability this software for any
 // purpose. It is provided "as is" without express or implied warranty.
 
-use crate::pps::PPS;
-use crate::timestamp::Timestamp;
-use anyhow::anyhow;
-use anyhow::Result;
+use crate::{pps::PPS, timestamp::Timestamp};
+use anyhow::{anyhow, Result};
 use std::ops::Deref;
 use tokio::sync::watch;
 
 const MIN_CHANGES: u32 = 12;
 const MIN_CLOCK_INCREMENT: u32 = 86;
 
+#[derive(Clone)]
 pub struct Precision {}
 
 impl Precision {

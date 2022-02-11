@@ -1,5 +1,6 @@
 pub mod configuration;
 pub mod device;
+pub mod devices;
 pub mod gps;
 pub mod gpsd;
 pub mod nmea;

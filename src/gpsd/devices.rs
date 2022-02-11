@@ -1,9 +1,6 @@
-use crate::configuration::GpsConfig;
 use crate::gpsd::Device;
-
-use std::convert::From;
-
 use serde::Serialize;
+use std::convert::From;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
 #[serde(rename = "DEVICES", tag = "class")]
@@ -12,16 +9,16 @@ pub struct Devices {
     remote: Option<String>,
 }
 
-impl From<Vec<GpsConfig>> for Devices {
-    fn from(configs: Vec<GpsConfig>) -> Self {
-        let mut devices = Vec::with_capacity(configs.len());
+impl From<&crate::devices::Devices> for Devices {
+    fn from(devices: &crate::devices::Devices) -> Self {
+        let mut gpsd_devices = Vec::new();
 
-        for config in configs.iter() {
-            devices.push(config.into());
+        for gps in devices.gps_devices() {
+            gpsd_devices.push(gps.into());
         }
 
         Devices {
-            devices,
+            devices: gpsd_devices,
             remote: None,
         }
     }

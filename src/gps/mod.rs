@@ -73,7 +73,7 @@ impl GPS {
         self.device.subscribe()
     }
 
-    pub async fn read(&mut self) {
+    pub fn start(&self) {
         let data = Arc::clone(&self.data);
         let name = self.name.clone();
         let rx = self.device.subscribe();

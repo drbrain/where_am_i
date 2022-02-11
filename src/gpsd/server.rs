@@ -1,11 +1,9 @@
-use crate::configuration::GpsConfig;
-use crate::configuration::GpsdConfig;
-use crate::gps::GPS;
-use crate::gpsd::client::Client;
-use crate::gpsd::Response;
-use crate::pps::PPS;
-use crate::precision::Precision;
-use crate::shm::NtpShm;
+use crate::{
+    configuration::GpsdConfig,
+    devices::Devices,
+    gpsd::{client::Client, Response},
+    pps::PPS,
+};
 use anyhow::Context;
 use anyhow::Result;
 use std::collections::HashMap;
@@ -23,50 +21,25 @@ pub struct Server {
     port: u16,
     bind_addresses: Vec<String>,
     pub clients: HashMap<SocketAddr, ()>,
-    pub devices: Vec<GpsConfig>,
-    gps_tx: HashMap<String, broadcast::Sender<Response>>,
-    pps: HashMap<String, (PPS, watch::Receiver<i32>)>,
+    pub devices: Devices,
 }
 
 impl Server {
-    pub fn new(config: GpsdConfig, devices: Vec<GpsConfig>) -> Self {
+    pub fn new(config: GpsdConfig, devices: Devices) -> Self {
         Server {
             port: config.port,
             bind_addresses: config.bind_addresses,
             clients: HashMap::new(),
             devices,
-            gps_tx: HashMap::new(),
-            pps: HashMap::new(),
         }
-    }
-
-    pub fn add_gps(&mut self, gps: &GPS) {
-        self.gps_tx.insert(gps.name.clone(), gps.gpsd_tx.clone());
-    }
-
-    pub async fn add_pps(
-        &mut self,
-        pps: &PPS,
-        current_precision: watch::Receiver<i32>,
-        name: String,
-    ) {
-        self.pps.insert(name, (pps.clone(), current_precision));
     }
 
     pub fn gps_rx_for(&self, device: String) -> Option<broadcast::Receiver<Response>> {
-        if let Some(tx) = self.gps_tx.get(&device) {
-            return Some(tx.subscribe());
-        }
-
-        None
+        self.devices.gps_rx_for(device)
     }
 
-    #[tracing::instrument]
     pub fn pps_for(&self, device: String) -> Option<(PPS, watch::Receiver<i32>)> {
-        match self.pps.get(&device) {
-            Some((pps, precision)) => Some((pps.clone(), precision.clone())),
-            None => None,
-        }
+        self.devices.pps_rx_for(device)
     }
 
     pub async fn run(self) -> Result<()> {
@@ -77,78 +50,6 @@ impl Server {
         for address in &addresses {
             run_listener(address, port, Arc::clone(&server)).await?;
         }
-
-        Ok(())
-    }
-
-    pub async fn start_gps_devices(&mut self) -> Result<()> {
-        for gps_config in self.devices.clone().iter() {
-            self.start_gps_device(gps_config).await?;
-        }
-
-        Ok(())
-    }
-
-    async fn start_gps_device(&mut self, gps_config: &GpsConfig) -> Result<()> {
-        let name = gps_config.name.clone();
-        let gps_name = gps_config.device.clone();
-
-        let mut gps = GPS::new(gps_config).await?;
-
-        gps.read().await;
-
-        self.add_gps(&gps);
-
-        info!("registered GPS {}", name.clone());
-
-        if let Some(ntp_unit) = gps_config.ntp_unit {
-            let mut rx = gps.ntp_tx.subscribe();
-            let local = tokio::task::LocalSet::new();
-
-            local.spawn_local(async move {
-                let mut ntp_shm = NtpShm::new(ntp_unit).unwrap();
-
-                while let Ok(ts) = rx.recv().await {
-                    ntp_shm.update_old(-1, 0, &ts);
-                }
-            });
-
-            info!("Sending GPS time from {} via NTP unit {}", name, ntp_unit);
-        }
-
-        match &gps_config.pps {
-            Some(pps_config) => {
-                let pps_name = pps_config.device.clone();
-
-                let pps = PPS::new(pps_name.clone()).unwrap();
-                let current_precision = Precision::new().watch(pps.clone()).await;
-
-                self.add_pps(&pps, current_precision.clone(), gps_name.clone())
-                    .await;
-
-                info!("registered PPS {} under {}", pps_name, gps_name);
-
-                if let Some(ntp_unit) = pps_config.ntp_unit {
-                    let mut current_timestamp = pps.current_timestamp();
-                    let local = tokio::task::LocalSet::new();
-
-                    local.spawn_local(async move {
-                        let mut ntp_shm = NtpShm::new(ntp_unit).unwrap();
-
-                        loop {
-                            ntp_shm
-                                .update(&current_precision, 0, &mut current_timestamp)
-                                .await;
-                        }
-                    });
-
-                    info!("Sending PPS time from {} via NTP unit {}", name, ntp_unit);
-                }
-
-                Some(pps)
-            }
-            None => None,
-        };
 
         Ok(())
     }

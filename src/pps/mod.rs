@@ -20,6 +20,7 @@ use tracing::trace;
 
 #[derive(Clone, Debug)]
 pub struct PPS {
+    pub name: String,
     // Don't let the File go out of scope
     _pps_file: Arc<File>,
     current_timestamp: watch::Receiver<Timestamp>,
@@ -51,6 +52,7 @@ impl PPS {
         info!("Started PPS device {}", &device_name);
 
         Ok(PPS {
+            name: device_name,
             _pps_file: Arc::new(pps_file),
             current_timestamp,
         })

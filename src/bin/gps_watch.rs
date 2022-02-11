@@ -35,10 +35,10 @@ async fn main() -> Result<()> {
 
     let device = config.gps[0].clone();
 
-    let mut gps = GPS::new(&device).await?;
+    let gps = GPS::new(&device).await?;
     let mut rx = gps.subscribe_nmea();
 
-    gps.read().await;
+    gps.start();
 
     while let Ok(nmea) = rx.recv().await {
         match nmea {

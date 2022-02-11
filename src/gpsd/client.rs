@@ -91,7 +91,6 @@ impl Client {
             let response = match command {
                 Command::Devices => self.command_devices().await,
                 Command::Device(_) => Response::Device(Device {
-                    stopbits: Some("1".to_string()),
                     ..Device::default()
                 }),
                 Command::Error(e) => Response::Error(ErrorMessage { message: e }),
@@ -122,7 +121,8 @@ impl Client {
     }
 
     async fn command_devices(&self) -> Response {
-        let devices: Devices = self.server.lock().await.devices.clone().into();
+        let guard = self.server.lock().await;
+        let devices = Devices::from(&guard.devices);
 
         Response::Devices(devices)
     }
