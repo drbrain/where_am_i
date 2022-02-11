@@ -2,9 +2,7 @@ use anyhow::Result;
 use chrono::Duration;
 use chrono::NaiveDateTime;
 use std::convert::TryFrom;
-use tracing::debug;
-use tracing::error;
-use tracing::info;
+use tracing::{debug, error, info};
 use tracing_subscriber::filter::EnvFilter;
 use where_am_i::configuration::Configuration;
 use where_am_i::configuration::GpsConfig;
@@ -13,10 +11,20 @@ use where_am_i::shm::NtpShm;
 #[tokio::main]
 async fn main() -> Result<()> {
     let config = load_config();
+    let local = tokio::task::LocalSet::new();
 
     for gps_config in config.gps.iter() {
         if gps_config.ntp_unit.is_some() {
-            NtpShmWatch::new(gps_config.clone()).run().await?;
+            let gps_config = gps_config.clone();
+            local.spawn_local(async move {
+                match NtpShmWatch::new(&gps_config).run().await {
+                    Ok(_) => (),
+                    Err(e) => {
+                        error!("Starting GPS {}: {}", gps_config.device, e);
+                        std::process::exit(1);
+                    }
+                }
+            });
         }
     }
 
@@ -57,7 +65,7 @@ struct NtpShmWatch {
 }
 
 impl NtpShmWatch {
-    pub fn new(config: GpsConfig) -> Self {
+    pub fn new(config: &GpsConfig) -> Self {
         let device = config.device.clone();
         let ntp_unit = config.ntp_unit.unwrap();
 

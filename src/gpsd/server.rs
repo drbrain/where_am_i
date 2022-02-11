@@ -105,19 +105,13 @@ impl Server {
             let mut rx = gps.ntp_tx.subscribe();
             let local = tokio::task::LocalSet::new();
 
-            local
-                .run_until(async move {
-                    tokio::task::spawn_local(async move {
-                        let mut ntp_shm = NtpShm::new(ntp_unit).unwrap();
+            local.spawn_local(async move {
+                let mut ntp_shm = NtpShm::new(ntp_unit).unwrap();
 
-                        while let Ok(ts) = rx.recv().await {
-                            ntp_shm.update_old(-1, 0, &ts);
-                        }
-                    })
-                    .await
-                    .unwrap();
-                })
-                .await;
+                while let Ok(ts) = rx.recv().await {
+                    ntp_shm.update_old(-1, 0, &ts);
+                }
+            });
 
             info!("Sending GPS time from {} via NTP unit {}", name, ntp_unit);
         }
@@ -138,21 +132,15 @@ impl Server {
                     let mut current_timestamp = pps.current_timestamp();
                     let local = tokio::task::LocalSet::new();
 
-                    local
-                        .run_until(async move {
-                            tokio::task::spawn_local(async move {
-                                let mut ntp_shm = NtpShm::new(ntp_unit).unwrap();
+                    local.spawn_local(async move {
+                        let mut ntp_shm = NtpShm::new(ntp_unit).unwrap();
 
-                                loop {
-                                    ntp_shm
-                                        .update(&current_precision, 0, &mut current_timestamp)
-                                        .await;
-                                }
-                            })
-                            .await
-                            .unwrap();
-                        })
-                        .await;
+                        loop {
+                            ntp_shm
+                                .update(&current_precision, 0, &mut current_timestamp)
+                                .await;
+                        }
+                    });
 
                     info!("Sending PPS time from {} via NTP unit {}", name, ntp_unit);
                 }
