@@ -119,9 +119,6 @@ mod tests {
 
         let device_data = Device {
             path: Some("/dev/gps0".to_string()),
-            bps: Some(38400),
-            parity: None,
-            stopbits: None,
             native: None,
         };
 
