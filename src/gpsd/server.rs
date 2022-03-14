@@ -55,7 +55,6 @@ impl Server {
     }
 }
 
-#[tracing::instrument]
 async fn run_listener(address: &str, port: u16, server: Arc<Mutex<Server>>) -> Result<()> {
     let address = (address, port);
 

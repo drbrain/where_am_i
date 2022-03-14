@@ -202,7 +202,6 @@ fn relay_messages(tx: mpsc::Sender<Response>, rx: broadcast::Receiver<Response>)
     });
 }
 
-#[tracing::instrument]
 async fn relay(tx: mpsc::Sender<Response>, mut rx: broadcast::Receiver<Response>) {
     loop {
         let message = rx.recv().await;
