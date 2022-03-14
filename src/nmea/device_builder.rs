@@ -22,9 +22,7 @@ use tokio_serial::SerialPortBuilder;
 use tokio_serial::SerialPortBuilderExt;
 use tokio_serial::SerialStream;
 use tokio_util::codec::Framed;
-use tracing::debug;
-use tracing::error;
-use tracing::info;
+use tracing::{debug, error, info, info_span, Instrument};
 
 pub struct DeviceBuilder {
     device: String,
@@ -58,11 +56,16 @@ impl DeviceBuilder {
 
     pub async fn build(self) -> Result<Device> {
         let name = self.device.clone();
+        let span_name = self.device.clone();
         let (sender, _) = broadcast::channel(20);
         let task_sender = sender.clone();
         let sender = Arc::new(sender);
 
-        tokio::task::spawn(async move { self.start(task_sender).await });
+        tokio::task::spawn(async move {
+            let span = info_span!("device", name = span_name.as_str());
+
+            self.start(task_sender).instrument(span).await
+        });
 
         Ok(Device { name, sender })
     }

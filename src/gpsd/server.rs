@@ -14,8 +14,7 @@ use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tokio::sync::watch;
 use tokio::sync::Mutex;
-use tracing::error;
-use tracing::info;
+use tracing::{debug_span, error, info, Instrument};
 
 pub struct Server {
     port: u16,
@@ -48,14 +47,18 @@ impl Server {
         let server = Arc::new(Mutex::new(self));
 
         for address in &addresses {
-            run_listener(address, port, Arc::clone(&server)).await?;
+            let span = debug_span!("gpsd_server", address = address.as_str(), port = port);
+
+            listen_loop(address, port, Arc::clone(&server))
+                .instrument(span)
+                .await?;
         }
 
         Ok(())
     }
 }
 
-async fn run_listener(address: &str, port: u16, server: Arc<Mutex<Server>>) -> Result<()> {
+async fn listen_loop(address: &str, port: u16, server: Arc<Mutex<Server>>) -> Result<()> {
     let address = (address, port);
 
     let listener = TcpListener::bind(address)

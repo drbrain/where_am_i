@@ -64,7 +64,6 @@ impl NtpShm {
         let mut interval = interval(Duration::from_secs(1));
         interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        // TODO use tokio::time::interval
         loop {
             if let Some(timestamp) = time.read(last_count) {
                 last_count = timestamp.count;

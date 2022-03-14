@@ -26,9 +26,7 @@ use tokio::sync::watch;
 use tokio::sync::Mutex;
 use tokio_util::codec::FramedRead;
 use tokio_util::codec::FramedWrite;
-use tracing::debug;
-use tracing::error;
-use tracing::info;
+use tracing::{debug, debug_span, error, info, Instrument};
 
 pub struct Client {
     server: Arc<Mutex<Server>>,
@@ -251,7 +249,14 @@ async fn relay_pps(
 
 async fn start_client_rx(client: Client) {
     tokio::spawn(async move {
-        client_rx(client).await;
+        let address = format!("{}", client.addr.ip());
+        let span = debug_span!(
+            "gpsd_client",
+            address = address.as_str(),
+            port = client.addr.port()
+        );
+
+        client_rx(client).instrument(span).await;
     });
 }
 
