@@ -1,28 +1,31 @@
-use crate::configuration::GpsConfig;
-use crate::gps::Driver;
-use crate::gps::Generic;
-use crate::gps::GpsType;
-use crate::gps::UBloxNMEA;
-use crate::gps::MKT;
-use crate::nmea::Codec;
-use crate::nmea::Device;
-use crate::nmea::MessageSetting;
-use crate::nmea::NMEA;
-use anyhow::Context;
-use anyhow::Result;
-use backoff::ExponentialBackoff;
-use backoff::SystemClock;
+use crate::{
+    configuration::GpsConfig,
+    gps::{Driver, Generic, GpsType, UBloxNMEA, MKT},
+    nmea::{Codec, Device, MessageSetting, NMEA},
+};
+use anyhow::{Context, Result};
+use backoff::{ExponentialBackoff, SystemClock};
 use futures_util::StreamExt;
-use std::convert::TryFrom;
-use std::sync::Arc;
-use std::time::Duration;
-use std::time::Instant;
+use lazy_static::lazy_static;
+use prometheus::{register_int_counter_vec, IntCounterVec};
+use std::{
+    convert::TryFrom,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tokio::sync::broadcast;
-use tokio_serial::SerialPortBuilder;
-use tokio_serial::SerialPortBuilderExt;
-use tokio_serial::SerialStream;
+use tokio_serial::{SerialPortBuilder, SerialPortBuilderExt, SerialStream};
 use tokio_util::codec::Framed;
 use tracing::{debug, error, info, info_span, Instrument};
+
+lazy_static! {
+    static ref DEVICE_OPENS: IntCounterVec = register_int_counter_vec!(
+        "where_am_i_device_opens_count",
+        "Count of times a device was open with result",
+        &["device", "result"]
+    )
+    .unwrap();
+}
 
 pub struct DeviceBuilder {
     device: String,
@@ -76,8 +79,12 @@ impl DeviceBuilder {
                 .serial_port_builder
                 .clone()
                 .open_native_async()
-                .map_err(log_error)
+                .map_err(|e| log_error(&self.device, e))
                 .with_context(|| format!("Failed to open GPS device {}", self.device))?;
+
+            DEVICE_OPENS
+                .with_label_values(&[&self.device, "success"])
+                .inc();
 
             debug!("Opened NMEA serial port {}", self.device);
 
@@ -134,8 +141,10 @@ fn default_backoff() -> ExponentialBackoff {
     }
 }
 
-fn log_error<T: std::fmt::Display>(e: T) -> T {
-    error!("Opening failed: {}", e);
+fn log_error<T: std::fmt::Display>(device: &str, e: T) -> T {
+    error!("Opening {device} failed: {e}");
+
+    DEVICE_OPENS.with_label_values(&[&device, "failed"]).inc();
 
     e
 }
