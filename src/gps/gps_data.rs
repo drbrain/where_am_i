@@ -1,16 +1,38 @@
-use crate::gpsd::Response;
-use crate::gpsd::Toff;
-use crate::gpsd::Tpv;
-use crate::nmea::*;
-use crate::TSSender;
-use crate::Timestamp;
+use crate::{
+    gpsd::{Response, Toff, Tpv},
+    nmea::*,
+    TSSender, Timestamp,
+};
 use chrono::prelude::*;
-use std::fmt::Debug;
-use std::time::Duration;
-use std::time::SystemTime;
+use lazy_static::lazy_static;
+use prometheus::{register_gauge_vec, GaugeVec};
+use std::{
+    fmt::Debug,
+    time::{Duration, SystemTime},
+};
 use tokio::sync::broadcast;
-use tracing::error;
-use tracing::trace;
+use tracing::{error, trace};
+
+lazy_static! {
+    static ref LATITUDE: GaugeVec = register_gauge_vec!(
+        "where_am_i_latitude_degrees",
+        "Latitude of a device",
+        &["device"]
+    )
+    .unwrap();
+    static ref LONGITUDE: GaugeVec = register_gauge_vec!(
+        "where_am_i_longitude_degrees",
+        "Longitude of a device",
+        &["device"]
+    )
+    .unwrap();
+    static ref ALTITUDE: GaugeVec = register_gauge_vec!(
+        "where_am_i_altitude_meters",
+        "Altitude of a device above mean sea level",
+        &["device"]
+    )
+    .unwrap();
+}
 
 #[derive(Debug, Default)]
 pub struct GPSData {
@@ -56,6 +78,27 @@ impl GPSData {
         }
     }
 
+    pub(crate) fn update_lat_lon(&mut self, new_lat_lon: Option<LatLon>, name: &str) {
+        self.lat_lon = new_lat_lon;
+
+        if let Some(lat_lon) = &self.lat_lon {
+            LATITUDE
+                .with_label_values(&[name])
+                .set(lat_lon.latitude.into());
+            LONGITUDE
+                .with_label_values(&[name])
+                .set(lat_lon.longitude.into());
+        }
+    }
+
+    pub(crate) fn update_altitude_msl(&mut self, new_altitude_msl: Option<f32>, name: &str) {
+        self.altitude_msl = new_altitude_msl;
+
+        if let Some(altitude_msl) = self.altitude_msl {
+            ALTITUDE.with_label_values(&[name]).set(altitude_msl.into());
+        }
+    }
+
     pub(crate) fn update_time(&mut self, new_time: NaiveTime) {
         if let Some(mut date) = self.naive_date {
             if let Some(time) = self.naive_time {
@@ -84,13 +127,13 @@ impl GPSData {
     pub(crate) fn gga(
         &mut self,
         gga: GGAData,
-        _name: &str,
+        name: &str,
         _gpsd_tx: &broadcast::Sender<Response>,
         _ntp_tx: &TSSender,
     ) {
         self.quality = Some(gga.quality);
-        self.lat_lon = gga.lat_lon;
-        self.altitude_msl = gga.alt;
+        self.update_lat_lon(gga.lat_lon, name);
+        self.update_altitude_msl(gga.alt, name);
 
         self.update_time(gga.time);
     }
@@ -143,11 +186,11 @@ impl GPSData {
     pub(crate) fn rmc(
         &mut self,
         rmc: RMCData,
-        _name: &str,
+        name: &str,
         _gpsd_tx: &broadcast::Sender<Response>,
         _ntp_tx: &TSSender,
     ) {
-        self.lat_lon = rmc.lat_lon;
+        self.update_lat_lon(rmc.lat_lon, name);
 
         let reference = NaiveDateTime::new(rmc.date, rmc.time);
         let reference = DateTime::from_utc(reference, Utc);

@@ -17,6 +17,10 @@ impl Devices {
 
         create_devices(&mut devices, device_configuration).await?;
 
+        for device in devices.values() {
+            device.start();
+        }
+
         Ok(Devices { devices })
     }
 
