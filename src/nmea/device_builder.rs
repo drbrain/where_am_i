@@ -25,6 +25,18 @@ lazy_static! {
         &["device", "result"]
     )
     .unwrap();
+    static ref NMEA_MESSAGES: IntCounterVec = register_int_counter_vec!(
+        "where_am_i_nmea_messages_read_count",
+        "Count of NMEA messages read from a device",
+        &["device"]
+    )
+    .unwrap();
+    static ref NMEA_ERRORS: IntCounterVec = register_int_counter_vec!(
+        "where_am_i_nmea_read_errors_count",
+        "Count of NMEA errors when reading from a device",
+        &["device"]
+    )
+    .unwrap();
 }
 
 pub struct DeviceBuilder {
@@ -106,13 +118,18 @@ impl DeviceBuilder {
                 .configure(&mut framed, &self.message_settings)
                 .await;
 
+            let nmea_messages = NMEA_MESSAGES.with_label_values(&[&self.device]);
+            let nmea_errors = NMEA_ERRORS.with_label_values(&[&self.device]);
+
             // send NMEA messages
             loop {
                 match framed.next().await {
                     Some(Ok(nmea)) => {
+                        nmea_messages.inc();
                         sender.send(nmea).unwrap_or(0);
                     }
                     Some(Err(e)) => {
+                        nmea_errors.inc();
                         error!("NMEA device {} parse error {:?}", self.device, e);
                         break;
                     }
