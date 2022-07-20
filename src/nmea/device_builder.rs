@@ -1,5 +1,6 @@
 use crate::{
     configuration::GpsConfig,
+    device::DEVICE_OPENS,
     gps::{Driver, Generic, GpsType, UBloxNMEA, MKT},
     nmea::{Codec, Device, MessageSetting, NMEA},
 };
@@ -19,12 +20,6 @@ use tokio_util::codec::Framed;
 use tracing::{debug, error, info, info_span, Instrument};
 
 lazy_static! {
-    static ref DEVICE_OPENS: IntCounterVec = register_int_counter_vec!(
-        "where_am_i_device_opens_count",
-        "Count of times a device was open with result",
-        &["device", "result"]
-    )
-    .unwrap();
     static ref NMEA_MESSAGES: IntCounterVec = register_int_counter_vec!(
         "where_am_i_nmea_messages_read_count",
         "Count of NMEA messages read from a device",

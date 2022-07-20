@@ -1,22 +1,24 @@
 pub mod ioctl;
 pub mod state;
 
-use crate::timestamp::Timestamp;
-use anyhow::anyhow;
-use anyhow::Context;
-use anyhow::Result;
+use crate::{device::DEVICE_OPENS, timestamp::Timestamp};
+use anyhow::{anyhow, Context, Result};
+use lazy_static::lazy_static;
 use libc::c_int;
+use prometheus::{register_int_counter_vec, IntCounterVec};
 use state::State;
-use std::fs::OpenOptions;
-use std::os::unix::io::AsRawFd;
-use std::sync::Arc;
-use std::time::SystemTime;
-use tokio::fs::File;
-use tokio::sync::watch;
-use tracing::debug;
-use tracing::error;
-use tracing::info;
-use tracing::trace;
+use std::{fs::OpenOptions, os::unix::io::AsRawFd, sync::Arc, time::SystemTime};
+use tokio::{fs::File, sync::watch};
+use tracing::{debug, error, info, trace};
+
+lazy_static! {
+    static ref PPS_EVENTS: IntCounterVec = register_int_counter_vec!(
+        "where_am_i_pps_events_count",
+        "Count of PPS events received per device",
+        &["device"]
+    )
+    .unwrap();
+}
 
 #[derive(Clone, Debug)]
 pub struct PPS {
@@ -31,7 +33,17 @@ impl PPS {
         let pps_file = OpenOptions::new()
             .read(true)
             .write(true)
-            .open(device_name.clone())?;
+            .open(device_name.clone())
+            .map_err(|e| {
+                DEVICE_OPENS
+                    .with_label_values(&[&device_name, "failed"])
+                    .inc();
+                e
+            })?;
+
+        DEVICE_OPENS
+            .with_label_values(&[&device_name, "success"])
+            .inc();
 
         let pps_file = File::from_std(pps_file);
         let fd = pps_file.as_raw_fd();
@@ -137,6 +149,8 @@ fn fetch_pps(pps_state: &mut State) -> Result<()> {
     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
 
     pps_state.result = Timestamp::from_pps_time(data, now);
+
+    PPS_EVENTS.with_label_values(&[&pps_state.device]).inc();
 
     Ok(())
 }
