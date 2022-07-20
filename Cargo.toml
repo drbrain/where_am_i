@@ -40,7 +40,7 @@ tempfile           = "^3.1"
 thiserror          = "^1.0"
 tokio              = { version = "^1.20", features = ["full"] }
 tokio-serial       = "^5.4"
-tokio-util         = { version = "0.6.9", features = ["full"] }
+tokio-util         = { version = "0.7.3", features = ["full"] }
 tokio-stream       = "0.1.8"
 toml               = "0.5.9"
 tracing            = "0.1.35"
