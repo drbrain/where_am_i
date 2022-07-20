@@ -43,7 +43,7 @@ tokio-serial       = "^5.4"
 tokio-util         = { version = "0.6.9", features = ["full"] }
 tokio-stream       = "0.1.8"
 toml               = "0.5.8"
-tracing            = "0.1.29"
+tracing            = "0.1.35"
 tracing-futures    = "0.2.5"
 tracing-subscriber = { version = "0.3.6", features = ["env-filter"] }
 volatile-register  = "0.2.1"
