@@ -42,7 +42,7 @@ tokio              = { version = "^1.20", features = ["full"] }
 tokio-serial       = "^5.4"
 tokio-util         = { version = "0.6.9", features = ["full"] }
 tokio-stream       = "0.1.8"
-toml               = "0.5.8"
+toml               = "0.5.9"
 tracing            = "0.1.35"
 tracing-futures    = "0.2.5"
 tracing-subscriber = { version = "0.3.14", features = ["env-filter"] }
