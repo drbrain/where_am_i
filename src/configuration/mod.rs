@@ -2,18 +2,16 @@ mod configuration_error;
 mod gps_config;
 mod gpsd_config;
 mod pps_config;
+mod prometheus_config;
 
 pub use configuration_error::ConfigurationError;
 pub use gps_config::GpsConfig;
 pub use gpsd_config::GpsdConfig;
 pub use pps_config::PpsConfig;
+pub use prometheus_config::PrometheusConfig;
 
 use serde::Deserialize;
-
-use std::convert::TryFrom;
-use std::fs;
-use std::path::Path;
-
+use std::{convert::TryFrom, fs, path::Path};
 use tracing_subscriber::filter::EnvFilter;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -21,6 +19,7 @@ pub struct Configuration {
     pub log_filter: Option<String>,
     pub gps: Vec<GpsConfig>,
     pub gpsd: Option<GpsdConfig>,
+    pub prometheus: Option<PrometheusConfig>,
 }
 
 impl Configuration {

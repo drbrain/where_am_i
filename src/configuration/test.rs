@@ -101,6 +101,7 @@ device = "/dev/pps1"
         log_filter: Some(String::from("debug")),
         gps: vec![gps0, gps1],
         gpsd: None,
+        prometheus: None,
     };
 
     assert_eq!(expected, config);
@@ -153,6 +154,7 @@ ntp_unit = 2
         log_filter: Some(String::from("debug")),
         gps: vec![gps0],
         gpsd: Some(gpsd),
+        prometheus: None,
     };
 
     assert_eq!(expected, config);
@@ -239,6 +241,7 @@ fn test_try_from_log_filter_default() {
         log_filter: None,
         gps: vec![],
         gpsd: None,
+        prometheus: None,
     };
 
     let filter = EnvFilter::try_from(config).unwrap();
@@ -254,6 +257,7 @@ fn test_try_from_log_filter_set() {
         log_filter: Some(String::from("trace")),
         gps: vec![],
         gpsd: None,
+        prometheus: None,
     };
 
     let filter = EnvFilter::try_from(config).unwrap();
@@ -269,6 +273,7 @@ fn test_try_from_log_filter_error() {
         log_filter: Some(String::from("=garbage")),
         gps: vec![],
         gpsd: None,
+        prometheus: None,
     };
 
     match EnvFilter::try_from(config).err().unwrap() {

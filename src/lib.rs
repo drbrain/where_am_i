@@ -6,6 +6,7 @@ pub mod gpsd;
 pub mod nmea;
 pub mod pps;
 pub mod precision;
+pub mod prometheus;
 pub mod shm;
 pub mod timestamp;
 

@@ -56,3 +56,12 @@ ntp_unit = 3
 [gpsd]
 bind_addresses = ["127.0.0.1", "::1"]
 port = 2947
+
+# Prometheus exporter configuration
+#
+# Enables a prometheus exporter
+#
+# The prometheus configuration has:
+# bind_address: Address and port to bind to
+[prometheus]
+bind_addresses = ["127.0.0.1:9947", "[::1]:9947"]

@@ -1,13 +1,26 @@
 use anyhow::Result;
-use std::convert::TryFrom;
-use tracing::error;
-use tracing::Level;
+use lazy_static::lazy_static;
+use prometheus::{register_gauge, Gauge};
+use std::{
+    convert::TryFrom,
+    time::{SystemTime, UNIX_EPOCH},
+};
+use tracing::{error, Level};
 use tracing_subscriber::filter::EnvFilter;
 use where_am_i::{
     configuration::{Configuration, GpsdConfig},
     devices::Devices,
     gpsd::Server,
+    prometheus::Exporter,
 };
+
+lazy_static! {
+    static ref START_TIME: Gauge = register_gauge!(
+        "process_start_time_seconds",
+        "Start time of the process since unix epoch in seconds."
+    )
+    .unwrap();
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -20,6 +33,7 @@ async fn main() -> Result<()> {
     };
 
     start_tracing(&config);
+    start_prometheus(&config).await?;
 
     let gpsd_config = match &config.gpsd {
         Some(c) => c.clone(),
@@ -30,6 +44,22 @@ async fn main() -> Result<()> {
 
     let server = Server::new(gpsd_config, devices);
     server.run().await
+}
+
+async fn start_prometheus(config: &Configuration) -> Result<()> {
+    if let Some(prometheus) = &config.prometheus {
+        let start_time = SystemTime::now().duration_since(UNIX_EPOCH);
+
+        if let Ok(duration) = start_time {
+            START_TIME.set(duration.as_secs_f64());
+        }
+
+        for bind_address in &prometheus.bind_addresses {
+            Exporter::new(bind_address.to_string())?.start().await
+        }
+    }
+
+    Ok(())
 }
 
 fn start_tracing(config: &Configuration) {
