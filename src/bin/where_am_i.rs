@@ -34,13 +34,19 @@ async fn main() -> Result<()> {
 
     start_tracing(&config);
     start_prometheus(&config).await?;
+    let devices = start_devices(&config).await?;
+    start_gpsd(&config, devices).await
+}
 
+async fn start_devices(config: &Configuration) -> Result<Devices> {
+    Devices::start(&config.gps).await
+}
+
+async fn start_gpsd(config: &Configuration, devices: Devices) -> Result<()> {
     let gpsd_config = match &config.gpsd {
         Some(c) => c.clone(),
         None => GpsdConfig::default(),
     };
-
-    let devices = Devices::start(&config.gps).await?;
 
     let server = Server::new(gpsd_config, devices);
     server.run().await
