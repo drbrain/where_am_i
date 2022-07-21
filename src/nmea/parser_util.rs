@@ -1,41 +1,31 @@
-use chrono::naive::NaiveDate;
-use chrono::naive::NaiveTime;
+use crate::nmea::parser::Result;
+use chrono::naive::{NaiveDate, NaiveTime};
+use nom::{
+    branch::alt,
+    bytes::complete::*,
+    character::complete::*,
+    combinator::*,
+    error::context,
+    number::complete::recognize_float,
+    sequence::{preceded, terminated, tuple},
+};
 
-use nom::branch::alt;
-use nom::bytes::complete::*;
-use nom::character::complete::*;
-use nom::combinator::*;
-use nom::error::context;
-use nom::error::ContextError;
-use nom::error::FromExternalError;
-use nom::error::ParseError;
-use nom::number::complete::recognize_float;
-use nom::sequence::preceded;
-use nom::sequence::terminated;
-use nom::sequence::tuple;
-use nom::IResult;
-
-use std::num::ParseFloatError;
-use std::num::ParseIntError;
-
-pub(crate) fn any<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, String, E> {
+pub(crate) fn any<'a>(input: &'a str) -> Result<&'a str, String> {
     map(take_while(|c| c != ','), |m: &str| m.to_string())(input)
 }
 
-pub(crate) fn comma<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
+pub(crate) fn comma<'a>(input: &'a str) -> Result<&'a str, &'a str> {
     tag(",")(input)
 }
 
-pub(crate) fn date<'a, E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>>(
-    input: &'a str,
-) -> IResult<&'a str, NaiveDate, E> {
+pub(crate) fn date<'a>(input: &'a str) -> Result<&'a str, NaiveDate> {
     map_opt(
         tuple((two_digit, two_digit, two_digit_i)),
         |(day, month, year)| NaiveDate::from_ymd_opt(year, month, day),
     )(input)
 }
 
-pub(crate) fn dot<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
+pub(crate) fn dot<'a>(input: &'a str) -> Result<&'a str, &'a str> {
     tag(".")(input)
 }
 
@@ -45,9 +35,7 @@ pub enum EastWest {
     West,
 }
 
-pub(crate) fn east_west<'a, E: ParseError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, EastWest, E> {
+pub(crate) fn east_west<'a>(input: &'a str) -> Result<&'a str, EastWest> {
     map(one_of("EW"), |ew| match ew {
         'E' => EastWest::East,
         'W' => EastWest::West,
@@ -55,12 +43,7 @@ pub(crate) fn east_west<'a, E: ParseError<&'a str>>(
     })(input)
 }
 
-pub(crate) fn flt32<
-    'a,
-    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseFloatError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, f32, E> {
+pub(crate) fn flt32<'a>(input: &'a str) -> Result<&'a str, f32> {
     map_res(recognize_float, |s: &str| s.parse())(input)
 }
 
@@ -68,9 +51,7 @@ pub(crate) fn is_digit(chr: char) -> bool {
     chr.is_ascii_digit()
 }
 
-pub(crate) fn int32<'a, E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>>(
-    input: &'a str,
-) -> IResult<&'a str, i32, E> {
+pub(crate) fn int32<'a>(input: &'a str) -> Result<&'a str, i32> {
     map_res(
         recognize(preceded(opt(char('-')), take_while(is_digit))),
         |s: &str| s.parse(),
@@ -81,27 +62,11 @@ pub(crate) fn is_upper_alphanum(chr: char) -> bool {
     chr.is_ascii_uppercase() || chr.is_ascii_digit()
 }
 
-pub(crate) fn lat<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseIntError>
-        + FromExternalError<&'a str, ParseFloatError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, f32, E> {
+pub(crate) fn lat<'a>(input: &'a str) -> Result<&'a str, f32> {
     map(tuple((two_digit, flt32)), |(d, m)| d as f32 + m / 60.0)(input)
 }
 
-pub(crate) fn lon<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, f32, E> {
+pub(crate) fn lon<'a>(input: &'a str) -> Result<&'a str, f32> {
     map(tuple((three_digit, flt32)), |(d, m)| d as f32 + m / 60.0)(input)
 }
 
@@ -111,15 +76,7 @@ pub struct LatLon {
     pub longitude: f32,
 }
 
-pub(crate) fn latlon<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, Option<LatLon>, E> {
+pub(crate) fn latlon<'a>(input: &'a str) -> Result<&'a str, Option<LatLon>> {
     map(
         tuple((
             map(
@@ -156,9 +113,7 @@ pub enum NorthSouth {
     South,
 }
 
-pub(crate) fn north_south<'a, E: ParseError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, NorthSouth, E> {
+pub(crate) fn north_south<'a>(input: &'a str) -> Result<&'a str, NorthSouth> {
     map(one_of("NS"), |ns| match ns {
         'N' => NorthSouth::North,
         'S' => NorthSouth::South,
@@ -166,26 +121,20 @@ pub(crate) fn north_south<'a, E: ParseError<&'a str>>(
     })(input)
 }
 
-pub fn parse_message<I, O1, O2, E, F, G>(
+pub fn parse_message<I, O1, O2, F, G>(
     message: &'static str,
     first: F,
     second: G,
-) -> impl FnMut(I) -> IResult<I, O2, E>
+) -> impl FnMut(I) -> Result<I, O2>
 where
-    E: ParseError<I> + ContextError<I>,
-    F: nom::Parser<I, O1, E>,
+    F: nom::Parser<I, O1, nom::error::VerboseError<I>>,
     G: FnMut(O1) -> O2,
     I: Clone + nom::InputLength,
 {
     context(message, all_consuming(map(first, second)))
 }
 
-pub(crate) fn three_digit<
-    'a,
-    E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, u32, E> {
+pub(crate) fn three_digit<'a>(input: &'a str) -> Result<&'a str, u32> {
     map_res(take_while_m_n(3, 3, is_digit), |i: &str| i.parse())(input)
 }
 
@@ -200,15 +149,7 @@ enum TimeResolution {
 //
 // with milliseconds: 010203.456
 
-pub(crate) fn time<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, NaiveTime, E> {
+pub(crate) fn time<'a>(input: &'a str) -> Result<&'a str, NaiveTime> {
     map_opt(
         tuple((
             two_digit,
@@ -234,23 +175,14 @@ pub(crate) fn time<
     )(input)
 }
 
-pub(crate) fn two_digit<'a, E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>>(
-    input: &'a str,
-) -> IResult<&'a str, u32, E> {
+pub(crate) fn two_digit<'a>(input: &'a str) -> Result<&'a str, u32> {
     map_res(take_while_m_n(2, 2, is_digit), |i: &str| i.parse())(input)
 }
 
-pub(crate) fn two_digit_i<
-    'a,
-    E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, i32, E> {
+pub(crate) fn two_digit_i<'a>(input: &'a str) -> Result<&'a str, i32> {
     map_res(take_while_m_n(2, 2, is_digit), |i: &str| i.parse())(input)
 }
 
-pub(crate) fn uint32<'a, E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>>(
-    input: &'a str,
-) -> IResult<&'a str, u32, E> {
+pub(crate) fn uint32<'a>(input: &'a str) -> Result<&'a str, u32> {
     map_res(take_while(is_digit), |s: &str| s.parse())(input)
 }

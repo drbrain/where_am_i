@@ -1,27 +1,16 @@
-use crate::nmea::parser::ChecksumMismatch;
+use crate::nmea::parser::{ChecksumMismatch, Result};
 use chrono::NaiveDateTime;
-use nom::bytes::streaming::tag;
-use nom::bytes::streaming::take_while_m_n;
-use nom::character::is_hex_digit;
-use nom::combinator::cut;
-use nom::combinator::map;
-use nom::combinator::opt;
-use nom::combinator::peek;
-use nom::combinator::recognize;
-use nom::error::context;
-use nom::error::ContextError;
-use nom::error::ParseError;
-use nom::sequence::delimited;
-use nom::sequence::preceded;
-use nom::sequence::terminated;
-use nom::sequence::tuple;
-use nom::Err;
-use nom::IResult;
-use nom::Needed;
+use nom::{
+    bytes::streaming::{tag, take_while_m_n},
+    character::is_hex_digit,
+    combinator::{cut, map, opt, peek, recognize},
+    error::context,
+    sequence::{delimited, preceded, terminated, tuple},
+    Err, Needed,
+};
 use std::convert::TryInto;
 use std::time::Duration;
-use tracing::error;
-use tracing::trace;
+use tracing::{error, trace};
 
 #[derive(Debug)]
 pub enum NMEASentence<'a> {
@@ -30,10 +19,10 @@ pub enum NMEASentence<'a> {
     Valid(&'a str),
 }
 
-pub(crate) fn parse_sentence<'a, E: ParseError<&'a [u8]> + ContextError<&'a [u8]>>(
+pub(crate) fn parse_sentence<'a>(
     input: &'a [u8],
     received: Duration,
-) -> IResult<&'a [u8], NMEASentence<'a>, E> {
+) -> Result<&'a [u8], NMEASentence<'a>> {
     let result = delimited(
         preceded(garbage, tag(b"$")),
         tuple((terminated(non_star, star), checksum)),
@@ -83,10 +72,10 @@ pub(crate) fn parse_sentence<'a, E: ParseError<&'a [u8]> + ContextError<&'a [u8]
     Ok((input, result))
 }
 
-fn parse_error<'a, E: ParseError<&'a [u8]>>(
+fn parse_error<'a>(
     input: &'a [u8],
-    e: nom::Err<E>,
-) -> IResult<&'a [u8], NMEASentence, E> {
+    e: nom::Err<nom::error::VerboseError<&'a [u8]>>,
+) -> Result<&'a [u8], NMEASentence<'a>> {
     let error = match e {
         Err::Incomplete(Needed::Size(n)) => format!("incomplete, need {}", n),
         Err::Incomplete(Needed::Unknown) => "incomplete".to_string(),
@@ -113,9 +102,7 @@ fn parse_error<'a, E: ParseError<&'a [u8]>>(
     }
 }
 
-pub(crate) fn garbage<'a, E: ParseError<&'a [u8]> + ContextError<&'a [u8]>>(
-    input: &'a [u8],
-) -> IResult<&'a [u8], usize, E> {
+pub(crate) fn garbage<'a>(input: &'a [u8]) -> Result<&'a [u8], usize> {
     context(
         "garbage",
         cut(terminated(
@@ -125,19 +112,17 @@ pub(crate) fn garbage<'a, E: ParseError<&'a [u8]> + ContextError<&'a [u8]>>(
     )(input)
 }
 
-pub(crate) fn non_star<'a, E: ParseError<&'a [u8]>>(
-    input: &'a [u8],
-) -> IResult<&'a [u8], &'a [u8], E> {
+pub(crate) fn non_star<'a>(input: &'a [u8]) -> Result<&'a [u8], &'a [u8]> {
     use nom::bytes::streaming::take_till;
 
     recognize(take_till(|c| c == b'*'))(input)
 }
 
-pub(crate) fn star<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], &'a [u8], E> {
+pub(crate) fn star<'a>(input: &'a [u8]) -> Result<&'a [u8], &'a [u8]> {
     tag(b"*")(input)
 }
 
-pub(crate) fn checksum<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], u8, E> {
+pub(crate) fn checksum<'a>(input: &'a [u8]) -> Result<&'a [u8], u8> {
     map(recognize(take_while_m_n(2, 2, is_hex_digit)), |c| {
         u8::from_str_radix(std::str::from_utf8(c).unwrap(), 16).unwrap()
     })(input)

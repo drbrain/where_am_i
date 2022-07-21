@@ -1,30 +1,17 @@
-use chrono::naive::NaiveDate;
-use chrono::naive::NaiveTime;
-
-use crate::gps::Driver;
-use crate::gps::MKTData;
-use crate::gps::UBXData;
-use crate::nmea::parser_util::*;
-use crate::nmea::sentence_parser::parse_sentence;
-use crate::nmea::sentence_parser::NMEASentence;
-use crate::nmea::EastWest;
-use crate::nmea::NorthSouth;
-
-use nom::branch::*;
-use nom::bytes::complete::*;
-use nom::character::complete::*;
-use nom::combinator::*;
-use nom::error::*;
-use nom::multi::*;
-use nom::sequence::*;
-use nom::Err;
-use nom::IResult;
-
-use std::num::ParseFloatError;
-use std::num::ParseIntError;
+use crate::gps::{Driver, MKTData, UBXData};
+use crate::nmea::{
+    parser_util::*,
+    sentence_parser::{parse_sentence, NMEASentence},
+    EastWest, NorthSouth,
+};
+use chrono::naive::{NaiveDate, NaiveTime};
+use nom::{
+    branch::*, bytes::complete::*, character::complete::*, combinator::*, error::*, multi::*,
+    sequence::*, Err, IResult,
+};
 use std::time::Duration;
 
-type VE<'a> = VerboseError<&'a [u8]>;
+pub type Result<I, T> = IResult<I, T, nom::error::VerboseError<I>>;
 
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Parser {
@@ -36,8 +23,8 @@ impl Parser {
         Parser { driver }
     }
 
-    pub fn parse<'a>(&'a self, input: &'a [u8], received: Duration) -> IResult<&'a [u8], NMEA, VE> {
-        parse::<VE>(input, &self.driver, received)
+    pub fn parse<'a>(&'a self, input: &'a [u8], received: Duration) -> Result<&'a [u8], NMEA> {
+        parse(input, &self.driver, received)
     }
 }
 
@@ -77,18 +64,12 @@ pub struct ChecksumMismatch {
     pub calculated: u8,
 }
 
-pub(crate) fn parse<
-    'a,
-    E: ParseError<&'a [u8]>
-        + ContextError<&'a [u8]>
-        + FromExternalError<&'a [u8], ParseFloatError>
-        + FromExternalError<&'a [u8], ParseIntError>,
->(
+pub(crate) fn parse<'a>(
     input: &'a [u8],
     driver: &Driver,
     received: Duration,
-) -> IResult<&'a [u8], NMEA, E> {
-    let result = parse_sentence::<VerboseError<&'a [u8]>>(input, received);
+) -> Result<&'a [u8], NMEA> {
+    let result = parse_sentence(input, received);
 
     let (input, data) = match result {
         Ok((input, sentence)) => match sentence {
@@ -104,7 +85,7 @@ pub(crate) fn parse<
         Err(_) => unreachable!(),
     };
 
-    match message::<VerboseError<&'a str>>(data, driver, received) {
+    match message(data, driver, received) {
         Err(Err::Error(_)) => Ok((input, NMEA::ParseError(String::from(data)))),
         Err(Err::Failure(_)) => Ok((input, NMEA::ParseFailure(String::from(data)))),
         Err(Err::Incomplete(_)) => unreachable!(
@@ -116,33 +97,14 @@ pub(crate) fn parse<
     }
 }
 
-pub fn message<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-    driver: &Driver,
-    received: Duration,
-) -> IResult<&'a str, NMEA, E> {
-    match nmea_message::<E>(input, received) {
+pub fn message<'a>(input: &'a str, driver: &Driver, received: Duration) -> Result<&'a str, NMEA> {
+    match nmea_message(input, received) {
         Ok(r) => Ok(r),
         Err(_) => private_message(input, driver),
     }
 }
 
-pub fn nmea_message<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-    received: Duration,
-) -> IResult<&'a str, NMEA, E> {
+pub fn nmea_message<'a>(input: &'a str, received: Duration) -> Result<&'a str, NMEA> {
     alt((
         map(dtm, |mut msg: DTMData| {
             msg.received = Some(received);
@@ -223,16 +185,7 @@ pub fn nmea_message<
     ))(input)
 }
 
-pub(crate) fn private_message<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-    driver: &Driver,
-) -> IResult<&'a str, NMEA, E> {
+pub(crate) fn private_message<'a>(input: &'a str, driver: &Driver) -> Result<&'a str, NMEA> {
     driver.parse_private(input)
 }
 
@@ -245,9 +198,7 @@ pub enum MessageType {
     Unknown(u32),
 }
 
-pub(crate) fn msg_type<'a, E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>>(
-    input: &'a str,
-) -> IResult<&'a str, MessageType, E> {
+pub(crate) fn msg_type<'a>(input: &'a str) -> Result<&'a str, MessageType> {
     map(two_digit, |t| match t {
         0 => MessageType::Error,
         1 => MessageType::Warning,
@@ -264,9 +215,7 @@ pub enum NavigationMode {
     Fix3D,
 }
 
-pub(crate) fn nav_mode<'a, E: ParseError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, NavigationMode, E> {
+pub(crate) fn nav_mode<'a>(input: &'a str) -> Result<&'a str, NavigationMode> {
     map(one_of("123"), |c| match c {
         '1' => NavigationMode::FixNone,
         '2' => NavigationMode::Fix2D,
@@ -281,9 +230,7 @@ pub enum OperationMode {
     Manual,
 }
 
-pub(crate) fn op_mode<'a, E: ParseError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, OperationMode, E> {
+pub(crate) fn op_mode<'a>(input: &'a str) -> Result<&'a str, OperationMode> {
     map(one_of("AM"), |c| match c {
         'A' => OperationMode::Automatic,
         'M' => OperationMode::Manual,
@@ -301,9 +248,7 @@ pub enum PositionMode {
     RTKFloat,
 }
 
-pub(crate) fn pos_mode<'a, E: ParseError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, PositionMode, E> {
+pub(crate) fn pos_mode<'a>(input: &'a str) -> Result<&'a str, PositionMode> {
     map(one_of("ADEFNR"), |c| match c {
         'A' => PositionMode::AutonomousGNSSFix,
         'D' => PositionMode::DifferentialGNSSFix,
@@ -333,7 +278,7 @@ impl Default for Quality {
     }
 }
 
-pub(crate) fn quality<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Quality, E> {
+pub(crate) fn quality<'a>(input: &'a str) -> Result<&'a str, Quality> {
     map(one_of("012456"), |c| match c {
         '0' => Quality::NoFix,
         '1' => Quality::AutonomousGNSSFix,
@@ -384,9 +329,7 @@ pub enum Signal {
     Unknown,
 }
 
-pub(crate) fn signal<'a, E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>>(
-    input: &'a str,
-) -> IResult<&'a str, Signal, E> {
+pub(crate) fn signal<'a>(input: &'a str) -> Result<&'a str, Signal> {
     map(uint32, |c| match c {
         1 => Signal::L1,
         2 => Signal::E5,
@@ -406,7 +349,7 @@ pub enum Status {
     Invalid,
 }
 
-pub(crate) fn status<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Status, E> {
+pub(crate) fn status<'a>(input: &'a str) -> Result<&'a str, Status> {
     map(one_of("AV"), |c| match c {
         'A' => Status::Valid,
         'V' => Status::Invalid,
@@ -424,9 +367,7 @@ pub enum System {
     Unknown,
 }
 
-pub(crate) fn system<'a, E: ParseError<&'a str> + FromExternalError<&'a str, ParseIntError>>(
-    input: &'a str,
-) -> IResult<&'a str, System, E> {
+pub(crate) fn system<'a>(input: &'a str) -> Result<&'a str, System> {
     map(uint32, |c| match c {
         1 => System::GPS,
         2 => System::GLONASS,
@@ -449,7 +390,7 @@ pub enum Talker {
     Unknown(String),
 }
 
-pub(crate) fn talker<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Talker, E> {
+pub(crate) fn talker<'a>(input: &'a str) -> Result<&'a str, Talker> {
     map(
         alt((tag("P"), take_while_m_n(2, 2, is_upper_alphanum))),
         |t| match t {
@@ -479,12 +420,7 @@ pub struct DTMData {
     pub ref_datum: String,
 }
 
-pub(crate) fn dtm<
-    'a,
-    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseFloatError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, DTMData, E> {
+pub(crate) fn dtm<'a>(input: &'a str) -> Result<&'a str, DTMData> {
     parse_message(
         "DTM",
         tuple((
@@ -520,9 +456,7 @@ pub struct GAQData {
     pub message_id: String,
 }
 
-pub(crate) fn gaq<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, GAQData, E> {
+pub(crate) fn gaq<'a>(input: &'a str) -> Result<&'a str, GAQData> {
     context(
         "GAQ",
         all_consuming(map(
@@ -543,9 +477,7 @@ pub struct GBQData {
     pub message_id: String,
 }
 
-pub(crate) fn gbq<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, GBQData, E> {
+pub(crate) fn gbq<'a>(input: &'a str) -> Result<&'a str, GBQData> {
     parse_message(
         "GBQ",
         tuple((talker, preceded(tag("GBQ"), preceded(comma, any)))),
@@ -573,15 +505,7 @@ pub struct GBSData {
     pub signal: Option<Signal>,
 }
 
-pub(crate) fn gbs<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, GBSData, E> {
+pub(crate) fn gbs<'a>(input: &'a str) -> Result<&'a str, GBSData> {
     parse_message(
         "GBS",
         tuple((
@@ -633,15 +557,7 @@ pub struct GGAData {
     pub diff_station: Option<u32>,
 }
 
-pub(crate) fn gga<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, GGAData, E> {
+pub(crate) fn gga<'a>(input: &'a str) -> Result<&'a str, GGAData> {
     parse_message(
         "GGA",
         tuple((
@@ -699,15 +615,7 @@ pub struct GLLData {
     pub position_mode: PositionMode,
 }
 
-pub(crate) fn gll<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, GLLData, E> {
+pub(crate) fn gll<'a>(input: &'a str) -> Result<&'a str, GLLData> {
     parse_message(
         "GLL",
         tuple((
@@ -735,9 +643,7 @@ pub struct GLQData {
     pub message_id: String,
 }
 
-pub(crate) fn glq<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, GLQData, E> {
+pub(crate) fn glq<'a>(input: &'a str) -> Result<&'a str, GLQData> {
     parse_message(
         "GLQ",
         tuple((talker, preceded(tag("GLQ"), preceded(comma, any)))),
@@ -756,9 +662,7 @@ pub struct GNQData {
     pub message_id: String,
 }
 
-pub(crate) fn gnq<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, GNQData, E> {
+pub(crate) fn gnq<'a>(input: &'a str) -> Result<&'a str, GNQData> {
     parse_message(
         "GNQ",
         tuple((talker, preceded(tag("GNQ"), preceded(comma, any)))),
@@ -789,15 +693,7 @@ pub struct GNSData {
     pub nav_status: Status,
 }
 
-pub(crate) fn gns<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, GNSData, E> {
+pub(crate) fn gns<'a>(input: &'a str) -> Result<&'a str, GNSData> {
     parse_message(
         "GNS",
         tuple((
@@ -858,9 +754,7 @@ pub struct GPQData {
     pub message_id: String,
 }
 
-pub(crate) fn gpq<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, GPQData, E> {
+pub(crate) fn gpq<'a>(input: &'a str) -> Result<&'a str, GPQData> {
     parse_message(
         "GPQ",
         tuple((talker, preceded(tag("GPQ"), preceded(comma, any)))),
@@ -883,15 +777,7 @@ pub struct GRSData {
     pub signal: Option<Signal>,
 }
 
-pub(crate) fn grs<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, GRSData, E> {
+pub(crate) fn grs<'a>(input: &'a str) -> Result<&'a str, GRSData> {
     parse_message(
         "GRS",
         tuple((
@@ -927,15 +813,7 @@ pub struct GSAData {
     pub system: Option<System>,
 }
 
-pub(crate) fn gsa<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, GSAData, E> {
+pub(crate) fn gsa<'a>(input: &'a str) -> Result<&'a str, GSAData> {
     parse_message(
         "GSA",
         tuple((
@@ -978,15 +856,7 @@ pub struct GSTData {
     pub std_alt: Option<f32>,
 }
 
-pub(crate) fn gst<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, GSTData, E> {
+pub(crate) fn gst<'a>(input: &'a str) -> Result<&'a str, GSTData> {
     parse_message(
         "GST",
         tuple((
@@ -1033,12 +903,7 @@ pub struct GSVsatellite {
     pub cno: Option<u32>,
 }
 
-pub(crate) fn gsv_sat<
-    'a,
-    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, GSVsatellite, E> {
+pub(crate) fn gsv_sat<'a>(input: &'a str) -> Result<&'a str, GSVsatellite> {
     context(
         "GSV satellite",
         map(
@@ -1069,12 +934,7 @@ pub struct GSVData {
     pub signal: Option<Signal>,
 }
 
-pub(crate) fn gsv<
-    'a,
-    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, GSVData, E> {
+pub(crate) fn gsv<'a>(input: &'a str) -> Result<&'a str, GSVData> {
     parse_message(
         "GSV",
         tuple((
@@ -1113,15 +973,7 @@ pub struct RMCData {
     pub nav_status: Option<Status>,
 }
 
-pub(crate) fn rmc<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseIntError>
-        + FromExternalError<&'a str, ParseFloatError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, RMCData, E> {
+pub(crate) fn rmc<'a>(input: &'a str) -> Result<&'a str, RMCData> {
     parse_message(
         "RMC",
         tuple((
@@ -1176,12 +1028,7 @@ pub struct TXTData {
     pub text: String,
 }
 
-pub(crate) fn txt<
-    'a,
-    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, TXTData, E> {
+pub(crate) fn txt<'a>(input: &'a str) -> Result<&'a str, TXTData> {
     parse_message(
         "TXT",
         tuple((
@@ -1216,12 +1063,7 @@ pub struct VLWData {
     pub ground_distance_unit: String,
 }
 
-pub(crate) fn vlw<
-    'a,
-    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseFloatError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, VLWData, E> {
+pub(crate) fn vlw<'a>(input: &'a str) -> Result<&'a str, VLWData> {
     parse_message(
         "VLW",
         tuple((
@@ -1275,12 +1117,7 @@ pub struct VTGData {
     pub position_mode: PositionMode,
 }
 
-pub(crate) fn vtg<
-    'a,
-    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseFloatError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, VTGData, E> {
+pub(crate) fn vtg<'a>(input: &'a str) -> Result<&'a str, VTGData> {
     parse_message(
         "VTG",
         tuple((
@@ -1334,15 +1171,7 @@ pub struct ZDAData {
     pub local_tz_minute: u32,
 }
 
-pub(crate) fn zda<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, ZDAData, E> {
+pub(crate) fn zda<'a>(input: &'a str) -> Result<&'a str, ZDAData> {
     parse_message(
         "ZDA",
         tuple((

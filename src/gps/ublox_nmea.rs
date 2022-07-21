@@ -1,37 +1,27 @@
 // For UBlox ZED-F9P devices using NMEA
 
-use crate::gps::add_message;
-use crate::nmea::device::SerialCodec;
-use crate::nmea::parser_util::*;
-use crate::nmea::MessageSetting;
-use crate::nmea::NMEA;
-use chrono::naive::NaiveDate;
-use chrono::naive::NaiveTime;
+use crate::{
+    gps::add_message,
+    nmea::{
+        device::SerialCodec, parser::Result as ParseResult, parser_util::*, MessageSetting, NMEA,
+    },
+};
+use chrono::naive::{NaiveDate, NaiveTime};
 use futures_util::sink::SinkExt;
-use nom::branch::alt;
-use nom::bytes::complete::tag;
-use nom::bytes::complete::take_while_m_n;
-use nom::character::complete::char;
-use nom::character::complete::one_of;
-use nom::combinator::map;
-use nom::combinator::opt;
-use nom::error::context;
-use nom::error::ContextError;
-use nom::error::FromExternalError;
-use nom::error::ParseError;
-use nom::multi::many0;
-use nom::sequence::preceded;
-use nom::sequence::terminated;
-use nom::sequence::tuple;
-use nom::IResult;
-use serde::ser::SerializeStruct;
-use serde::ser::Serializer;
-use serde::Serialize;
-use std::num::ParseFloatError;
-use std::num::ParseIntError;
-use tracing::error;
-use tracing::info;
-use tracing::trace;
+use nom::{
+    branch::alt,
+    bytes::complete::{tag, take_while_m_n},
+    character::complete::{char, one_of},
+    combinator::{map, opt},
+    error::context,
+    multi::many0,
+    sequence::{preceded, terminated, tuple},
+};
+use serde::{
+    ser::{SerializeStruct, Serializer},
+    Serialize,
+};
+use tracing::{error, info, trace};
 
 pub const OUTPUT_MESSAGES: [&str; 15] = [
     "DTM", "GBS", "GGA", "GLL", "GNS", "GRS", "GSA", "GST", "GSV", "RLM", "RMC", "TXT", "VLW",
@@ -76,16 +66,7 @@ impl UBloxNMEA {
         message_settings
     }
 
-    pub fn parse_private<
-        'a,
-        E: ParseError<&'a str>
-            + ContextError<&'a str>
-            + FromExternalError<&'a str, ParseFloatError>
-            + FromExternalError<&'a str, ParseIntError>,
-    >(
-        &self,
-        input: &'a str,
-    ) -> IResult<&'a str, NMEA, E> {
+    pub fn parse_private<'a>(&self, input: &'a str) -> ParseResult<&'a str, NMEA> {
         context(
             "PUBX",
             map(
@@ -206,9 +187,7 @@ pub enum UBXNavigationStatus {
     Unknown(String),
 }
 
-pub(crate) fn ubx_nav_stat<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, UBXNavigationStatus, E> {
+pub(crate) fn ubx_nav_stat<'a>(input: &'a str) -> ParseResult<&'a str, UBXNavigationStatus> {
     context(
         "UBX navigation status",
         map(take_while_m_n(2, 2, is_upper_alphanum), |ns| match ns {
@@ -245,15 +224,7 @@ pub struct UBXPosition {
     pub dead_reckoning: bool,
 }
 
-pub(crate) fn ubx_00<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, UBXPosition, E> {
+pub(crate) fn ubx_00<'a>(input: &'a str) -> ParseResult<&'a str, UBXPosition> {
     parse_message(
         "UBX 00",
         tuple((
@@ -325,9 +296,7 @@ pub enum UBXSatelliteStatus {
     EphemerisAvailable,
 }
 
-pub(crate) fn ubx_sat_status<'a, E: ParseError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, UBXSatelliteStatus, E> {
+pub(crate) fn ubx_sat_status<'a>(input: &'a str) -> ParseResult<&'a str, UBXSatelliteStatus> {
     map(one_of("-Ue"), |c| match c {
         '-' => UBXSatelliteStatus::NotUsed,
         'U' => UBXSatelliteStatus::Used,
@@ -346,12 +315,7 @@ pub struct UBXSatellite {
     pub lock_time: u32,
 }
 
-pub(crate) fn ubx_satellite<
-    'a,
-    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, UBXSatellite, E> {
+pub(crate) fn ubx_satellite<'a>(input: &'a str) -> ParseResult<&'a str, UBXSatellite> {
     context(
         "UBX satellite",
         map(
@@ -380,12 +344,7 @@ pub struct UBXSatellites {
     pub satellites: Vec<UBXSatellite>,
 }
 
-pub(crate) fn ubx_03<
-    'a,
-    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, UBXSatellites, E> {
+pub(crate) fn ubx_03<'a>(input: &'a str) -> ParseResult<&'a str, UBXSatellites> {
     parse_message(
         "UBX 03",
         preceded(
@@ -415,15 +374,7 @@ pub struct UBXTime {
     pub time_pulse_granularity: u32,
 }
 
-pub(crate) fn ubx_04<
-    'a,
-    E: ParseError<&'a str>
-        + ContextError<&'a str>
-        + FromExternalError<&'a str, ParseFloatError>
-        + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, UBXTime, E> {
+pub(crate) fn ubx_04<'a>(input: &'a str) -> ParseResult<&'a str, UBXTime> {
     parse_message(
         "UBX 04",
         tuple((

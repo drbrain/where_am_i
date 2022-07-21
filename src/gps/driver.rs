@@ -4,12 +4,7 @@ use crate::gps::MKT;
 use crate::nmea::MessageSetting;
 use crate::nmea::SerialCodec;
 use crate::nmea::NMEA;
-use nom::error::ContextError;
-use nom::error::FromExternalError;
-use nom::error::ParseError;
 use nom::IResult;
-use std::num::ParseFloatError;
-use std::num::ParseIntError;
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Driver {
@@ -35,16 +30,10 @@ impl Driver {
         }
     }
 
-    pub fn parse_private<
-        'a,
-        E: ParseError<&'a str>
-            + ContextError<&'a str>
-            + FromExternalError<&'a str, ParseFloatError>
-            + FromExternalError<&'a str, ParseIntError>,
-    >(
+    pub fn parse_private<'a>(
         &self,
         input: &'a str,
-    ) -> IResult<&'a str, NMEA, E> {
+    ) -> IResult<&'a str, NMEA, nom::error::VerboseError<&'a str>> {
         match self {
             Driver::Generic(d) => d.parse_private(input),
             Driver::MKT(d) => d.parse_private(input),

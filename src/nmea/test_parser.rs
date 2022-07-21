@@ -1,23 +1,15 @@
-use chrono::naive::NaiveDate;
-use chrono::naive::NaiveTime;
-
-use crate::gps::Driver;
-use crate::gps::Generic;
-use crate::nmea::parser;
-use crate::nmea::parser::*;
-use crate::nmea::EastWest;
-use crate::nmea::NorthSouth;
-
-use nom::error::*;
-use nom::Err::Incomplete;
-use nom::Needed;
-
+use crate::{
+    gps::{Driver, Generic},
+    nmea::{
+        parser::{self, *},
+        EastWest, NorthSouth,
+    },
+};
+use chrono::naive::{NaiveDate, NaiveTime};
+use nom::{error::*, Err::Incomplete, Needed};
 use std::time::Duration;
 
-type VE<'a> = VerboseError<&'a str>;
-type VEb<'a> = VerboseError<&'a [u8]>;
-
-fn p<'a, D>(input: &'a str, result: nom::IResult<&'a str, D, VE>) -> D {
+fn p<'a, D>(input: &'a str, result: nom::IResult<&'a str, D, VerboseError<&'a str>>) -> D {
     match result {
         Ok((_, data)) => data,
         Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
@@ -34,7 +26,7 @@ fn driver() -> Driver {
 fn parse<'a>(input: &'a [u8]) -> NMEA {
     let driver = driver();
 
-    parser::parse::<VEb>(input, &driver, timestamp()).unwrap().1
+    parser::parse(input, &driver, timestamp()).unwrap().1
 }
 
 fn timestamp() -> Duration {
@@ -44,14 +36,14 @@ fn timestamp() -> Duration {
 #[test]
 fn test_parse_sentence() {
     let parsed = parse(b"$EIGAQ,RMC*2B\r\n$");
-    let mut data = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;
+    let mut data = parser::gaq("EIGAQ,RMC").unwrap().1;
 
     data.received = Some(timestamp());
 
     assert_eq!(NMEA::GAQ(data), parsed);
 
     let parsed = parse(b"$GNGSA,A,3,19,12,33,25,24,11,,,,,,,0.97,0.51,0.83,3*08\r\n$");
-    let mut data = parser::gsa::<VE>("GNGSA,A,3,19,12,33,25,24,11,,,,,,,0.97,0.51,0.83,3")
+    let mut data = parser::gsa("GNGSA,A,3,19,12,33,25,24,11,,,,,,,0.97,0.51,0.83,3")
         .unwrap()
         .1;
 
@@ -84,7 +76,7 @@ fn test_error_checksum() {
 #[test]
 fn test_incomplete() {
     let input = b"$EIG";
-    let result = parser::parse::<VEb>(input, &driver(), timestamp());
+    let result = parser::parse(input, &driver(), timestamp());
 
     match result {
         Err(Incomplete(Needed::Size(n))) => {
@@ -96,19 +88,15 @@ fn test_incomplete() {
 
 #[test]
 fn test_nmea_message() {
-    let parsed = parser::nmea_message::<VE>("EIGAQ,RMC", timestamp())
-        .unwrap()
-        .1;
-    let mut data = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;
+    let parsed = parser::nmea_message("EIGAQ,RMC", timestamp()).unwrap().1;
+    let mut data = parser::gaq("EIGAQ,RMC").unwrap().1;
 
     data.received = Some(timestamp());
 
     assert_eq!(NMEA::GAQ(data), parsed);
 
-    let parsed = parser::nmea_message::<VE>("EIGNQ,RMC", timestamp())
-        .unwrap()
-        .1;
-    let mut data = parser::gnq::<VE>("EIGNQ,RMC").unwrap().1;
+    let parsed = parser::nmea_message("EIGNQ,RMC", timestamp()).unwrap().1;
+    let mut data = parser::gnq("EIGNQ,RMC").unwrap().1;
 
     data.received = Some(timestamp());
 
@@ -117,58 +105,47 @@ fn test_nmea_message() {
 
 #[test]
 fn test_nav_mode() {
-    assert_eq!(
-        NavigationMode::FixNone,
-        parser::nav_mode::<VE>("1").unwrap().1
-    );
-    assert_eq!(
-        NavigationMode::Fix2D,
-        parser::nav_mode::<VE>("2").unwrap().1
-    );
+    assert_eq!(NavigationMode::FixNone, parser::nav_mode("1").unwrap().1);
+    assert_eq!(NavigationMode::Fix2D, parser::nav_mode("2").unwrap().1);
 }
 
 #[test]
 fn test_pos_mode() {
-    assert_eq!(PositionMode::NoFix, parser::pos_mode::<VE>("N").unwrap().1);
+    assert_eq!(PositionMode::NoFix, parser::pos_mode("N").unwrap().1);
     assert_eq!(
         PositionMode::AutonomousGNSSFix,
-        parser::pos_mode::<VE>("A").unwrap().1
+        parser::pos_mode("A").unwrap().1
     );
 }
 
 #[test]
 fn test_quality() {
-    assert_eq!(Quality::NoFix, parser::quality::<VE>("0").unwrap().1);
-    assert_eq!(
-        Quality::AutonomousGNSSFix,
-        parser::quality::<VE>("1").unwrap().1
-    );
+    assert_eq!(Quality::NoFix, parser::quality("0").unwrap().1);
+    assert_eq!(Quality::AutonomousGNSSFix, parser::quality("1").unwrap().1);
 }
 
 #[test]
 fn test_status() {
-    assert_eq!(Status::Valid, parser::status::<VE>("A").unwrap().1);
-    assert_eq!(Status::Invalid, parser::status::<VE>("V").unwrap().1);
+    assert_eq!(Status::Valid, parser::status("A").unwrap().1);
+    assert_eq!(Status::Invalid, parser::status("V").unwrap().1);
 }
 
 #[test]
 fn test_talker() {
-    assert_eq!(Talker::Galileo, parser::talker::<VE>("GA").unwrap().1);
-    assert_eq!(Talker::BeiDuo, parser::talker::<VE>("GB").unwrap().1);
-    assert_eq!(Talker::GLONASS, parser::talker::<VE>("GL").unwrap().1);
-    assert_eq!(Talker::Combination, parser::talker::<VE>("GN").unwrap().1);
-    assert_eq!(Talker::GPS, parser::talker::<VE>("GP").unwrap().1);
+    assert_eq!(Talker::Galileo, parser::talker("GA").unwrap().1);
+    assert_eq!(Talker::BeiDuo, parser::talker("GB").unwrap().1);
+    assert_eq!(Talker::GLONASS, parser::talker("GL").unwrap().1);
+    assert_eq!(Talker::Combination, parser::talker("GN").unwrap().1);
+    assert_eq!(Talker::GPS, parser::talker("GP").unwrap().1);
     assert_eq!(
         Talker::Unknown("AA".to_string()),
-        parser::talker::<VE>("AA").unwrap().1
+        parser::talker("AA").unwrap().1
     );
 }
 
 #[test]
 fn test_dtm() {
-    let parsed = parser::dtm::<VE>("GPDTM,W84,,0.0,N,0.0,E,0.0,W84")
-        .unwrap()
-        .1;
+    let parsed = parser::dtm("GPDTM,W84,,0.0,N,0.0,E,0.0,W84").unwrap().1;
 
     assert_eq!(Talker::GPS, parsed.talker);
     assert_eq!("W84".to_string(), parsed.datum);
@@ -180,9 +157,7 @@ fn test_dtm() {
     assert_approx_eq!(0.0, parsed.alt);
     assert_eq!("W84".to_string(), parsed.ref_datum);
 
-    let parsed = parser::dtm::<VE>("GPDTM,999,,0.08,N,0.07,E,-47.7,W84")
-        .unwrap()
-        .1;
+    let parsed = parser::dtm("GPDTM,999,,0.08,N,0.07,E,-47.7,W84").unwrap().1;
 
     assert_eq!(Talker::GPS, parsed.talker);
     assert_eq!("999".to_string(), parsed.datum);
@@ -197,7 +172,7 @@ fn test_dtm() {
 
 #[test]
 fn test_gaq() {
-    let parsed = parser::gaq::<VE>("EIGAQ,RMC").unwrap().1;
+    let parsed = parser::gaq("EIGAQ,RMC").unwrap().1;
 
     assert_eq!(Talker::ECDIS, parsed.talker);
     assert_eq!("RMC".to_string(), parsed.message_id);
@@ -205,7 +180,7 @@ fn test_gaq() {
 
 #[test]
 fn test_gbq() {
-    let parsed = parser::gbq::<VE>("EIGBQ,RMC").unwrap().1;
+    let parsed = parser::gbq("EIGBQ,RMC").unwrap().1;
 
     assert_eq!(Talker::ECDIS, parsed.talker);
     assert_eq!("RMC".to_string(), parsed.message_id);
@@ -213,9 +188,7 @@ fn test_gbq() {
 
 #[test]
 fn test_gbs() {
-    let parsed = parser::gbs::<VE>("GPGBS,235503.00,1.6,1.4,3.2,,,,,,")
-        .unwrap()
-        .1;
+    let parsed = parser::gbs("GPGBS,235503.00,1.6,1.4,3.2,,,,,,").unwrap().1;
 
     assert_eq!(Talker::GPS, parsed.talker);
     assert_eq!(NaiveTime::from_hms_milli(23, 55, 3, 0), parsed.time);
@@ -230,7 +203,7 @@ fn test_gbs() {
     assert_eq!(None, parsed.system);
     assert_eq!(None, parsed.signal);
 
-    let parsed = parser::gbs::<VE>("GPGBS,235458.00,1.4,1.3,3.1,03,,-21.4,3.8,1,0")
+    let parsed = parser::gbs("GPGBS,235458.00,1.4,1.3,3.1,03,,-21.4,3.8,1,0")
         .unwrap()
         .1;
 
@@ -250,7 +223,7 @@ fn test_gbs() {
 #[test]
 fn test_gga() {
     let parsed =
-        parser::gga::<VE>("GPGGA,092725.00,4717.11399,N,00833.91590,E,1,08,1.01,499.6,M,48.0,M,,")
+        parser::gga("GPGGA,092725.00,4717.11399,N,00833.91590,E,1,08,1.01,499.6,M,48.0,M,,")
             .unwrap()
             .1;
 
@@ -273,9 +246,7 @@ fn test_gga() {
 
 #[test]
 fn test_gga_startup() {
-    let parsed = parser::gga::<VE>("GPGGA,204849.013,,,,,0,0,,,M,,M,,")
-        .unwrap()
-        .1;
+    let parsed = parser::gga("GPGGA,204849.013,,,,,0,0,,,M,,M,,").unwrap().1;
 
     assert_eq!(Talker::GPS, parsed.talker);
     assert_eq!(NaiveTime::from_hms_milli(20, 48, 49, 013), parsed.time);
@@ -292,7 +263,7 @@ fn test_gga_startup() {
 
 #[test]
 fn test_gll() {
-    let parsed = parser::gll::<VE>("GPGLL,4717.11364,N,00833.91565,E,092321.00,A,A")
+    let parsed = parser::gll("GPGLL,4717.11364,N,00833.91565,E,092321.00,A,A")
         .unwrap()
         .1;
 
@@ -309,7 +280,7 @@ fn test_gll() {
 
 #[test]
 fn test_gll_startup() {
-    let parsed = parser::gll::<VE>("GPGLL,,,,,204849.013,V,N").unwrap().1;
+    let parsed = parser::gll("GPGLL,,,,,204849.013,V,N").unwrap().1;
 
     assert_eq!(Talker::GPS, parsed.talker);
     assert_eq!(None, parsed.lat_lon);
@@ -320,7 +291,7 @@ fn test_gll_startup() {
 
 #[test]
 fn test_glq() {
-    let parsed = parser::glq::<VE>("EIGLQ,RMC").unwrap().1;
+    let parsed = parser::glq("EIGLQ,RMC").unwrap().1;
 
     assert_eq!(Talker::ECDIS, parsed.talker);
     assert_eq!("RMC".to_string(), parsed.message_id);
@@ -328,7 +299,7 @@ fn test_glq() {
 
 #[test]
 fn test_gnq() {
-    let parsed = parser::gnq::<VE>("EIGNQ,RMC").unwrap().1;
+    let parsed = parser::gnq("EIGNQ,RMC").unwrap().1;
 
     assert_eq!(Talker::ECDIS, parsed.talker);
     assert_eq!("RMC".to_string(), parsed.message_id);
@@ -336,7 +307,7 @@ fn test_gnq() {
 
 #[test]
 fn test_gpq() {
-    let parsed = parser::gpq::<VE>("EIGPQ,RMC").unwrap().1;
+    let parsed = parser::gpq("EIGPQ,RMC").unwrap().1;
 
     assert_eq!(Talker::ECDIS, parsed.talker);
     assert_eq!("RMC".to_string(), parsed.message_id);
@@ -344,7 +315,7 @@ fn test_gpq() {
 
 #[test]
 fn test_grs() {
-    let parsed = parser::grs::<VE>("GNGRS,104148.00,1,2.6,2.2,-1.6,-1.1,-1.7,-1.5,5.8,1.7,,,,,1,1")
+    let parsed = parser::grs("GNGRS,104148.00,1,2.6,2.2,-1.6,-1.1,-1.7,-1.5,5.8,1.7,,,,,1,1")
         .unwrap()
         .1;
 
@@ -381,7 +352,7 @@ fn test_grs() {
     assert_eq!(System::GPS, parsed.system);
     assert_eq!(Some(Signal::L1), parsed.signal);
 
-    let parsed = parser::grs::<VE>("GNGRS,104148.00,1,,0.0,2.5,0.0,,2.8,,,,,,,1,5")
+    let parsed = parser::grs("GNGRS,104148.00,1,,0.0,2.5,0.0,,2.8,,,,,,,1,5")
         .unwrap()
         .1;
 
@@ -421,7 +392,7 @@ fn test_grs() {
 
 #[test]
 fn test_gsa() {
-    let parsed = parser::gsa::<VE>("GPGSA,A,3,23,29,07,08,09,18,26,28,,,,,1.94,1.18,1.54,1")
+    let parsed = parser::gsa("GPGSA,A,3,23,29,07,08,09,18,26,28,,,,,1.94,1.18,1.54,1")
         .unwrap()
         .1;
 
@@ -460,7 +431,7 @@ fn test_gsa() {
     assert_approx_eq!(1.54, parsed.vdop.unwrap());
     assert_eq!(Some(System::GPS), parsed.system);
 
-    let parsed = parser::gsa::<VE>("GNGSA,A,3,19,12,33,25,24,11,,,,,,,0.98,0.50,0.84,3")
+    let parsed = parser::gsa("GNGSA,A,3,19,12,33,25,24,11,,,,,,,0.98,0.50,0.84,3")
         .unwrap()
         .1;
 
@@ -502,7 +473,7 @@ fn test_gsa() {
 
 #[test]
 fn test_gsa_startup() {
-    let parsed = parser::gsa::<VE>("GPGSA,A,1,,,,,,,,,,,,,,,").unwrap().1;
+    let parsed = parser::gsa("GPGSA,A,1,,,,,,,,,,,,,,,").unwrap().1;
 
     assert_eq!(Talker::GPS, parsed.talker);
     assert_eq!(OperationMode::Automatic, parsed.operation_mode);
@@ -526,9 +497,7 @@ fn test_gsa_startup() {
 
 #[test]
 fn test_gst() {
-    let parsed = parser::gst::<VE>("GPGST,082356.00,1.8,,,,1.7,1.3,2.2")
-        .unwrap()
-        .1;
+    let parsed = parser::gst("GPGST,082356.00,1.8,,,,1.7,1.3,2.2").unwrap().1;
 
     assert_eq!(Talker::GPS, parsed.talker);
     assert_eq!(NaiveTime::from_hms_milli(8, 23, 56, 0), parsed.time);
@@ -543,7 +512,7 @@ fn test_gst() {
 
 #[test]
 fn test_gsv() {
-    let (_, parsed) = parser::gsv::<VE>("GPGSV,3,1,09,09,,,17,10,,,40,12,,,49,13,,,35,1").unwrap();
+    let (_, parsed) = parser::gsv("GPGSV,3,1,09,09,,,17,10,,,40,12,,,49,13,,,35,1").unwrap();
 
     let satellites = vec![
         GSVsatellite {
@@ -579,7 +548,7 @@ fn test_gsv() {
     assert_eq!(satellites, parsed.satellites);
     assert_eq!(Some(Signal::L1), parsed.signal);
 
-    let parsed = parser::gsv::<VE>("GPGSV,3,3,09,25,,,40,1").unwrap().1;
+    let parsed = parser::gsv("GPGSV,3,3,09,25,,,40,1").unwrap().1;
 
     let satellites = vec![GSVsatellite {
         id: 25,
@@ -595,7 +564,7 @@ fn test_gsv() {
     assert_eq!(satellites, parsed.satellites);
     assert_eq!(Some(Signal::L1), parsed.signal);
 
-    let parsed = parser::gsv::<VE>("GPGSV,1,1,03,12,,,42,24,,,47,32,,,37,5")
+    let parsed = parser::gsv("GPGSV,1,1,03,12,,,42,24,,,47,32,,,37,5")
         .unwrap()
         .1;
 
@@ -627,7 +596,7 @@ fn test_gsv() {
     assert_eq!(satellites, parsed.satellites);
     assert_eq!(Some(Signal::L2CM), parsed.signal);
 
-    let parsed = parser::gsv::<VE>("GAGSV,1,1,00,2").unwrap().1;
+    let parsed = parser::gsv("GAGSV,1,1,00,2").unwrap().1;
 
     let satellites: Vec<GSVsatellite> = vec![];
 
@@ -641,7 +610,7 @@ fn test_gsv() {
 
 #[test]
 fn test_gsv_startup() {
-    let (_, parsed) = parser::gsv::<VE>("GPGSV,1,1,00").unwrap();
+    let (_, parsed) = parser::gsv("GPGSV,1,1,00").unwrap();
 
     let satellites: Vec<GSVsatellite> = vec![];
 
@@ -656,7 +625,7 @@ fn test_gsv_startup() {
 #[test]
 fn test_gbgsv() {
     let input = "GBGSV,2,1,07,04,00,261,,11,01,341,,12,30,300,,19,61,071,,";
-    let result = gsv::<VE>(input);
+    let result = gsv(input);
 
     let parsed = p::<GSVData>(input, result);
 
@@ -698,7 +667,7 @@ fn test_gbgsv() {
 #[test]
 fn test_rmc() {
     let parsed =
-        parser::rmc::<VE>("GPRMC,083559.00,A,4717.11437,N,00833.91522,E,0.004,77.52,091202,,,A,V")
+        parser::rmc("GPRMC,083559.00,A,4717.11437,N,00833.91522,E,0.004,77.52,091202,,,A,V")
             .unwrap()
             .1;
 
@@ -721,7 +690,7 @@ fn test_rmc() {
 
 #[test]
 fn test_rmc_empty() {
-    let parsed = parser::rmc::<VE>("GPRMC,204849.013,V,,,,,0.00,0.00,050920,,,N")
+    let parsed = parser::rmc("GPRMC,204849.013,V,,,,,0.00,0.00,050920,,,N")
         .unwrap()
         .1;
 
@@ -744,7 +713,7 @@ fn test_rmc_empty() {
 fn test_gnrmc() {
     let input = "GNRMC,083559.00,A,4717.11437,N,00833.91522,E,0.015,,091202,,,A,V";
 
-    let result = rmc::<VE>(input);
+    let result = rmc(input);
 
     let parsed = p::<RMCData>(input, result);
 
@@ -767,7 +736,7 @@ fn test_gnrmc() {
 
 #[test]
 fn test_txt() {
-    let parsed = parser::txt::<VE>("GPTXT,01,01,02,u-blox ag - www.u-blox.com")
+    let parsed = parser::txt("GPTXT,01,01,02,u-blox ag - www.u-blox.com")
         .unwrap()
         .1;
 
@@ -780,7 +749,7 @@ fn test_txt() {
 
 #[test]
 fn test_vlw() {
-    let parsed = parser::vlw::<VE>("GPVLW,,N,,N,15.8,N,1.2,N").unwrap().1;
+    let parsed = parser::vlw("GPVLW,,N,,N,15.8,N,1.2,N").unwrap().1;
 
     assert_eq!(Talker::GPS, parsed.talker);
     assert_eq!(None, parsed.total_water_distance);
@@ -795,9 +764,7 @@ fn test_vlw() {
 
 #[test]
 fn test_vtg() {
-    let parsed = parser::vtg::<VE>("GPVTG,77.52,T,,M,0.004,N,0.008,K,A")
-        .unwrap()
-        .1;
+    let parsed = parser::vtg("GPVTG,77.52,T,,M,0.004,N,0.008,K,A").unwrap().1;
 
     assert_eq!(Talker::GPS, parsed.talker);
     assert_approx_eq!(77.52, parsed.course_over_ground_true.unwrap());
@@ -815,7 +782,7 @@ fn test_vtg() {
 fn test_gnvtg() {
     let input = "GNVTG,,T,,M,0.015,N,0.027,K,A";
 
-    let result = vtg::<VE>(input);
+    let result = vtg(input);
 
     let parsed = p::<VTGData>(input, result);
 
@@ -833,9 +800,7 @@ fn test_gnvtg() {
 
 #[test]
 fn test_zda() {
-    let parsed = parser::zda::<VE>("GPZDA,082710.00,16,09,2002,00,00")
-        .unwrap()
-        .1;
+    let parsed = parser::zda("GPZDA,082710.00,16,09,2002,00,00").unwrap().1;
 
     assert_eq!(Some(NaiveTime::from_hms_milli(8, 27, 10, 0)), parsed.time);
     assert_eq!(Some(16), parsed.day);
@@ -847,7 +812,7 @@ fn test_zda() {
 
 #[test]
 fn test_zda_empty() {
-    let parsed = parser::zda::<VE>("GPZDA,,,,,00,00").unwrap().1;
+    let parsed = parser::zda("GPZDA,,,,,00,00").unwrap().1;
 
     assert_eq!(None, parsed.time);
     assert_eq!(None, parsed.day);
@@ -859,7 +824,7 @@ fn test_zda_empty() {
 
 #[test]
 fn test_zda_time_only() {
-    let parsed = parser::zda::<VE>("GPZDA,233346.00,,,,00,00").unwrap().1;
+    let parsed = parser::zda("GPZDA,233346.00,,,,00,00").unwrap().1;
 
     assert_eq!(Some(NaiveTime::from_hms_milli(23, 33, 46, 0)), parsed.time);
     assert_eq!(None, parsed.day);

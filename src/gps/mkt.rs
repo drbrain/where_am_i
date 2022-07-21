@@ -1,22 +1,13 @@
 // For GlobalTop MKT devices
 
-use crate::gps::add_message;
-use crate::nmea::device::SerialCodec;
-use crate::nmea::parser_util::*;
-use crate::nmea::MessageSetting;
-use crate::nmea::NMEA;
+use crate::{
+    gps::add_message,
+    nmea::{device::SerialCodec, parser::Result, parser_util::*, MessageSetting, NMEA},
+};
 use futures_util::sink::SinkExt;
-use nom::branch::*;
-use nom::bytes::complete::*;
-use nom::combinator::*;
-use nom::error::*;
-use nom::sequence::*;
-use nom::IResult;
+use nom::{branch::*, bytes::complete::*, combinator::*, error::*, sequence::*};
 use serde::Serialize;
-use std::num::ParseIntError;
-use tracing::debug;
-use tracing::error;
-use tracing::info;
+use tracing::{debug, error, info};
 
 pub const OUTPUT_MESSAGES: [&str; 7] = ["GGA", "GLL", "GSA", "GSV", "MCHN", "RMC", "VTG"];
 
@@ -97,13 +88,7 @@ impl MKT {
         message_settings
     }
 
-    pub fn parse_private<
-        'a,
-        E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
-    >(
-        &self,
-        input: &'a str,
-    ) -> IResult<&'a str, NMEA, E> {
+    pub fn parse_private<'a>(&self, input: &'a str) -> Result<&'a str, NMEA> {
         context(
             "PMKT",
             map(
@@ -134,12 +119,7 @@ pub enum MKTAcknowledge {
     Unhandled(u32),
 }
 
-pub(crate) fn mkt_001<
-    'a,
-    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, MKTAcknowledge, E> {
+pub(crate) fn mkt_001<'a>(input: &'a str) -> Result<&'a str, MKTAcknowledge> {
     let result = parse_message(
         "MKT 001",
         preceded(preceded(tag("PMTK001"), comma), uint32),
@@ -184,12 +164,7 @@ pub enum MKTSystemMessage {
     Unhandled(u32),
 }
 
-pub(crate) fn mkt_010<
-    'a,
-    E: ParseError<&'a str> + ContextError<&'a str> + FromExternalError<&'a str, ParseIntError>,
->(
-    input: &'a str,
-) -> IResult<&'a str, MKTSystemMessage, E> {
+pub(crate) fn mkt_010<'a>(input: &'a str) -> Result<&'a str, MKTSystemMessage> {
     parse_message(
         "MKT 010",
         preceded(preceded(tag("PMTK010"), comma), uint32),
@@ -208,9 +183,7 @@ pub struct MKTTextMessage {
     pub message: String,
 }
 
-pub(crate) fn mkt_011<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, MKTTextMessage, E> {
+pub(crate) fn mkt_011<'a>(input: &'a str) -> Result<&'a str, MKTTextMessage> {
     parse_message(
         "MKT 011",
         preceded(preceded(tag("PMTK011"), comma), rest),

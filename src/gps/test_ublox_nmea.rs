@@ -1,18 +1,13 @@
 #[cfg(test)]
 mod test {
-    use crate::gps::ublox_nmea::ubx_00;
-    use crate::gps::ublox_nmea::ubx_03;
-    use crate::gps::ublox_nmea::ubx_04;
-    use crate::gps::*;
-
-    use chrono::NaiveDate;
-    use chrono::NaiveTime;
-
+    use crate::gps::{
+        ublox_nmea::{ubx_00, ubx_03, ubx_04},
+        *,
+    };
+    use chrono::{NaiveDate, NaiveTime};
     use nom::error::*;
 
-    type VE<'a> = VerboseError<&'a str>;
-
-    fn p<'a, D>(input: &'a str, result: nom::IResult<&'a str, D, VE>) -> D {
+    fn p<'a, D>(input: &'a str, result: nom::IResult<&'a str, D, VerboseError<&'a str>>) -> D {
         match result {
             Ok((_, data)) => data,
             Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
@@ -25,7 +20,7 @@ mod test {
     #[test]
     fn test_ubx_00() {
         let input = "PUBX,00,081350.00,4717.113210,N,00833.915187,E,546.589,G3,2.1,2.0,0.007,77.52,0.007,,0.92,1.19,0.77,9,0,0";
-        let result = ubx_00::<VE>(input);
+        let result = ubx_00(input);
 
         let parsed = p::<UBXPosition>(input, result);
 
@@ -54,7 +49,7 @@ mod test {
     #[test]
     fn test_ubx_03() {
         let input = "PUBX,03,11,23,-,,,45,010,29,-,,,46,013,07,-,,,42,015,08,U,067,31,42,025,10,U,195,33,46,026,18,U,326,08,39,026,17,-,,,32,015,26,U,306,66,48,025,27,U,073,10,36,026,28,U,089,61,46,024,15,-,,,39,014";
-        let result = ubx_03::<VE>(input);
+        let result = ubx_03(input);
 
         let parsed = p::<UBXSatellites>(input, result);
 
@@ -155,7 +150,7 @@ mod test {
     #[test]
     fn test_ubx_04() {
         let input = "PUBX,04,073731.00,091202,113851.00,1196,15D,1930035,-2660.664,43,";
-        let result = ubx_04::<VE>(input);
+        let result = ubx_04(input);
 
         let parsed = p::<UBXTime>(input, result);
 
