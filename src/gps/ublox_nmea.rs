@@ -1,4 +1,4 @@
-// For UBlox ZED-F9P devices
+// For UBlox ZED-F9P devices using NMEA
 
 use crate::gps::add_message;
 use crate::nmea::device::SerialCodec;

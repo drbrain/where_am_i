@@ -38,7 +38,7 @@ log_filter = "debug"
 [[gps]]
 name = "GPS0"
 device = "/dev/gps0"
-gps_type = "ublox"
+gps_type = "ublox_nmea"
 baud_rate = 38400
 messages = [ "ZDA" ]
 ntp_unit = 2
@@ -69,7 +69,7 @@ device = "/dev/pps1"
     let gps0 = GpsConfig {
         name: "GPS0".to_string(),
         device: "/dev/gps0".to_string(),
-        gps_type: GpsType::UBlox,
+        gps_type: GpsType::UBloxNMEA,
         pps: Some(pps0),
         baud_rate: Some(38400),
         framing: None,

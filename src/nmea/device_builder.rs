@@ -48,7 +48,7 @@ impl DeviceBuilder {
         let serial_port_builder = SerialPortBuilder::try_from(config.clone())?;
 
         let driver = match config.gps_type {
-            GpsType::UBlox => Driver::UBloxNMEA(UBloxNMEA::default()),
+            GpsType::UBloxNMEA => Driver::UBloxNMEA(UBloxNMEA::default()),
             GpsType::MKT => Driver::MKT(MKT::default()),
             GpsType::Generic => Driver::Generic(Generic::default()),
         };

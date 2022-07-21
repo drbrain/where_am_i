@@ -4,8 +4,10 @@ use serde::Deserialize;
 #[serde(rename_all = "lowercase")]
 pub enum GpsType {
     Generic,
+    #[serde(rename = "mkt")]
     MKT,
-    UBlox,
+    #[serde(rename = "ublox_nmea")]
+    UBloxNMEA,
 }
 
 impl Default for GpsType {
